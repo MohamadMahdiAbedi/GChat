@@ -1,0 +1,53 @@
+<!--
+  ~ Copyright (C) 2026 The Android Open Source Project
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~      http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+  <path
+      android:pathData="M0,0h320v180h-320z"
+      android:fillColor="#08633e"/>
+  <path
+      android:pathData="M0,0h320v60h-320z">
+    <aapt:attr name="android:fillColor">
+      <gradient
+          android:startX="3.22"
+          android:startY="72.01"
+          android:endX="316.78"
+          android:endY="-12.01"
+          android:type="linear">
+        <item android:offset="0" android:color="#FF02824F"/>
+        <item android:offset="0.46" android:color="#FF129B58"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+  <path
+      android:pathData="M130.43,0l-130.43,45.36l0,-45.36l130.43,0z">
+    <aapt:attr name="android:fillColor">
+      <gradient
+          android:startX="-6.95"
+          android:startY="26.27"
+          android:endX="122.8"
+          android:endY="-20.96"
+          android:type="linear">
+        <item android:offset="0.14" android:color="#FF008551"/>
+        <item android:offset="0.79" android:color="#FF067042"/>
+      </gradient>
+    </aapt:attr>
+  </path>
+</vector>
