@@ -3,8 +3,6 @@
 package ir.gchat
 
 import android.Manifest
-import android.R.attr.textAlignment
-import android.R.attr.textDirection
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
@@ -19,12 +17,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.telephony.SubscriptionManager
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.SoundEffectConstants
 import android.view.View
-import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -67,13 +62,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,16 +75,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -123,7 +110,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -134,12 +120,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -147,7 +130,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.core.DataStore
@@ -214,15 +196,15 @@ fun getIccidsFromSubscriptionManager(context: Context): List<String> {
                 if (!iccid.isNullOrEmpty() && slotIndex >= 0 && slotIndex < iccids.size) {
                     iccids[slotIndex] = iccid
                 }
-            } catch (e: SecurityException) {
-            } catch (e: Exception) {
+            } catch (_: SecurityException) {
+            } catch (_: Exception) {
             }
         }
 
         iccids
-    } catch (e: SecurityException) {
+    } catch (_: SecurityException) {
         emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 }
@@ -301,7 +283,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                             """.trimIndent()
                             )
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                     }
                 }
             }
@@ -320,7 +302,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                             }
                             _oldLogined.value = true
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                     }
                 }
             }
@@ -361,7 +343,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     """.trimIndent()
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
             }
         }
     }
@@ -481,7 +463,7 @@ fun SetUPNavigationBar(darkTheme: Boolean) {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.decorView.setOnApplyWindowInsetsListener { view, insets ->
+            window.decorView.setOnApplyWindowInsetsListener { _, insets ->
                 insets
             }
         }
@@ -1866,7 +1848,7 @@ fun ChatScreen() {
 
         Column {
             AdvancedDynamicLightEffectOptim(
-                renderValue = renderValue, modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f), renderValue = renderValue
             )
         }
 
@@ -1918,7 +1900,7 @@ fun ChatScreen() {
                             shape = RoundedCornerShape(2.dp)
                         )
                 ) {
-                    Row() {
+                    Row {
                         IconButton({
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             isExpandedEmoji = true
@@ -2073,7 +2055,7 @@ fun ChatScreen() {
 
 @Composable
 fun AdvancedDynamicLightEffectOptim(
-    renderValue: Int = 5, modifier: Modifier = Modifier
+    modifier: Modifier = Modifier, renderValue: Int = 5
 ) {
     val targetAngle1 = renderValue * 36f
     val angle1 by animateFloatAsState(
@@ -2194,9 +2176,9 @@ fun getICCIDList(context: Context): List<String> {
         }
 
         iccids
-    } catch (e: SecurityException) {
+    } catch (_: SecurityException) {
         emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 }
