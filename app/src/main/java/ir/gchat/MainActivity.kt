@@ -2,8 +2,9 @@
 
 package ir.gchat
 
-//import androidx.compose.ui.graphics.MeshGradientPainter
 import android.Manifest
+import android.R.attr.textAlignment
+import android.R.attr.textDirection
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
@@ -18,7 +19,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.telephony.SubscriptionManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Gravity
 import android.view.SoundEffectConstants
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,12 +34,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
@@ -41,26 +44,32 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -75,12 +84,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -101,33 +114,40 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.core.DataStore
@@ -166,8 +186,7 @@ const val RULES =
 
 fun getIccidsFromSubscriptionManager(context: Context): List<String> {
     if (ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_PHONE_STATE
+            context, Manifest.permission.READ_PHONE_STATE
         ) != PackageManager.PERMISSION_GRANTED
     ) {
         return emptyList()
@@ -252,9 +271,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     val logined: StateFlow<Boolean> = _logined.asStateFlow()
 
     private val _oldLogined = MutableStateFlow(
-        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() }
-    )
+        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() })
     val oldLogined: StateFlow<Boolean> = _oldLogined.asStateFlow()
+
+    private val _contactsList = MutableStateFlow(listOf("عباس عراقچی", "استاد قنبری"))
+    val contactsList: StateFlow<List<String>> = _contactsList.asStateFlow()
 
     fun connect() {
 
@@ -392,6 +413,7 @@ class MainActivity : ComponentActivity() {
                 2 -> false
                 else -> isSystemInDarkTheme()
             }
+            val contactsList by socketViewModel.contactsList.collectAsState()
             GChatTheme(
                 dynamicColor = false, darkTheme = darkTheme
             ) {
@@ -403,578 +425,13 @@ class MainActivity : ComponentActivity() {
                     theme = theme,
                     login = { iccid -> socketViewModel.login(iccid = iccid) },
                     logined = logined,
-                    oldLogined = oldLogined
+                    oldLogined = oldLogined,
+                    contactsList = contactsList
                 )
             }
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainNavigation(
-    setTheme: () -> Unit,
-    theme: Int,
-    login: (String) -> Unit,
-    logined: Boolean,
-    oldLogined: Boolean
-) {
-    val navController = rememberNavController()
-    LaunchedEffect(logined) {
-        if (oldLogined) {
-            if (logined) {
-                navController.navigate("mainScreen") {
-                    popUpTo(0) {
-                        inclusive = true
-                    }
-                }
-            } else {
-                navController.navigate("wait") {
-                    popUpTo(0) {
-                        inclusive = true
-                    }
-                }
-            }
-        }
-    }
-    NavHost(
-        modifier = Modifier.fillMaxSize(),
-        navController = navController,
-        startDestination = "greeting",
-
-        enterTransition = {
-            slideInVertically(
-                initialOffsetY = { it }, animationSpec = tween(300)
-            )
-        },
-        exitTransition = {
-            slideOutVertically(
-                targetOffsetY = { -it }, animationSpec = tween(300)
-            )
-        },
-
-        popEnterTransition = {
-            slideInVertically(
-                initialOffsetY = { -it }, animationSpec = tween(300)
-            )
-        },
-        popExitTransition = {
-            slideOutVertically(
-                targetOffsetY = { it }, animationSpec = tween(300)
-            )
-        }) {
-        composable("greeting") {
-            Greeting(
-                setTheme = setTheme,
-                theme = theme,
-                login = login
-            )
-        }
-        composable("mainScreen") {
-            MainScreen()
-        }
-        composable("chatScreen") {
-
-        }
-        composable("wait") {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("Connecting...")
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                }
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "After connecting, you will be taken to the home page.",
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@SuppressLint("ConfigurationScreenWidthHeight")
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
-@Composable
-fun MainScreen() {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
-    val drawerRatio = when (windowSizeClass.widthSizeClass) {
-        Compact -> 0.8f
-        Medium -> 0.5f
-        else -> 0.3f
-    }
-
-    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
-
-    val view = LocalView.current
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(drawerRatio)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(192.dp)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.1f)
-                                    ),
-                                    startY = 184.dp.toPx(),
-                                    endY = 192.dp.toPx()
-                                ),
-                                blendMode = BlendMode.Multiply
-                            )
-                        }
-                )
-            }
-
-        },
-    ) {
-        //Box
-        Row(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(
-                        if (expandedScreen) 0.3f else 1f
-                    ),
-                    //.shadow(
-                    //    elevation = 16.dp,
-                    //    clip = true
-                    //),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("GChat")
-                        },
-                        navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    scope.launch {
-                                        drawerState.apply {
-                                            if (isClosed) open() else close()
-                                        }
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.menu),
-                                    contentDescription = "Menu"
-                                )
-                            }
-                        },
-                        actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.search),
-                                    contentDescription = "Search"
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                },
-
-                ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-
-                }
-            }
-            if (expandedScreen) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        //.fillMaxWidth(0.7f)
-                        .fillMaxWidth()
-                        //.align(Alignment.CenterEnd)
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.1f),
-                                        Color.Transparent
-                                    ),
-                                    startX = 0.dp.toPx(),
-                                    endX = 8.dp.toPx()
-                                ),
-                                blendMode = BlendMode.Multiply
-                            )
-                        }
-                ) {
-                    ChatScreen()
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChatScreen() {
-    val view = LocalView.current
-
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Contact")
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = "Menu"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.menu_dots),
-                            contentDescription = "Search"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        },
-
-        ) { innerPadding ->
-        var renderValue by remember { mutableIntStateOf(5) }
-
-        Column {
-            AdvancedDynamicLightEffectOptim(
-                renderValue = renderValue,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Button({renderValue = (1..10).random()}, modifier = Modifier.padding(innerPadding)) { }
-    }
-}
-
-@Composable
-fun AdvancedDynamicLightEffectOptim(
-    renderValue: Int = 5, // مقدار بین 1 تا 10
-    modifier: Modifier = Modifier
-) {
-    // انیمیشن برای تغییر زاویه اول بر اساس مقدار
-    val targetAngle1 = renderValue * 36f // 1->36°, 10->360°
-    val angle1 by animateFloatAsState(
-        targetValue = targetAngle1,
-        animationSpec = tween(
-            durationMillis = 2000,
-            easing = FastOutSlowInEasing
-        ),
-        label = "angle1"
-    )
-
-    // انیمیشن برای تغییر زاویه دوم با اختلاف 180 درجه
-    val targetAngle2 = targetAngle1 + 180f
-    val angle2 by animateFloatAsState(
-        targetValue = targetAngle2,
-        animationSpec = tween(
-            durationMillis = 2000,
-            easing = FastOutSlowInEasing
-        ),
-        label = "angle2"
-    )
-
-    // انیمیشن برای چرخش صحنه - این یکی می‌تونه ثابت بمونه یا حذف بشه
-    val sceneRotation by animateFloatAsState(
-        targetValue = 0f, // اگر نمی‌خواید بچرخه
-        animationSpec = tween(durationMillis = 1),
-        label = "scene"
-    )
-
-    Canvas(
-        modifier = modifier.fillMaxSize()
-    ) {
-        val radius = hypot(size.width, size.height)
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val orbitRadius = minOf(size.width, size.height) * 0.7f
-
-        drawRect(
-            brush = Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF6DA687),
-                    Color(0xFF89B885)
-                ),
-                start = Offset(center.x - radius, center.y),
-                end = Offset(center.x + radius, center.y)
-            )
-        )
-
-        rotate(
-            degrees = sceneRotation,
-            pivot = center
-        ) {
-            fun pointOnCircle(angleDegrees: Float): Offset {
-                val angleRad = Math.toRadians(angleDegrees.toDouble()).toFloat()
-                return Offset(
-                    x = center.x + orbitRadius * cos(angleRad),
-                    y = center.y + orbitRadius * sin(angleRad)
-                )
-            }
-
-            val lightRadius = radius * 0.7f
-
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFFD1D68C),
-                        Color.Transparent
-                    ),
-                    center = pointOnCircle(angle1),
-                    radius = lightRadius
-                ),
-                radius = radius,
-                center = center,
-                blendMode = BlendMode.Screen
-            )
-
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFFD5DAB8),
-                        Color.Transparent
-                    ),
-                    center = pointOnCircle(angle2),
-                    radius = lightRadius * 0.85f
-                ),
-                radius = radius,
-                center = center,
-                blendMode = BlendMode.Screen
-            )
-        }
-    }
-}
-
-// کامپوننت استفاده کننده
-@Composable
-fun RenderValueDemo() {
-    var renderValue by remember { mutableStateOf(5) }
-
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        AdvancedDynamicLightEffectOptim(
-            renderValue = renderValue,
-            modifier = Modifier.weight(1f)
-        )
-
-        // دکمه‌های کنترل برای تست
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            repeat(10) { index ->
-                val value = index + 1
-                Button(
-                    onClick = { renderValue = value },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (renderValue == value)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.secondary
-                    )
-                ) {
-                    Text(value.toString())
-                }
-            }
-        }
-    }
-}
-
-//@Composable
-//fun AdvancedDynamicLightEffectOptim() {
-//
-//    val infiniteTransition = rememberInfiniteTransition(label = "")
-//
-//    val sceneRotation by infiniteTransition.animateFloat(
-//        initialValue = 0f,
-//        targetValue = 360f,
-//        animationSpec = infiniteRepeatable(
-//            animation = tween(
-//                durationMillis = 120_000,
-//                easing = LinearEasing
-//            )
-//        ),
-//        label = "scene"
-//    )
-//
-//    val angle1 by infiniteTransition.animateFloat(
-//        initialValue = 0f,
-//        targetValue = 360f,
-//        animationSpec = infiniteRepeatable(
-//            animation = tween(60000, easing = LinearEasing)
-//        ),
-//        label = "angle1"
-//    )
-//
-//    val angle2 by infiniteTransition.animateFloat(
-//        initialValue = 180f,
-//        targetValue = 540f,
-//        animationSpec = infiniteRepeatable(
-//            animation = tween(60000, easing = LinearEasing)
-//        ),
-//        label = "angle2"
-//    )
-//
-//    //val density = LocalDensity.current
-//
-//    Canvas(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            //.padding(
-//            //    PaddingValues(
-//            //        top = with(density) {
-//            //            WindowInsets.statusBars.getTop(density).toDp() + 64.dp
-//            //        },
-//            //        bottom = 0.dp,
-//            //        start = 0.dp,
-//            //        end = 0.dp
-//            //    )
-//            //)
-//    ) {
-//
-//        val radius = hypot(size.width, size.height)
-//        val center = Offset(size.width / 2f, size.height / 2f)
-//
-//        val orbitRadius = minOf(size.width, size.height) * 0.7f
-//
-//        drawRect(
-//            brush = Brush.linearGradient(
-//                colors = listOf(
-//                    Color(0xFF6DA687),
-//                    Color(0xFF89B885)
-//                    //Color(0xFF0F1A14),
-//                    //Color(0xFF1A2D22)
-//                ),
-//                start = Offset(center.x - radius, center.y),
-//                end = Offset(center.x + radius, center.y)
-//            )
-//        )
-//
-//        rotate(
-//            degrees = sceneRotation,
-//            pivot = center
-//        ) {
-//            fun pointOnCircle(angleDegrees: Float): Offset {
-//                val angleRad = Math.toRadians(angleDegrees.toDouble()).toFloat()
-//                return Offset(
-//                    x = center.x + orbitRadius * cos(angleRad),
-//                    y = center.y + orbitRadius * sin(angleRad)
-//                )
-//            }
-//
-//            val lightRadius = radius * 0.7f
-//
-//            drawCircle(
-//                brush = Brush.radialGradient(
-//                    colors = listOf(
-//                        Color(0xFFD1D68C),
-//                        //Color(0xFF2D4035),
-//                        Color.Transparent
-//                    ),
-//                    center = pointOnCircle(angle1),
-//                    radius = lightRadius
-//                ),
-//                radius = radius,
-//                center = center,
-//                blendMode = BlendMode.Screen
-//            )
-//
-//            drawCircle(
-//                brush = Brush.radialGradient(
-//                    colors = listOf(
-//                        Color(0xFFD5DAB8),
-//                        //Color(0xFF3D5545),
-//                        Color.Transparent
-//                    ),
-//                    center = pointOnCircle(angle2),
-//                    radius = lightRadius * 0.85f
-//                ),
-//                radius = radius,
-//                center = center,
-//                blendMode = BlendMode.Screen
-//            )
-//        }
-//    }
-//}
 
 @Composable
 fun SetUPNavigationViewTitleBar() {
@@ -1031,6 +488,112 @@ fun SetUPNavigationBar(darkTheme: Boolean) {
 
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars =
             !darkTheme
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainNavigation(
+    setTheme: () -> Unit,
+    theme: Int,
+    login: (String) -> Unit,
+    logined: Boolean,
+    oldLogined: Boolean,
+    contactsList: List<String>
+) {
+    val navController = rememberNavController()
+    LaunchedEffect(logined) {
+        if (oldLogined) {
+            if (logined) {
+                navController.navigate("mainScreen") {
+                    popUpTo(0) {
+                        inclusive = true
+                    }
+                }
+            } else {
+                navController.navigate("wait") {
+                    popUpTo(0) {
+                        inclusive = true
+                    }
+                }
+            }
+        }
+    }
+    NavHost(
+        modifier = Modifier.fillMaxSize(),
+        navController = navController,
+        startDestination = "greeting",
+
+        enterTransition = {
+            slideInVertically(
+                initialOffsetY = { it }, animationSpec = tween(300)
+            )
+        },
+        exitTransition = {
+            slideOutVertically(
+                targetOffsetY = { -it }, animationSpec = tween(300)
+            )
+        },
+
+        popEnterTransition = {
+            slideInVertically(
+                initialOffsetY = { -it }, animationSpec = tween(300)
+            )
+        },
+        popExitTransition = {
+            slideOutVertically(
+                targetOffsetY = { it }, animationSpec = tween(300)
+            )
+        }) {
+        composable("greeting") {
+            Greeting(
+                setTheme = setTheme, theme = theme, login = login
+            )
+        }
+        composable("mainScreen") {
+            MainScreen(contactsList)
+        }
+        composable("chatScreen") {
+
+        }
+        composable("wait") {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(), topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("Connecting...")
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp,
+                            shape = RectangleShape,
+                            clip = false
+                        )
+                    )
+                }) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "After connecting, you will be taken to the home page.",
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1237,7 +800,12 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     modifier = Modifier
                                         .padding(innerPadding)
                                         .size(56.dp)
-                                        .align(Alignment.BottomEnd),
+                                        .align(Alignment.BottomEnd)
+                                        .shadow(
+                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            shape = CircleShape,
+                                            clip = false               // اجازه خروج سایه از محدوده
+                                        ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp),
                                     enabled = hasPhonePermission
@@ -1308,7 +876,12 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .padding(innerPadding)
                                         .padding(8.dp)
                                         .size(56.dp)
-                                        .align(Alignment.BottomEnd),
+                                        .align(Alignment.BottomEnd)
+                                        .shadow(
+                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            shape = CircleShape,
+                                            clip = false               // اجازه خروج سایه از محدوده
+                                        ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
                                 ) {
@@ -1513,7 +1086,12 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     modifier = Modifier
                                         .padding(innerPadding)
                                         .size(56.dp)
-                                        .align(Alignment.BottomEnd),
+                                        .align(Alignment.BottomEnd)
+                                        .shadow(
+                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            shape = CircleShape,
+                                            clip = false               // اجازه خروج سایه از محدوده
+                                        ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp),
                                     enabled = hasPhonePermission
@@ -1611,7 +1189,12 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .padding(8.dp)
                                         .padding(innerPadding)
                                         .size(56.dp)
-                                        .align(Alignment.BottomEnd),
+                                        .align(Alignment.BottomEnd)
+                                        .shadow(
+                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            shape = CircleShape,
+                                            clip = false               // اجازه خروج سایه از محدوده
+                                        ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
                                 ) {
@@ -1690,7 +1273,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
             text = {
                 Text(text = "You can send an SMS to support by clicking the button below.")
             },
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(2.dp),
             confirmButton = {
                 Button(
                     onClick = {
@@ -1699,17 +1282,18 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                         val uri = "sms:$phoneNumber".toUri()
                         val intent = Intent(Intent.ACTION_VIEW, uri)
                         context.startActivity(intent)
-                    }, shape = RoundedCornerShape(4.dp)
+                    }, shape = RoundedCornerShape(2.dp)
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.sms), contentDescription = null
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Send SMS")
                 }
             },
             dismissButton = {
                 TextButton(
-                    shape = RoundedCornerShape(4.dp), onClick = {
+                    shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showSupportDialog = false
                     }) {
@@ -1732,10 +1316,10 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                     Text(text = RULES)
                 }
             },
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(2.dp),
             confirmButton = {
                 TextButton(
-                    shape = RoundedCornerShape(4.dp), onClick = {
+                    shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showTermsDialog = false
                     }) {
@@ -1756,7 +1340,8 @@ fun VerifySimCard(
 
     if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
         //val iccidCollector = remember(context) { IccidCollector(context) }
-        val iccids = remember { mutableStateOf(getIccidsFromSubscriptionManager(context = context)) }
+        val iccids =
+            remember { mutableStateOf(getIccidsFromSubscriptionManager(context = context)) }
 
         Column(
             modifier = Modifier.fillMaxSize()
@@ -1766,7 +1351,7 @@ fun VerifySimCard(
                     containerColor = MaterialTheme.colorScheme.tertiary
                 ), elevation = CardDefaults.cardElevation(
                     defaultElevation = 4.dp
-                ), shape = RoundedCornerShape(0.dp)
+                ), shape = RectangleShape
             ) {
                 Row(
                     modifier = Modifier
@@ -1803,7 +1388,7 @@ fun VerifySimCard(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ), elevation = CardDefaults.cardElevation(
                         defaultElevation = 4.dp
-                    ), shape = RoundedCornerShape(4.dp), onClick = {
+                    ), shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         setSelectedIccid(iccid)
                     }) {
@@ -1849,7 +1434,7 @@ fun VerifySimCard(
                     containerColor = MaterialTheme.colorScheme.tertiary
                 ), elevation = CardDefaults.cardElevation(
                     defaultElevation = 4.dp
-                ), shape = RoundedCornerShape(0.dp)
+                ), shape = RectangleShape
             ) {
                 Row(
                     modifier = Modifier
@@ -1886,7 +1471,7 @@ fun VerifySimCard(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ), elevation = CardDefaults.cardElevation(
                         defaultElevation = 4.dp
-                    ), shape = RoundedCornerShape(4.dp), onClick = {
+                    ), shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         setSelectedIccid(iccid)
                     }) {
@@ -1922,6 +1507,641 @@ fun VerifySimCard(
     }
 }
 
+@SuppressLint("ConfigurationScreenWidthHeight")
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun MainScreen(
+    contactsList: List<String>
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
+    val drawerRatio = when (windowSizeClass.widthSizeClass) {
+        Compact -> 0.8f
+        Medium -> 0.5f
+        else -> 0.3f
+    }
+
+    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
+
+    val view = LocalView.current
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(drawerRatio)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(192.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
+                                    ), startY = 184.dp.toPx(), endY = 192.dp.toPx()
+                                ), blendMode = BlendMode.Multiply
+                            )
+                        }
+                )
+            }
+        },
+    ) {
+        //Box
+        Row(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(
+                        if (expandedScreen) 0.3f else 1f
+                    ),
+                //.shadow(
+                //    elevation = 16.dp,
+                //    clip = true
+                //),
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("GChat")
+                        }, navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    scope.launch {
+                                        drawerState.apply {
+                                            if (isClosed) open() else close()
+                                        }
+                                    }
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.menu),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        }, actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.search),
+                                    contentDescription = "Search"
+                                )
+                            }
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp,
+                            shape = RectangleShape,
+                            clip = false
+                        )
+                    )
+                }
+            ) { innerPadding ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+//                        .verticalScroll(rememberScrollState())
+                    ) {
+                        item {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                            )
+                        }
+
+                        items(contactsList) { text ->
+                            Card(
+                                modifier = Modifier
+                                    .padding(
+                                        start = 8.dp,
+                                        top = 0.dp,
+                                        end = 8.dp,
+                                        bottom = 8.dp
+                                    )
+                                    .fillMaxWidth(), colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                ), elevation = CardDefaults.cardElevation(
+                                    defaultElevation = 4.dp
+                                ), shape = RoundedCornerShape(2.dp), onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                setSelectedIccid(iccid)
+                                }) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = text,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = text,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                            navController.navigate("login") {
+//                                popUpTo(0) {
+//                                    inclusive = true
+//                                }
+//                            }
+                        },
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .padding(innerPadding)
+                            .size(56.dp)
+                            .align(Alignment.BottomEnd)
+                            .shadow(
+                                elevation = 6.dp,          // سایه مطابق MD1
+                                shape = CircleShape,
+                                clip = false               // اجازه خروج سایه از محدوده
+                            ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(16.dp),
+//                        enabled = hasPhonePermission
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_forward),
+                            contentDescription = "Accept and Sign-In",
+                            modifier = Modifier.fillMaxSize(),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+            if (expandedScreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        //.fillMaxWidth(0.7f)
+                        .fillMaxWidth()
+                        //.align(Alignment.CenterEnd)
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.1f), Color.Transparent
+                                    ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
+                                ), blendMode = BlendMode.Multiply
+                            )
+                        }) {
+                    ChatScreen()
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AnimatedCircle(
+    modifier: Modifier,
+    width: Dp,
+    height: Dp,
+    chord: Dp,
+    isExpanded: Boolean,
+    close: () -> Unit,
+    relativeX: Float,
+    relativeY: Float,
+    content: @Composable () -> Unit
+) {
+    val sizeBtn by animateDpAsState(
+        targetValue = if (isExpanded) (chord.value * 2).dp else 48.dp, animationSpec = tween(
+            durationMillis = 200, easing = FastOutSlowInEasing
+        ), label = "circle_size"
+    )
+
+    val surface = MaterialTheme.colorScheme.surface
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (isExpanded) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
+                        close()
+                    }
+                    .background(
+                        Color(0xFF000000).copy(
+                            alpha = ((sizeBtn - 48.dp).value / (sizeBtn.value - 48.dp.value)).coerceIn(
+                                0f, 0.25f
+                            )
+                        )
+                    ))
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(8.dp)
+                .height(height)
+                .width(width)
+                .clip(RoundedCornerShape(2.dp))
+                .align(Alignment.BottomStart)
+        ) {
+            val canvasmodifier =
+                if (sizeBtn / 2 != 24.dp) Modifier
+                    .fillMaxSize()
+                    .align(Alignment.Center)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) { } else Modifier
+                    .fillMaxSize()
+                    .align(Alignment.Center)
+
+            Canvas(
+                modifier = canvasmodifier
+            ) {
+                val radius = sizeBtn.toPx() / 2
+
+                val centerX = size.width * relativeX + 24.dp.toPx()
+                val centerY = size.height * relativeY - 24.dp.toPx()
+
+                drawCircle(
+                    color = if (radius != 24.dp.toPx()) surface else Color.Transparent,
+                    radius = radius,
+                    center = Offset(centerX, centerY)
+                )
+            }
+
+            if (isExpanded) {
+                Box(
+                    modifier = Modifier.alpha(
+                        ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+                            0f, 1f
+                        )
+                    )
+                ) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen() {
+    val view = LocalView.current
+
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text("Contact")
+                }, navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = "Menu"
+                        )
+                    }
+                }, actions = {
+                    IconButton(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.menu_dots),
+                            contentDescription = "Search"
+                        )
+                    }
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp,
+                    shape = RectangleShape,
+                    clip = false
+                )
+            )
+        },
+
+        ) { innerPadding ->
+        var renderValue by remember { mutableIntStateOf(5) }
+        var isExpandedAttachment by remember { mutableStateOf(false) }
+        var isExpandedEmoji by remember { mutableStateOf(false) }
+        var message by remember { mutableStateOf("") }
+        val onSurface = MaterialTheme.colorScheme.onSurface
+
+        Column {
+            AdvancedDynamicLightEffectOptim(
+                renderValue = renderValue, modifier = Modifier.weight(1f)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            LazyColumn(
+                modifier = Modifier.weight(1f), reverseLayout = true
+            ) {
+
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp, max = 256.dp)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .imePadding(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                IconButton(
+                    onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        isExpandedAttachment = true
+                    },
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.attach),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = 8.dp, bottom = 10.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = RectangleShape,
+                            clip = false
+                        )
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(2.dp)
+                        )
+                ) {
+                    Row() {
+                        IconButton({
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            isExpandedEmoji = true
+                        }) {
+                            Icon(
+                                painter = painterResource(R.drawable.emoji),
+                                contentDescription = null,
+                                tint = onSurface.copy(alpha = 0.5f)
+                            )
+                        }
+
+                        AndroidView(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 8.dp),
+                            factory = { context ->
+                                EditText(context).apply {
+                                    layoutDirection = View.LAYOUT_DIRECTION_LOCALE
+                                    textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+                                    gravity = Gravity.START or Gravity.TOP
+                                    background = null
+
+                                    hint = "type your message..."
+                                    setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
+
+                                    //addTextChangedListener(object : TextWatcher {
+                                    //    override fun beforeTextChanged(
+                                    //        s: CharSequence?,
+                                    //        start: Int,
+                                    //        count: Int,
+                                    //        after: Int
+                                    //    ) {
+                                    //    }
+
+                                    //    override fun onTextChanged(
+                                    //        s: CharSequence?,
+                                    //        start: Int,
+                                    //        before: Int,
+                                    //        count: Int
+                                    //    ) {
+                                    //        val newText = s.toString()
+                                    //        if (newText != message) {
+                                    //            onValueChange(newText)
+                                    //        }
+                                    //    }
+
+                                    //    override fun afterTextChanged(s: Editable?) {}
+                                    //})
+                                }
+                            },
+                            update = { editText ->
+                                val currentText = editText.text.toString()
+                                if (currentText != message) {
+                                    editText.setText(message)
+                                    editText.setSelection(message.length)
+                                }
+
+                                editText.setTextColor(onSurface.toArgb())
+                            }
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    },
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(48.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.send),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
+
+        AnimatedCircle(
+            modifier = Modifier.padding(innerPadding),
+            width = 224.dp,
+            height = 112.dp,
+            chord = 250.dp,
+            isExpanded = isExpandedAttachment,
+            close = { isExpandedAttachment = false },0f,1f) {
+            Column {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "Photos and videos") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.photo), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "File") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.folder), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+            }
+        }
+
+        AnimatedCircle(
+            modifier = Modifier.padding(innerPadding),
+            width = 400.dp,
+            height = 420.dp,
+            chord = 580.dp,
+            isExpanded = isExpandedEmoji,
+            close = { isExpandedEmoji = false },0.2f,1f) {
+            Column {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "Photos and videos") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.photo), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "File") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.folder), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+            }
+        }
+
+        Button({ renderValue = (1..10).random() }, modifier = Modifier.padding(innerPadding)) { }
+    }
+}
+
+@Composable
+fun AdvancedDynamicLightEffectOptim(
+    renderValue: Int = 5, modifier: Modifier = Modifier
+) {
+    val targetAngle1 = renderValue * 36f
+    val angle1 by animateFloatAsState(
+        targetValue = targetAngle1, animationSpec = tween(
+            durationMillis = 2000, easing = FastOutSlowInEasing
+        ), label = "angle1"
+    )
+
+    val targetAngle2 = targetAngle1 + 180f
+    val angle2 by animateFloatAsState(
+        targetValue = targetAngle2, animationSpec = tween(
+            durationMillis = 2000, easing = FastOutSlowInEasing
+        ), label = "angle2"
+    )
+
+    val sceneRotation by animateFloatAsState(
+        targetValue = 0f, animationSpec = tween(durationMillis = 1), label = "scene"
+    )
+
+    Canvas(
+        modifier = modifier.fillMaxSize()
+    ) {
+        val radius = hypot(size.width, size.height)
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val orbitRadius = minOf(size.width, size.height) * 0.7f
+
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF6DA687), Color(0xFF89B885)
+                ),
+                start = Offset(center.x - radius, center.y),
+                end = Offset(center.x + radius, center.y)
+            )
+        )
+
+        rotate(
+            degrees = sceneRotation, pivot = center
+        ) {
+            fun pointOnCircle(angleDegrees: Float): Offset {
+                val angleRad = Math.toRadians(angleDegrees.toDouble()).toFloat()
+                return Offset(
+                    x = center.x + orbitRadius * cos(angleRad),
+                    y = center.y + orbitRadius * sin(angleRad)
+                )
+            }
+
+            val lightRadius = radius * 0.7f
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFD1D68C), Color.Transparent
+                    ), center = pointOnCircle(angle1), radius = lightRadius
+                ), radius = radius, center = center, blendMode = BlendMode.Screen
+            )
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFD5DAB8), Color.Transparent
+                    ), center = pointOnCircle(angle2), radius = lightRadius * 0.85f
+                ), radius = radius, center = center, blendMode = BlendMode.Screen
+            )
+        }
+    }
+}
+
 class SmsReceiver : BroadcastReceiver() {
     @SuppressLint("UnsafeProtectedBroadcastReceiver")
     override fun onReceive(context: Context, intent: Intent) {
@@ -1944,8 +2164,7 @@ class HeadlessSmsSendService : Service() {
 
 fun getICCIDList(context: Context): List<String> {
     if (ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_PHONE_STATE
+            context, Manifest.permission.READ_PHONE_STATE
         ) != PackageManager.PERMISSION_GRANTED
     ) {
         return emptyList()
