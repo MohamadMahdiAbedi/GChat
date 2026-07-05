@@ -49,6 +49,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -71,13 +73,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -127,11 +129,13 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
@@ -146,9 +150,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import ir.gchat.ui.theme.GChatTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,11 +173,6 @@ import org.json.JSONObject
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
-import android.net.Uri
-import android.os.Handler
-import android.os.Looper
-import android.provider.Telephony.Sms
-import androidx.lifecycle.Lifecycle
 
 const val RULES =
     "GNet and GNet Corp Platform Rules and Regulations\n\n1. Platform Principles\nEquality: Users have complete freedom of opinion, choice of audience, and membership in groups. The GNet platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.\nContent Responsibility: The publishing user is directly responsible for all published content. The platform acts as a technical intermediary and does not accept legal or criminal liability for user content (except in cases where the law expressly provides otherwise).\n\n2. Registration, Account Ownership, and Privacy\nAccount Ownership: Your account information belongs to you and you should not make it available to other parties. The platform is not responsible for any incidents resulting from the sharing of information by the user.\nAccount Deletion: If you request to delete your account, all information related to the user, including messages, contacts, files, groups, and channels created, will be completely removed from the user's access.\nImpersonation Prohibition: Impersonating others, especially celebrities, or members of the GNet team, is prohibited and will result in immediate account ban.\n\n3. Content Privacy Classification\nThe platform's intelligent system defines different levels of content access based on the type of interaction:\n1. Private messages: Only the parties involved in the conversation (2-person or private groups) can view the content.\n2. Private group/channel: Only members who have officially joined can view the content.\n3. Public channel: The content of these channels is visible on the GNet website and can even be viewed by non-members.\n4. Unauthorized content\nAny publication or promotion of the following is prohibited and will be subject to legal action:\n1. Crimes against persons:\nInsult, humiliation, insult and spam.\nHarassment, harassment and nuisance in personal messages, groups, comments, etc.\nThreats to life, encouragement of violence, suicide, self-harm or other harm.\nPublishing and revealing the private information of others (such as address, contact number, identification documents) without their consent.\nactivities against an individual or destruction campaigns.\n2. Immoral and sexual content:\nPornography is prohibited in all spaces (including cloud space) and will lead to expulsion from the platform.\nContent related to child abuse (CSAM) will lead to the strictest treatment.\n3. Fraud and illegal activities:\nPublishing online theft links, fraud and redirection to fake portals.\nBuying and selling drugs, alcoholic beverages, smuggling, gambling and betting.\nSelling memberships and buying/selling user accounts.\nPublishing fake news that leads to serious harm to individuals or real/legal entities.\n4. Technical security:\nDistribution of viruses, malware or any malicious code (unless explicitly published for educational purposes and with the necessary warnings).\n\n5. Special rules for managing channels, groups and rooms\nCreator's responsibility: The creator of each group, channel or room is fully responsible for monitoring the content and behavior of its members.\nRoom rules:\nThe admin or creator of the room is obliged to delete the offending content and remove the offending user from the room.\nRooms whose purpose is spam (multiple messages with low content value), fraudulent advertising, or promotion of prohibited content will be closed.\nChoosing offensive/immoral names or descriptions for the room is not allowed.\nChannel rules:\nStore channels: The GNet platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.\nIn store products where the model is present in the image, the model must be dressed in a way that cannot be abused.\nDisagreements: Disagreements are natural, but users are required to handle disagreements respectfully and without insults or harassment.\n\n6. Mechanism for dealing with violations\nThe GNet platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):\n\na) Personal account penalties:\n1. Official warning and removal of the offending content.\n2. Stopping contact list synchronization.\n3. Restriction on sending messages to non-contacts.\n4. Restriction on sending messages in groups that the user is not an administrator of.\n5. Complete restriction on sending messages on the platform.\n6. Restriction on creating new channels or groups.\n7. Restriction on adding members to groups/channels.\n8. Expulsion from the platform: In extreme cases, the user account will be deleted and all groups and channels created by that user will also be deleted.\n\nb) Group or channel penalties:\n1. Revocation of public membership links.\n2. Disabling the public search feature for the group/channel.\n3. Restricting new post posting.\n4. Blocking or completely deleting the group/channel.\n5. Removing the public channel from the platform lists.\n\n7. Reporting violations and contacting support\nUsers are required to report any violating content or inappropriate behavior. All reports will be carefully reviewed.\nTo send suggestions, criticism, bug reports or questions, you can contact us from the internal support section of the application or through the admin ID.\n\n8. Changes to the rules\nThe GNet platform has the right to change, modify or update its rules and regulations at any time and without prior notice.\nContinuing to use the platform services after any changes are made means full acceptance of the new rules by the user.\nMajor and critical changes will be notified to users via an in-app message or the official GNet notification channel.\nUsers are advised to periodically check the page Check the rules.\n\nGNet Corp | Always with you for a safe and fast space"
@@ -249,6 +250,16 @@ val ICCID_KEY = stringPreferencesKey("iccid")
 val LOGINED_KEY = booleanPreferencesKey("logined")
 val THEME_KEY = intPreferencesKey("theme")
 
+data class Person(
+    val id: String = "",
+    val name: String = "",
+    val profilePicture: String = "",
+    val lastMessageText: String = "",
+    val lastMessageDate: String = "",
+    val unreadMessages: Int = 0,
+    val conectionStatus: Boolean = false,
+)
+
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context = getApplication<Application>()
@@ -266,8 +277,30 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() })
     val oldLogined: StateFlow<Boolean> = _oldLogined.asStateFlow()
 
-    private val _contactsList = MutableStateFlow(listOf("عباس عراقچی", "استاد قنبری"))
-    val contactsList: StateFlow<List<String>> = _contactsList.asStateFlow()
+    private val _contactsList = MutableStateFlow(
+        listOf(
+            Person(
+                name = "عباس عراقچی",
+                id = "test1",
+                lastMessageDate = "12:20",
+                unreadMessages = 999,
+                lastMessageText = "جایگزین کردیم"
+            ), Person(
+                name = "امام خمینی",
+                id = "test2",
+                lastMessageDate = "1360",
+                unreadMessages = 14,
+                lastMessageText = "خیلی خری"
+            ), Person(
+                name = "استاد قنبری",
+                id = "test3",
+                lastMessageDate = "1m",
+                unreadMessages = 0,
+                lastMessageText = "بله خبر دارم."
+            )
+        )
+    )
+    val contactsList: StateFlow<List<Person>> = _contactsList.asStateFlow()
 
     fun connect() {
 
@@ -491,7 +524,7 @@ fun MainNavigation(
     login: (String) -> Unit,
     logined: Boolean,
     oldLogined: Boolean,
-    contactsList: List<String>
+    contactsList: List<Person>
 ) {
     val navController = rememberNavController()
     LaunchedEffect(logined) {
@@ -512,7 +545,9 @@ fun MainNavigation(
         }
     }
     NavHost(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
         navController = navController,
         startDestination = "greeting",
 
@@ -537,24 +572,28 @@ fun MainNavigation(
                 targetOffsetY = { it }, animationSpec = tween(300)
             )
         }) {
-        composable("greeting") {
+        composable(route = "greeting") {
             Greeting(
                 setTheme = setTheme, theme = theme, login = login
             )
         }
-        composable("mainScreen") {
+        composable(route = "mainScreen") {
             MainScreen(contactsList = contactsList, navHostController = navController)
         }
-        composable("chatScreen") {
-            ChatScreen(back = { navController.popBackStack() })
+        composable(
+            route = "chatScreen?id={id}", arguments = listOf(
+                navArgument("id") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            ChatScreen(back = { navController.popBackStack() }, id = id)
         }
-        composable("wait") {
+        composable(route = "wait") {
             Scaffold(
                 modifier = Modifier.fillMaxSize(), topBar = {
                     TopAppBar(
                         title = {
                             Text("Connecting...")
-                        }, colors = TopAppBarDefaults.topAppBarColors(
+                        }, expandedHeight = 56.dp, colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             subtitleContentColor = MaterialTheme.colorScheme.onPrimary
@@ -912,41 +951,41 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                             )
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .align(Alignment.TopEnd)
-                        ) {
-                            DropdownMenu(
-                                modifier = Modifier.width(200.dp),
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }) {
-                                DropdownMenuItem(text = {
-                                    Text(
-                                        text = dropdownThemeText
-                                    )
-                                }, leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(
-                                            id = dropdownThemeIcon
-                                        ), contentDescription = "Theme"
-                                    )
-                                }, onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    setTheme()
-                                })
-                                DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.support),
-                                        contentDescription = "Support"
-                                    )
-                                }, onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    expanded = false
-                                    showSupportDialog = true
-                                })
-                            }
-                        }
+//                        Box(
+//                            modifier = Modifier
+//                                .padding(16.dp)
+//                                .align(Alignment.TopEnd)
+//                        ) {
+//                            DropdownMenu(
+//                                modifier = Modifier.width(200.dp),
+//                                expanded = expanded,
+//                                onDismissRequest = { expanded = false }) {
+//                                DropdownMenuItem(text = {
+//                                    Text(
+//                                        text = dropdownThemeText
+//                                    )
+//                                }, leadingIcon = {
+//                                    Icon(
+//                                        painter = painterResource(
+//                                            id = dropdownThemeIcon
+//                                        ), contentDescription = "Theme"
+//                                    )
+//                                }, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    setTheme()
+//                                })
+//                                DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+//                                    Icon(
+//                                        painter = painterResource(id = R.drawable.support),
+//                                        contentDescription = "Support"
+//                                    )
+//                                }, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    expanded = false
+//                                    showSupportDialog = true
+//                                })
+//                            }
+//                        }
                     }
                     Row(
                         modifier = Modifier
@@ -959,6 +998,47 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                 color = Color(0xFFDFE4DD)
                             )
                         )
+                    }
+                }
+
+                AnimatedDropMenu(
+                    modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
+                    width = 200.dp,
+                    height = 110.dp,
+                    chord = 230.dp,
+                    isExpanded = expanded,
+                    close = { expanded = false },
+                    ratioX = 1f,
+                    ratioY = 0f,
+                    position = Alignment.TopEnd,
+                    hasBackgroundCover = false
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DropdownMenuItem(text = {
+                            Text(
+                                text = dropdownThemeText
+                            )
+                        }, leadingIcon = {
+                            Icon(
+                                painter = painterResource(
+                                    id = dropdownThemeIcon
+                                ), contentDescription = "Theme"
+                            )
+                        }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            setTheme()
+                        })
+                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.support),
+                                contentDescription = "Support"
+                            )
+                        }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            expanded = false
+                            showSupportDialog = true
+                        })
                     }
                 }
             } else {
@@ -1021,41 +1101,41 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     )
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .padding(16.dp)
-                                        .align(Alignment.TopEnd)
-                                ) {
-                                    DropdownMenu(
-                                        modifier = Modifier.width(200.dp),
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false }) {
-                                        DropdownMenuItem(text = {
-                                            Text(
-                                                text = dropdownThemeText
-                                            )
-                                        }, leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(
-                                                    id = dropdownThemeIcon
-                                                ), contentDescription = "Theme"
-                                            )
-                                        }, onClick = {
-                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                                            setTheme()
-                                        })
-                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(id = R.drawable.support),
-                                                contentDescription = "Support"
-                                            )
-                                        }, onClick = {
-                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                                            expanded = false
-                                            showSupportDialog = true
-                                        })
-                                    }
-                                }
+//                                Box(
+//                                    modifier = Modifier
+//                                        .padding(16.dp)
+//                                        .align(Alignment.TopEnd)
+//                                ) {
+//                                    DropdownMenu(
+//                                        modifier = Modifier.width(200.dp),
+//                                        expanded = expanded,
+//                                        onDismissRequest = { expanded = false }) {
+//                                        DropdownMenuItem(text = {
+//                                            Text(
+//                                                text = dropdownThemeText
+//                                            )
+//                                        }, leadingIcon = {
+//                                            Icon(
+//                                                painter = painterResource(
+//                                                    id = dropdownThemeIcon
+//                                                ), contentDescription = "Theme"
+//                                            )
+//                                        }, onClick = {
+//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                            setTheme()
+//                                        })
+//                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+//                                            Icon(
+//                                                painter = painterResource(id = R.drawable.support),
+//                                                contentDescription = "Support"
+//                                            )
+//                                        }, onClick = {
+//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                            expanded = false
+//                                            showSupportDialog = true
+//                                        })
+//                                    }
+//                                }
 
                                 Text(
                                     text = "GChat is secure and optimized for some tasks.",
@@ -1109,6 +1189,47 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontSize = 14.sp
                                     )
+                                }
+
+                                AnimatedDropMenu(
+                                    modifier = Modifier.zIndex(1f),
+                                    width = 200.dp,
+                                    height = 110.dp,
+                                    chord = 230.dp,
+                                    isExpanded = expanded,
+                                    close = { expanded = false },
+                                    ratioX = 1f,
+                                    ratioY = 0f,
+                                    position = Alignment.TopEnd,
+                                    hasBackgroundCover = false
+                                ) {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        DropdownMenuItem(text = {
+                                            Text(
+                                                text = dropdownThemeText
+                                            )
+                                        }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(
+                                                    id = dropdownThemeIcon
+                                                ), contentDescription = "Theme"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            setTheme()
+                                        })
+                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.support),
+                                                contentDescription = "Support"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            expanded = false
+                                            showSupportDialog = true
+                                        })
+                                    }
                                 }
                             }
                         }
@@ -1196,16 +1317,57 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     )
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .padding(16.dp)
-                                        .padding(8.dp)
-                                        .align(Alignment.TopEnd)
+//                                Box(
+//                                    modifier = Modifier
+//                                        .padding(16.dp)
+//                                        .padding(8.dp)
+//                                        .align(Alignment.TopEnd)
+//                                ) {
+//                                    DropdownMenu(
+//                                        modifier = Modifier.width(200.dp),
+//                                        expanded = expanded,
+//                                        onDismissRequest = { expanded = false }) {
+//                                        DropdownMenuItem(text = {
+//                                            Text(
+//                                                text = dropdownThemeText
+//                                            )
+//                                        }, leadingIcon = {
+//                                            Icon(
+//                                                painter = painterResource(
+//                                                    id = dropdownThemeIcon
+//                                                ), contentDescription = "Theme"
+//                                            )
+//                                        }, onClick = {
+//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                            setTheme()
+//                                        })
+//                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+//                                            Icon(
+//                                                painter = painterResource(id = R.drawable.support),
+//                                                contentDescription = "Support"
+//                                            )
+//                                        }, onClick = {
+//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                            expanded = false
+//                                            showSupportDialog = true
+//                                        })
+//                                    }
+//                                }
+
+                                AnimatedDropMenu(
+                                    modifier = Modifier.zIndex(1f),
+                                    width = 200.dp,
+                                    height = 110.dp,
+                                    chord = 230.dp,
+                                    isExpanded = expanded,
+                                    close = { expanded = false },
+                                    ratioX = 1f,
+                                    ratioY = 0f,
+                                    position = Alignment.TopEnd,
+                                    hasBackgroundCover = false
                                 ) {
-                                    DropdownMenu(
-                                        modifier = Modifier.width(200.dp),
-                                        expanded = expanded,
-                                        onDismissRequest = { expanded = false }) {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
                                             Text(
                                                 text = dropdownThemeText
@@ -1235,6 +1397,19 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                             }
                         }
                     }
+                }
+
+                if (expanded) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(0.5f)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }) {
+                                expanded = false
+                            }
+                    )
                 }
 
                 Column {
@@ -1291,9 +1466,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                 }
             },
             modifier = Modifier.shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(2.dp),
-                clip = false
+                elevation = 16.dp, shape = RoundedCornerShape(2.dp), clip = false
             )
         )
     }
@@ -1302,9 +1475,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
         AlertDialog(
             modifier = Modifier
                 .shadow(
-                    elevation = 16.dp,
-                    shape = RoundedCornerShape(2.dp),
-                    clip = false
+                    elevation = 16.dp, shape = RoundedCornerShape(2.dp), clip = false
                 )
                 .fillMaxHeight(0.8f),
             onDismissRequest = { showTermsDialog = false },
@@ -1511,12 +1682,13 @@ fun VerifySimCard(
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(
-    ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3AdaptiveApi::class,
+    ExperimentalMaterial3Api::class,
     ExperimentalAnimationApi::class
 )
 @Composable
 fun MainScreen(
-    contactsList: List<String>, navHostController: NavHostController
+    contactsList: List<Person>, navHostController: NavHostController
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -1537,29 +1709,44 @@ fun MainScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(drawerRatio)
+                    .shadow(elevation = 16.dp, clip = false)
                     .background(MaterialTheme.colorScheme.surface)
                     .verticalScroll(rememberScrollState())
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(192.dp)
+                        .aspectRatio(16 / 9f)
                         .background(MaterialTheme.colorScheme.primary)
                         .drawWithContent {
                             drawContent()
+
+                            val gradientHeight = size.height * 0.15f
+
                             drawRect(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
-                                    ), startY = 184.dp.toPx(), endY = 192.dp.toPx()
-                                ), blendMode = BlendMode.Multiply
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.1f)
+                                    ),
+                                    startY = size.height - gradientHeight,
+                                    endY = size.height
+                                ),
+                                blendMode = BlendMode.Multiply
                             )
-                        })
+                        }
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.wallpaper_picture),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         },
     ) {
@@ -1573,8 +1760,7 @@ fun MainScreen(
                     )
             ) {
                 Scaffold(
-                    modifier = Modifier
-                        .fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     //.shadow(
                     //    elevation = 16.dp,
                     //    clip = true
@@ -1583,7 +1769,7 @@ fun MainScreen(
                         TopAppBar(
                             title = {
                                 Text("GChat")
-                            }, navigationIcon = {
+                            }, expandedHeight = 56.dp, navigationIcon = {
                                 IconButton(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -1615,7 +1801,8 @@ fun MainScreen(
                                 titleContentColor = MaterialTheme.colorScheme.onPrimary,
                                 actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                                 subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                            ), modifier = Modifier.shadow(
+                            ),
+                            modifier = Modifier.shadow(
                                 elevation = 4.dp, shape = RectangleShape, clip = false
                             )
                         )
@@ -1626,60 +1813,122 @@ fun MainScreen(
                                 .fillMaxSize()
                                 .padding(innerPadding)
                         ) {
-                            items(contactsList) { text ->
-                                Card(
+                            items(
+                                items = contactsList, key = { it.id }) { person ->
+
+                                Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(64.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface
-                                    ),
-                                    shape = RectangleShape,
-                                    onClick = {}
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        .height(72.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        val id = person.id
+                                        navHostController.navigate("chatScreen?id=$id")
+                                    }) {
+
+                                    Box(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+
                                         Spacer(
                                             modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .padding(start = 72.dp)
                                                 .fillMaxWidth()
-                                                .padding(start = 64.dp)
                                                 .height(1.dp)
-                                                .align(Alignment.BottomEnd)
                                                 .background(
-                                                    MaterialTheme.colorScheme.onSurface.copy(
-                                                        alpha = 0.1f
-                                                    )
+                                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                                                 )
                                         )
+
                                         Row(
                                             modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(8.dp),
+                                                .fillMaxSize()
+                                                .padding(horizontal = 16.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+
                                             Surface(
-                                                modifier = Modifier.size(48.dp),
-                                                shape = CircleShape
+                                                modifier = Modifier.size(40.dp), shape = CircleShape
                                             ) {
                                                 Image(
-                                                    painter = painterResource(id = R.drawable.abbas_araghchi),
+                                                    painter = painterResource(R.drawable.abbas_araghchi),
                                                     contentDescription = null,
-                                                    modifier = Modifier.size(48.dp),
-                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
                                                 )
                                             }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Column {
+
+                                            Spacer(Modifier.width(16.dp))
+
+                                            Column(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+
                                                 Text(
-                                                    text = text,
-                                                    color = MaterialTheme.colorScheme.onSurface
+                                                    text = person.name,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
+
                                                 Text(
-                                                    text = text,
+                                                    text = person.lastMessageText,
+                                                    style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurface.copy(
                                                         alpha = 0.6f
                                                     ),
-                                                    style = MaterialTheme.typography.bodySmall
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
+                                            }
+
+                                            Spacer(Modifier.width(16.dp))
+
+                                            Column(
+                                                horizontalAlignment = Alignment.End
+                                            ) {
+
+                                                Text(
+                                                    text = person.lastMessageDate,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+
+                                                Spacer(Modifier.height(4.dp))
+
+                                                if (person.unreadMessages > 0) {
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .defaultMinSize(minWidth = 20.dp)
+                                                            .height(20.dp)
+                                                            .background(
+                                                                MaterialTheme.colorScheme.primary,
+                                                                RoundedCornerShape(10.dp)
+                                                            )
+                                                            .padding(horizontal = 4.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+
+                                                        Text(
+                                                            text = person.unreadMessages.toString(),
+                                                            color = MaterialTheme.colorScheme.onPrimary,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            maxLines = 1
+                                                        )
+                                                    }
+
+                                                } else {
+
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.double_check),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(20.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1690,7 +1939,6 @@ fun MainScreen(
                         Button(
                             onClick = {
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                navHostController.navigate("chatScreen")
                             },
                             modifier = Modifier
                                 .padding(8.dp)
@@ -1719,12 +1967,12 @@ fun MainScreen(
                             .background(Color(0x44000000))
                     )
                 }
+
+                //search
                 val heightFraction by animateFloatAsState(
                     //64.dp.value / 1000 or 0f
-                    targetValue = if (searching) 1f else 0f,
-                    animationSpec = tween(
-                        durationMillis = 300,
-                        easing = FastOutSlowInEasing
+                    targetValue = if (searching) 1f else 0f, animationSpec = tween(
+                        durationMillis = 300, easing = FastOutSlowInEasing
                     )
                 )
 
@@ -1748,15 +1996,13 @@ fun MainScreen(
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             searching = !searching
-                        }
-                    ) {
+                        }) {
                         Row {
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     searching = false
-                                }
-                            ) {
+                                }) {
                                 Icon(
                                     painter = painterResource(R.drawable.arrow_back),
                                     contentDescription = "Menu"
@@ -1766,25 +2012,26 @@ fun MainScreen(
                         }
                     }
                 }
-                if (expandedScreen) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            //.fillMaxWidth(0.7f)
-                            .fillMaxWidth()
-                            //.align(Alignment.CenterEnd)
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.1f), Color.Transparent
-                                        ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
-                                    ), blendMode = BlendMode.Multiply
-                                )
-                            }) {
-                        ChatScreen(back = { navHostController.popBackStack() })
-                    }
+            }
+
+            if (expandedScreen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        //.fillMaxWidth(0.7f)
+                        .fillMaxWidth()
+                        //.align(Alignment.CenterEnd)
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.1f), Color.Transparent
+                                    ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
+                                ), blendMode = BlendMode.Multiply
+                            )
+                        }) {
+                    ChatScreen(back = { navHostController.popBackStack() }, id = "test 1")
                 }
             }
         }
@@ -1793,7 +2040,7 @@ fun MainScreen(
 }
 
 @Composable
-fun AnimatedCircle(
+fun AnimatedDropMenu(
     modifier: Modifier,
     width: Dp,
     height: Dp,
@@ -1802,6 +2049,8 @@ fun AnimatedCircle(
     close: () -> Unit,
     ratioX: Float,
     ratioY: Float,
+    position: Alignment,
+    hasBackgroundCover: Boolean,
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
@@ -1810,7 +2059,8 @@ fun AnimatedCircle(
         ), label = "circle_size"
     )
 
-    val surface = MaterialTheme.colorScheme.surface
+    //val surface = MaterialTheme.colorScheme.surface
+    val surface = MenuDefaults.containerColor
 
     Box(modifier = modifier.fillMaxSize()) {
         if (isExpanded) {
@@ -1823,11 +2073,15 @@ fun AnimatedCircle(
                         close()
                     }
                     .background(
-                        Color(0xFF000000).copy(
-                            alpha = ((sizeBtn - 48.dp).value / (sizeBtn.value - 48.dp.value)).coerceIn(
-                                0f, 0.25f
+                        color = if (hasBackgroundCover) {
+                            Color(0xFF000000).copy(
+                                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+                                    0f, 0.25f
+                                )
                             )
-                        )
+                        } else {
+                            Color.Transparent
+                        }
                     ))
         }
 
@@ -1836,8 +2090,13 @@ fun AnimatedCircle(
                 .padding(8.dp)
                 .height(height)
                 .width(width)
+                .shadow(
+                    elevation = if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)) > 0.99f && isExpanded) 8.dp else 0.dp,
+                    shape = RoundedCornerShape(2.dp),
+                    clip = false
+                )
                 .clip(RoundedCornerShape(2.dp))
-                .align(Alignment.BottomStart)
+                .align(position)
         ) {
             val canvasmodifier =
                 if (sizeBtn / 2 != 24.dp) Modifier
@@ -1854,8 +2113,17 @@ fun AnimatedCircle(
             ) {
                 val radius = sizeBtn.toPx() / 2
 
-                val centerX = size.width * ratioX + 24.dp.toPx()
-                val centerY = size.height * ratioY - 24.dp.toPx()
+                val centerX = when (position) {
+                    Alignment.BottomStart -> size.width * ratioX + 24.dp.toPx()
+                    Alignment.TopEnd -> size.width * ratioX - 24.dp.toPx()
+                    else -> size.width * ratioX // Default fallback
+                }
+
+                val centerY = when (position) {
+                    Alignment.BottomStart -> size.height * ratioY - 24.dp.toPx()
+                    Alignment.TopEnd -> size.height * ratioY + 24.dp.toPx()
+                    else -> size.height * ratioY // Default fallback
+                }
 
                 drawCircle(
                     color = if (radius != 24.dp.toPx()) surface else Color.Transparent,
@@ -1881,7 +2149,7 @@ fun AnimatedCircle(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(back: () -> Boolean) {
+fun ChatScreen(back: () -> Boolean, id: String) {
     val view = LocalView.current
 
     Scaffold(
@@ -1892,7 +2160,7 @@ fun ChatScreen(back: () -> Boolean) {
             TopAppBar(
                 title = {
                     Text("Contact")
-                }, navigationIcon = {
+                }, expandedHeight = 56.dp, navigationIcon = {
                     IconButton(
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -2063,15 +2331,17 @@ fun ChatScreen(back: () -> Boolean) {
             }
         }
 
-        AnimatedCircle(
+        AnimatedDropMenu(
             modifier = Modifier.padding(innerPadding),
             width = 224.dp,
             height = 112.dp,
             chord = 250.dp,
             isExpanded = isExpandedAttachment,
             close = { isExpandedAttachment = false },
-            0f,
-            1f
+            ratioX = 0f,
+            ratioY = 1f,
+            position = Alignment.BottomStart,
+            hasBackgroundCover = true
         ) {
             Column {
                 Spacer(
@@ -2100,7 +2370,7 @@ fun ChatScreen(back: () -> Boolean) {
             }
         }
 
-        AnimatedCircle(
+        AnimatedDropMenu(
             modifier = Modifier.padding(innerPadding),
             width = 400.dp,
             height = 420.dp,
@@ -2108,7 +2378,9 @@ fun ChatScreen(back: () -> Boolean) {
             isExpanded = isExpandedEmoji,
             close = { isExpandedEmoji = false },
             ratioX = 0.16f,
-            ratioY = 0.98f
+            ratioY = 0.98f,
+            position = Alignment.BottomStart,
+            hasBackgroundCover = true
         ) {
             Column {
                 Spacer(
@@ -2233,8 +2505,7 @@ class SmsReceiver : BroadcastReceiver() {
 
     private fun isDefaultSmsApp(context: Context): Boolean {
         val packageName = context.packageName
-        val defaultSms =
-            Telephony.Sms.getDefaultSmsPackage(context)
+        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
         return packageName == defaultSms
     }
 
@@ -2262,8 +2533,7 @@ class MmsReceiver : BroadcastReceiver() {
 
     private fun isDefaultSmsApp(context: Context): Boolean {
         val packageName = context.packageName
-        val defaultSms =
-            Telephony.Sms.getDefaultSmsPackage(context)
+        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
         return packageName == defaultSms
     }
 
