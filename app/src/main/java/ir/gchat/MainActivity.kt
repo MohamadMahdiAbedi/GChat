@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.provider.Telephony
 import android.telephony.SubscriptionManager
 import android.view.Gravity
 import android.view.SoundEffectConstants
@@ -28,6 +29,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -79,6 +81,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -98,6 +101,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -141,6 +145,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -162,6 +167,11 @@ import org.json.JSONObject
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.Telephony.Sms
+import androidx.lifecycle.Lifecycle
 
 const val RULES =
     "GNet and GNet Corp Platform Rules and Regulations\n\n1. Platform Principles\nEquality: Users have complete freedom of opinion, choice of audience, and membership in groups. The GNet platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.\nContent Responsibility: The publishing user is directly responsible for all published content. The platform acts as a technical intermediary and does not accept legal or criminal liability for user content (except in cases where the law expressly provides otherwise).\n\n2. Registration, Account Ownership, and Privacy\nAccount Ownership: Your account information belongs to you and you should not make it available to other parties. The platform is not responsible for any incidents resulting from the sharing of information by the user.\nAccount Deletion: If you request to delete your account, all information related to the user, including messages, contacts, files, groups, and channels created, will be completely removed from the user's access.\nImpersonation Prohibition: Impersonating others, especially celebrities, or members of the GNet team, is prohibited and will result in immediate account ban.\n\n3. Content Privacy Classification\nThe platform's intelligent system defines different levels of content access based on the type of interaction:\n1. Private messages: Only the parties involved in the conversation (2-person or private groups) can view the content.\n2. Private group/channel: Only members who have officially joined can view the content.\n3. Public channel: The content of these channels is visible on the GNet website and can even be viewed by non-members.\n4. Unauthorized content\nAny publication or promotion of the following is prohibited and will be subject to legal action:\n1. Crimes against persons:\nInsult, humiliation, insult and spam.\nHarassment, harassment and nuisance in personal messages, groups, comments, etc.\nThreats to life, encouragement of violence, suicide, self-harm or other harm.\nPublishing and revealing the private information of others (such as address, contact number, identification documents) without their consent.\nactivities against an individual or destruction campaigns.\n2. Immoral and sexual content:\nPornography is prohibited in all spaces (including cloud space) and will lead to expulsion from the platform.\nContent related to child abuse (CSAM) will lead to the strictest treatment.\n3. Fraud and illegal activities:\nPublishing online theft links, fraud and redirection to fake portals.\nBuying and selling drugs, alcoholic beverages, smuggling, gambling and betting.\nSelling memberships and buying/selling user accounts.\nPublishing fake news that leads to serious harm to individuals or real/legal entities.\n4. Technical security:\nDistribution of viruses, malware or any malicious code (unless explicitly published for educational purposes and with the necessary warnings).\n\n5. Special rules for managing channels, groups and rooms\nCreator's responsibility: The creator of each group, channel or room is fully responsible for monitoring the content and behavior of its members.\nRoom rules:\nThe admin or creator of the room is obliged to delete the offending content and remove the offending user from the room.\nRooms whose purpose is spam (multiple messages with low content value), fraudulent advertising, or promotion of prohibited content will be closed.\nChoosing offensive/immoral names or descriptions for the room is not allowed.\nChannel rules:\nStore channels: The GNet platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.\nIn store products where the model is present in the image, the model must be dressed in a way that cannot be abused.\nDisagreements: Disagreements are natural, but users are required to handle disagreements respectfully and without insults or harassment.\n\n6. Mechanism for dealing with violations\nThe GNet platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):\n\na) Personal account penalties:\n1. Official warning and removal of the offending content.\n2. Stopping contact list synchronization.\n3. Restriction on sending messages to non-contacts.\n4. Restriction on sending messages in groups that the user is not an administrator of.\n5. Complete restriction on sending messages on the platform.\n6. Restriction on creating new channels or groups.\n7. Restriction on adding members to groups/channels.\n8. Expulsion from the platform: In extreme cases, the user account will be deleted and all groups and channels created by that user will also be deleted.\n\nb) Group or channel penalties:\n1. Revocation of public membership links.\n2. Disabling the public search feature for the group/channel.\n3. Restricting new post posting.\n4. Blocking or completely deleting the group/channel.\n5. Removing the public channel from the platform lists.\n\n7. Reporting violations and contacting support\nUsers are required to report any violating content or inappropriate behavior. All reports will be carefully reviewed.\nTo send suggestions, criticism, bug reports or questions, you can contact us from the internal support section of the application or through the admin ID.\n\n8. Changes to the rules\nThe GNet platform has the right to change, modify or update its rules and regulations at any time and without prior notice.\nContinuing to use the platform services after any changes are made means full acceptance of the new rules by the user.\nMajor and critical changes will be notified to users via an in-app message or the official GNet notification channel.\nUsers are advised to periodically check the page Check the rules.\n\nGNet Corp | Always with you for a safe and fast space"
@@ -533,10 +543,10 @@ fun MainNavigation(
             )
         }
         composable("mainScreen") {
-            MainScreen(contactsList)
+            MainScreen(contactsList = contactsList, navHostController = navController)
         }
         composable("chatScreen") {
-
+            ChatScreen(back = { navController.popBackStack() })
         }
         composable("wait") {
             Scaffold(
@@ -549,9 +559,7 @@ fun MainNavigation(
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             subtitleContentColor = MaterialTheme.colorScheme.onPrimary
                         ), modifier = Modifier.shadow(
-                            elevation = 4.dp,
-                            shape = RectangleShape,
-                            clip = false
+                            elevation = 4.dp, shape = RectangleShape, clip = false
                         )
                     )
                 }) { innerPadding ->
@@ -784,7 +792,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,          // سایه مطابق MD1
                                             shape = CircleShape,
                                             clip = false               // اجازه خروج سایه از محدوده
                                         ),
@@ -860,7 +868,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            elevation = if (!isLoading and !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
                                             shape = CircleShape,
                                             clip = false               // اجازه خروج سایه از محدوده
                                         ),
@@ -1070,7 +1078,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,          // سایه مطابق MD1
                                             shape = CircleShape,
                                             clip = false               // اجازه خروج سایه از محدوده
                                         ),
@@ -1173,7 +1181,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,          // سایه مطابق MD1
+                                            elevation = if (!isLoading and !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
                                             shape = CircleShape,
                                             clip = false               // اجازه خروج سایه از محدوده
                                         ),
@@ -1281,12 +1289,24 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                     }) {
                     Text("Dismiss")
                 }
-            })
+            },
+            modifier = Modifier.shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(2.dp),
+                clip = false
+            )
+        )
     }
 
     if (showTermsDialog) {
         AlertDialog(
-            modifier = Modifier.fillMaxHeight(0.8f),
+            modifier = Modifier
+                .shadow(
+                    elevation = 16.dp,
+                    shape = RoundedCornerShape(2.dp),
+                    clip = false
+                )
+                .fillMaxHeight(0.8f),
             onDismissRequest = { showTermsDialog = false },
             title = { Text("Term of use and privacy") },
             text = {
@@ -1490,10 +1510,13 @@ fun VerifySimCard(
 }
 
 @SuppressLint("ConfigurationScreenWidthHeight")
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class,
+    ExperimentalAnimationApi::class
+)
 @Composable
 fun MainScreen(
-    contactsList: List<String>
+    contactsList: List<String>, navHostController: NavHostController
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -1508,6 +1531,8 @@ fun MainScreen(
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
 
     val view = LocalView.current
+    val covered by rememberSaveable { mutableStateOf(false) }
+    var searching by rememberSaveable { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -1534,176 +1559,238 @@ fun MainScreen(
                                     ), startY = 184.dp.toPx(), endY = 192.dp.toPx()
                                 ), blendMode = BlendMode.Multiply
                             )
-                        }
-                )
+                        })
             }
         },
     ) {
         //Box
         Row(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(
                         if (expandedScreen) 0.3f else 1f
-                    ),
-                //.shadow(
-                //    elevation = 16.dp,
-                //    clip = true
-                //),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("GChat")
-                        }, navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    scope.launch {
-                                        drawerState.apply {
-                                            if (isClosed) open() else close()
-                                        }
-                                    }
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.menu),
-                                    contentDescription = "Menu"
-                                )
-                            }
-                        }, actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.search),
-                                    contentDescription = "Search"
-                                )
-                            }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp,
-                            shape = RectangleShape,
-                            clip = false
-                        )
                     )
-                }
-            ) { innerPadding ->
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-//                        .verticalScroll(rememberScrollState())
-                    ) {
-                        item {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                            )
-                        }
-
-                        items(contactsList) { text ->
-                            Card(
-                                modifier = Modifier
-                                    .padding(
-                                        start = 8.dp,
-                                        top = 0.dp,
-                                        end = 8.dp,
-                                        bottom = 8.dp
+            ) {
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    //.shadow(
+                    //    elevation = 16.dp,
+                    //    clip = true
+                    //),
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Text("GChat")
+                            }, navigationIcon = {
+                                IconButton(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        scope.launch {
+                                            drawerState.apply {
+                                                if (isClosed) open() else close()
+                                            }
+                                        }
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.menu),
+                                        contentDescription = "Menu"
                                     )
-                                    .fillMaxWidth(), colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ), elevation = CardDefaults.cardElevation(
-                                    defaultElevation = 4.dp
-                                ), shape = RoundedCornerShape(2.dp), onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                setSelectedIccid(iccid)
-                                }) {
-                                Row(
+                                }
+                            }, actions = {
+                                IconButton(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        searching = true
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.search),
+                                        contentDescription = "Search"
+                                    )
+                                }
+                            }, colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                                titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                            ), modifier = Modifier.shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
+                        )
+                    }) { innerPadding ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            items(contactsList) { text ->
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .height(64.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    ),
+                                    shape = RectangleShape,
+                                    onClick = {}
                                 ) {
-                                    Column {
-                                        Text(
-                                            text = text,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        Spacer(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 64.dp)
+                                                .height(1.dp)
+                                                .align(Alignment.BottomEnd)
+                                                .background(
+                                                    MaterialTheme.colorScheme.onSurface.copy(
+                                                        alpha = 0.1f
+                                                    )
+                                                )
                                         )
-                                        Text(
-                                            text = text,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(48.dp),
+                                                shape = CircleShape
+                                            ) {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.abbas_araghchi),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(48.dp),
+                                                    contentScale = ContentScale.Crop,
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = text,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = text,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(
+                                                        alpha = 0.6f
+                                                    ),
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Button(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                            navController.navigate("login") {
-//                                popUpTo(0) {
-//                                    inclusive = true
-//                                }
-//                            }
-                        },
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .padding(innerPadding)
-                            .size(56.dp)
-                            .align(Alignment.BottomEnd)
-                            .shadow(
-                                elevation = 6.dp,          // سایه مطابق MD1
-                                shape = CircleShape,
-                                clip = false               // اجازه خروج سایه از محدوده
-                            ),
-                        shape = CircleShape,
-                        contentPadding = PaddingValues(16.dp),
-//                        enabled = hasPhonePermission
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_forward),
-                            contentDescription = "Accept and Sign-In",
-                            modifier = Modifier.fillMaxSize(),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Button(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                navHostController.navigate("chatScreen")
+                            },
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .padding(innerPadding)
+                                .size(56.dp)
+                                .align(Alignment.BottomEnd)
+                                .shadow(
+                                    elevation = 6.dp, shape = CircleShape, clip = false
+                                ),
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(16.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.edit),
+                                contentDescription = "Accept and Sign-In",
+                                modifier = Modifier.fillMaxSize(),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
-            }
-            if (expandedScreen) {
-                Box(
+                if (covered) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x44000000))
+                    )
+                }
+                val heightFraction by animateFloatAsState(
+                    //64.dp.value / 1000 or 0f
+                    targetValue = if (searching) 1f else 0f,
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+
+                Scaffold(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        //.fillMaxWidth(0.7f)
                         .fillMaxWidth()
-                        //.align(Alignment.CenterEnd)
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.1f), Color.Transparent
-                                    ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
-                                ), blendMode = BlendMode.Multiply
-                            )
-                        }) {
-                    ChatScreen()
+                        .fillMaxHeight(heightFraction)
+                        .alpha(heightFraction),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) { innerPadding ->
+                    Card(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .padding(8.dp)
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(2.dp),
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            searching = !searching
+                        }
+                    ) {
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    searching = false
+                                }
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                            // بقیه محتوای Card
+                        }
+                    }
+                }
+                if (expandedScreen) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            //.fillMaxWidth(0.7f)
+                            .fillMaxWidth()
+                            //.align(Alignment.CenterEnd)
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.1f), Color.Transparent
+                                        ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
+                                    ), blendMode = BlendMode.Multiply
+                                )
+                            }) {
+                        ChatScreen(back = { navHostController.popBackStack() })
+                    }
                 }
             }
         }
     }
-}
 
+}
 
 @Composable
 fun AnimatedCircle(
@@ -1713,8 +1800,8 @@ fun AnimatedCircle(
     chord: Dp,
     isExpanded: Boolean,
     close: () -> Unit,
-    relativeX: Float,
-    relativeY: Float,
+    ratioX: Float,
+    ratioY: Float,
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
@@ -1767,8 +1854,8 @@ fun AnimatedCircle(
             ) {
                 val radius = sizeBtn.toPx() / 2
 
-                val centerX = size.width * relativeX + 24.dp.toPx()
-                val centerY = size.height * relativeY - 24.dp.toPx()
+                val centerX = size.width * ratioX + 24.dp.toPx()
+                val centerY = size.height * ratioY - 24.dp.toPx()
 
                 drawCircle(
                     color = if (radius != 24.dp.toPx()) surface else Color.Transparent,
@@ -1794,7 +1881,7 @@ fun AnimatedCircle(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen() {
+fun ChatScreen(back: () -> Boolean) {
     val view = LocalView.current
 
     Scaffold(
@@ -1809,6 +1896,7 @@ fun ChatScreen() {
                     IconButton(
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
+                            back()
                         }) {
                         Icon(
                             painter = painterResource(R.drawable.arrow_back),
@@ -1832,9 +1920,7 @@ fun ChatScreen() {
                     actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                     subtitleContentColor = MaterialTheme.colorScheme.onPrimary
                 ), modifier = Modifier.shadow(
-                    elevation = 4.dp,
-                    shape = RectangleShape,
-                    clip = false
+                    elevation = 4.dp, shape = RectangleShape, clip = false
                 )
             )
         },
@@ -1874,8 +1960,7 @@ fun ChatScreen() {
                     onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         isExpandedAttachment = true
-                    },
-                    modifier = Modifier
+                    }, modifier = Modifier
                         .padding(8.dp)
                         .size(48.dp)
                 ) {
@@ -1891,16 +1976,14 @@ fun ChatScreen() {
                         .weight(1f)
                         .padding(top = 8.dp, bottom = 10.dp)
                         .shadow(
-                            elevation = 4.dp,
-                            shape = RectangleShape,
-                            clip = false
+                            elevation = 4.dp, shape = RectangleShape, clip = false
                         )
                         .background(
                             color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(2.dp)
                         )
                 ) {
-                    Row {
+                    Row(verticalAlignment = Alignment.Bottom) {
                         IconButton({
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             isExpandedEmoji = true
@@ -1959,16 +2042,15 @@ fun ChatScreen() {
                                 }
 
                                 editText.setTextColor(onSurface.toArgb())
-                            }
-                        )
+                            })
                     }
                 }
 
                 IconButton(
                     onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                    },
-                    modifier = Modifier
+                        renderValue = (1..10).random()
+                    }, modifier = Modifier
                         .padding(8.dp)
                         .size(48.dp)
                 ) {
@@ -1987,7 +2069,10 @@ fun ChatScreen() {
             height = 112.dp,
             chord = 250.dp,
             isExpanded = isExpandedAttachment,
-            close = { isExpandedAttachment = false },0f,1f) {
+            close = { isExpandedAttachment = false },
+            0f,
+            1f
+        ) {
             Column {
                 Spacer(
                     modifier = Modifier
@@ -2021,7 +2106,10 @@ fun ChatScreen() {
             height = 420.dp,
             chord = 580.dp,
             isExpanded = isExpandedEmoji,
-            close = { isExpandedEmoji = false },0.2f,1f) {
+            close = { isExpandedEmoji = false },
+            ratioX = 0.16f,
+            ratioY = 0.98f
+        ) {
             Column {
                 Spacer(
                     modifier = Modifier
@@ -2048,8 +2136,6 @@ fun ChatScreen() {
                 )
             }
         }
-
-        Button({ renderValue = (1..10).random() }, modifier = Modifier.padding(innerPadding)) { }
     }
 }
 
@@ -2125,14 +2211,64 @@ fun AdvancedDynamicLightEffectOptim(
 }
 
 class SmsReceiver : BroadcastReceiver() {
-    @SuppressLint("UnsafeProtectedBroadcastReceiver")
     override fun onReceive(context: Context, intent: Intent) {
+        // بررسی امنیتی برای Broadcast
+        if (!isValidBroadcast(intent)) {
+            return
+        }
+
+        // بررسی اینکه اپلیکیشن پیش‌فرض SMS هست
+        if (!isDefaultSmsApp(context)) {
+            return
+        }
+
+        // کد اصلی شما اینجا
+        handleSms(context, intent)
+    }
+
+    private fun isValidBroadcast(intent: Intent): Boolean {
+        // بررسی اینکه intent از سیستم هست نه از اپلیکیشن دیگه
+        return intent.action == "android.provider.Telephony.SMS_DELIVER"
+    }
+
+    private fun isDefaultSmsApp(context: Context): Boolean {
+        val packageName = context.packageName
+        val defaultSms =
+            Telephony.Sms.getDefaultSmsPackage(context)
+        return packageName == defaultSms
+    }
+
+    private fun handleSms(context: Context, intent: Intent) {
+        // منطق دریافت SMS
     }
 }
 
 class MmsReceiver : BroadcastReceiver() {
-    @SuppressLint("UnsafeProtectedBroadcastReceiver")
     override fun onReceive(context: Context, intent: Intent) {
+        if (!isValidBroadcast(intent)) {
+            return
+        }
+
+        if (!isDefaultSmsApp(context)) {
+            return
+        }
+
+        handleMms(context, intent)
+    }
+
+    private fun isValidBroadcast(intent: Intent): Boolean {
+        return intent.action == "android.provider.Telephony.WAP_PUSH_DELIVER"
+    }
+
+    private fun isDefaultSmsApp(context: Context): Boolean {
+        val packageName = context.packageName
+        val defaultSms =
+            Telephony.Sms.getDefaultSmsPackage(context)
+        return packageName == defaultSms
+    }
+
+    private fun handleMms(context: Context, intent: Intent) {
+        // منطق دریافت MMS
     }
 }
 
@@ -2140,7 +2276,55 @@ class HeadlessSmsSendService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // بررسی اینکه اپلیکیشن پیش‌فرض SMS هست
+        if (!isDefaultSmsApp()) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
+        // بررسی مجوزها
+        if (!checkPhonePermission() || !checkSmsAppRole()) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
+        // پردازش intent
+        intent?.let {
+            handleSendSms(it)
+        }
+
+        stopSelf(startId)
         return START_NOT_STICKY
+    }
+
+    private fun isDefaultSmsApp(): Boolean {
+        val packageName = packageName
+        val defaultSms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            Telephony.Sms.getDefaultSmsPackage(this)
+        } else {
+            null
+        }
+        return packageName == defaultSms
+    }
+
+    private fun checkPhonePermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_PHONE_STATE
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun checkSmsAppRole(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            roleManager.isRoleHeld(RoleManager.ROLE_SMS)
+        } else {
+            true
+        }
+    }
+
+    private fun handleSendSms(intent: Intent) {
+        // منطق ارسال SMS با محدودیت‌های امنیتی
+        // فقط به مخاطبین اجازه بدید یا شماره‌های خاص
     }
 }
 
@@ -2194,6 +2378,6 @@ private fun checkSmsAppRole(context: Context): Boolean {
         val roleManager = context.getSystemService(RoleManager::class.java)
         roleManager.isRoleHeld(RoleManager.ROLE_SMS)
     } else {
-        true // قبل از Android 10 نیازی به Role نیست
+        true
     }
 }
