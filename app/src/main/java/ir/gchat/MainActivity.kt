@@ -44,11 +44,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -60,12 +63,15 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -75,9 +81,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalNavigationDrawer
@@ -86,11 +93,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.ripple
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Compact
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Medium
 import androidx.compose.runtime.Composable
@@ -103,6 +113,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -110,7 +121,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -121,14 +136,22 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
@@ -147,6 +170,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.protobuf.LazyStringArrayList.emptyList
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
@@ -173,9 +197,6 @@ import org.json.JSONObject
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
-
-const val RULES =
-    "GNet and GNet Corp Platform Rules and Regulations\n\n1. Platform Principles\nEquality: Users have complete freedom of opinion, choice of audience, and membership in groups. The GNet platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.\nContent Responsibility: The publishing user is directly responsible for all published content. The platform acts as a technical intermediary and does not accept legal or criminal liability for user content (except in cases where the law expressly provides otherwise).\n\n2. Registration, Account Ownership, and Privacy\nAccount Ownership: Your account information belongs to you and you should not make it available to other parties. The platform is not responsible for any incidents resulting from the sharing of information by the user.\nAccount Deletion: If you request to delete your account, all information related to the user, including messages, contacts, files, groups, and channels created, will be completely removed from the user's access.\nImpersonation Prohibition: Impersonating others, especially celebrities, or members of the GNet team, is prohibited and will result in immediate account ban.\n\n3. Content Privacy Classification\nThe platform's intelligent system defines different levels of content access based on the type of interaction:\n1. Private messages: Only the parties involved in the conversation (2-person or private groups) can view the content.\n2. Private group/channel: Only members who have officially joined can view the content.\n3. Public channel: The content of these channels is visible on the GNet website and can even be viewed by non-members.\n4. Unauthorized content\nAny publication or promotion of the following is prohibited and will be subject to legal action:\n1. Crimes against persons:\nInsult, humiliation, insult and spam.\nHarassment, harassment and nuisance in personal messages, groups, comments, etc.\nThreats to life, encouragement of violence, suicide, self-harm or other harm.\nPublishing and revealing the private information of others (such as address, contact number, identification documents) without their consent.\nactivities against an individual or destruction campaigns.\n2. Immoral and sexual content:\nPornography is prohibited in all spaces (including cloud space) and will lead to expulsion from the platform.\nContent related to child abuse (CSAM) will lead to the strictest treatment.\n3. Fraud and illegal activities:\nPublishing online theft links, fraud and redirection to fake portals.\nBuying and selling drugs, alcoholic beverages, smuggling, gambling and betting.\nSelling memberships and buying/selling user accounts.\nPublishing fake news that leads to serious harm to individuals or real/legal entities.\n4. Technical security:\nDistribution of viruses, malware or any malicious code (unless explicitly published for educational purposes and with the necessary warnings).\n\n5. Special rules for managing channels, groups and rooms\nCreator's responsibility: The creator of each group, channel or room is fully responsible for monitoring the content and behavior of its members.\nRoom rules:\nThe admin or creator of the room is obliged to delete the offending content and remove the offending user from the room.\nRooms whose purpose is spam (multiple messages with low content value), fraudulent advertising, or promotion of prohibited content will be closed.\nChoosing offensive/immoral names or descriptions for the room is not allowed.\nChannel rules:\nStore channels: The GNet platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.\nIn store products where the model is present in the image, the model must be dressed in a way that cannot be abused.\nDisagreements: Disagreements are natural, but users are required to handle disagreements respectfully and without insults or harassment.\n\n6. Mechanism for dealing with violations\nThe GNet platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):\n\na) Personal account penalties:\n1. Official warning and removal of the offending content.\n2. Stopping contact list synchronization.\n3. Restriction on sending messages to non-contacts.\n4. Restriction on sending messages in groups that the user is not an administrator of.\n5. Complete restriction on sending messages on the platform.\n6. Restriction on creating new channels or groups.\n7. Restriction on adding members to groups/channels.\n8. Expulsion from the platform: In extreme cases, the user account will be deleted and all groups and channels created by that user will also be deleted.\n\nb) Group or channel penalties:\n1. Revocation of public membership links.\n2. Disabling the public search feature for the group/channel.\n3. Restricting new post posting.\n4. Blocking or completely deleting the group/channel.\n5. Removing the public channel from the platform lists.\n\n7. Reporting violations and contacting support\nUsers are required to report any violating content or inappropriate behavior. All reports will be carefully reviewed.\nTo send suggestions, criticism, bug reports or questions, you can contact us from the internal support section of the application or through the admin ID.\n\n8. Changes to the rules\nThe GNet platform has the right to change, modify or update its rules and regulations at any time and without prior notice.\nContinuing to use the platform services after any changes are made means full acceptance of the new rules by the user.\nMajor and critical changes will be notified to users via an in-app message or the official GNet notification channel.\nUsers are advised to periodically check the page Check the rules.\n\nGNet Corp | Always with you for a safe and fast space"
 
 fun getIccidsFromSubscriptionManager(context: Context): List<String> {
     if (ContextCompat.checkSelfPermission(
@@ -249,6 +270,10 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "da
 val ICCID_KEY = stringPreferencesKey("iccid")
 val LOGINED_KEY = booleanPreferencesKey("logined")
 val THEME_KEY = intPreferencesKey("theme")
+val SERVERIP_KEY = stringPreferencesKey("serverIP")
+val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
+val USERNAME_KEY = stringPreferencesKey("username")
+val PASSWORD_KEY = stringPreferencesKey("password")
 
 data class Person(
     val id: String = "",
@@ -258,6 +283,11 @@ data class Person(
     val lastMessageDate: String = "",
     val unreadMessages: Int = 0,
     val conectionStatus: Boolean = false,
+)
+
+data class SearchEntity(
+    val username: String,
+    val isOnline: Boolean
 )
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
@@ -274,10 +304,47 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     val logined: StateFlow<Boolean> = _logined.asStateFlow()
 
     private val _oldLogined = MutableStateFlow(
-        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() })
+        //false
+        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() }
+    )
     val oldLogined: StateFlow<Boolean> = _oldLogined.asStateFlow()
 
-    private val _contactsList = MutableStateFlow(
+    val savedUsername = runBlocking {
+        context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
+    }
+    val savedPassword =
+        runBlocking { context.dataStore.data.map { it[PASSWORD_KEY] ?: "" }.first() }
+
+    private val _serverIP = MutableStateFlow(
+        //"127.0.0.1:8765"
+        runBlocking { context.dataStore.data.map { it[SERVERIP_KEY] ?: "127.0.0.1:8765" }.first() }
+    )
+    val serverIP: StateFlow<String> = _serverIP.asStateFlow()
+
+    //init {
+    //viewModelScope.launch {
+    //context.dataStore.data.collect { preferences ->
+    //_serverIP.value = preferences[SERVERIP_KEY] ?: "127.0.0.1:8765"
+    //_oldLogined.value = preferences[LOGINED_KEY] ?: false
+    //}
+    //}
+    //}
+
+    //private val _device = MutableStateFlow(
+    //    runBlocking { context.dataStore.data.map { it[DEVICE_TYPE_KEY] ?: 2 }.first() })
+    //val device: StateFlow<Int> = _device.asStateFlow()
+
+    // 0 -> success
+    // 1 -> iccid alreasy exist
+    // 2 -> username alreasy exist
+    // 3 -> password is incorrect
+    // 4 -> untitled error
+    // 5 -> username not found
+    // 6 -> invalid input(limit error)
+    private val _loginError = MutableStateFlow(0)
+    val loginError: StateFlow<Int> = _loginError.asStateFlow()
+
+    private val _chatList = MutableStateFlow(
         listOf(
             Person(
                 name = "عباس عراقچی",
@@ -300,7 +367,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             )
         )
     )
-    val contactsList: StateFlow<List<Person>> = _contactsList.asStateFlow()
+    val chatList: StateFlow<List<Person>> = _chatList.asStateFlow()
+
+    private val _contactSearchList = MutableStateFlow(emptyList<SearchEntity>())
+    val contactSearchList: StateFlow<List<SearchEntity>> = _contactSearchList.asStateFlow()
 
     fun connect() {
 
@@ -308,20 +378,19 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        val request = Request.Builder().url("ws://10.0.2.2:8765").build()
+        val request = Request.Builder().url("ws://${_serverIP.value}").build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 viewModelScope.launch {
                     try {
-                        if (context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first()) {
-                            val savedIccid =
-                                context.dataStore.data.map { it[ICCID_KEY] ?: "" }.first()
+                        if (_oldLogined.value/*context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first()*/) {
                             webSocket.send(
                                 """
                                 {
-                                    "type": "login",
-                                    "iccid": "$savedIccid"
+                                    "type": "signin",
+                                    "username": "$savedUsername",
+                                    "password": "$savedPassword"
                                 }
                             """.trimIndent()
                             )
@@ -336,14 +405,126 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     try {
                         val jsonObject = JSONObject(text)
                         val type = jsonObject.getString("type")
+                        println(jsonObject)
                         //val message = jsonObject.getString("message")
 
-                        if (type == "login_recived") {
-                            _logined.value = true
-                            context.dataStore.edit { preferences ->
-                                preferences[LOGINED_KEY] = true
+                        when (type) {
+                            "signup_response" -> {
+                                val message = jsonObject.getString("status")
+                                when (message) {
+                                    "success" -> {
+                                        _loginError.value = 0
+                                        _oldLogined.value = true
+                                        _logined.value = true
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = true
+                                        }
+                                    }
+
+                                    "iccid_error" -> {
+                                        _loginError.value = 1
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "username_error" -> {
+                                        _loginError.value = 2
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "error" -> {
+                                        _loginError.value = 4
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "invalid_input" -> {
+                                        _loginError.value = 6
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+                                }
                             }
-                            _oldLogined.value = true
+
+                            "signin_response" -> {
+                                val message = jsonObject.getString("status")
+                                when (message) {
+                                    "success" -> {
+                                        _loginError.value = 0
+                                        _oldLogined.value = true
+                                        _logined.value = true
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = true
+                                        }
+                                    }
+
+                                    "password_error" -> {
+                                        _loginError.value = 3
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "error" -> {
+                                        _loginError.value = 4
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "username_error" -> {
+                                        _loginError.value = 5
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+
+                                    "invalid_input" -> {
+                                        _loginError.value = 6
+                                        _oldLogined.value = false
+                                        _logined.value = false
+                                        context.dataStore.edit { preferences ->
+                                            preferences[LOGINED_KEY] = false
+                                        }
+                                    }
+                                }
+                            }
+
+                            "search_user_response" -> {
+                                _contactSearchList.value = emptyList<SearchEntity>()
+                                if (jsonObject.getString("status") == "success") {
+                                    val results = jsonObject.getJSONArray("results")
+                                    for (i in 0 until results.length()) {
+                                        val item = results.getJSONObject(i)
+                                        _contactSearchList.value += SearchEntity(
+                                            username = item.getString("username"),
+                                            isOnline = item.getBoolean("online"),
+                                        )
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Search error", Toast.LENGTH_SHORT)
+                                        .show()
+                                }
+                            }
                         }
                     } catch (_: Exception) {
                     }
@@ -370,19 +551,23 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         })
     }
 
-    fun login(iccid: String) {
+    fun signIn(username: String, password: String) {
         viewModelScope.launch {
             try {
                 context.dataStore.edit { preferences ->
-                    preferences[ICCID_KEY] = iccid
+                    preferences[USERNAME_KEY] = username
                 }
-                _oldLogined.value = true
+
+                context.dataStore.edit { preferences ->
+                    preferences[PASSWORD_KEY] = password
+                }
 
                 webSocket?.send(
                     """
                     {
-                        "type": "login",
-                        "iccid": "$iccid"
+                        "type": "signin",
+                        "username": "$username",
+                        "password": "$password"
                     }
                     """.trimIndent()
                 )
@@ -390,16 +575,94 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    fun signUp(iccid: String, username: String, password: String) {
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[ICCID_KEY] = iccid
+                }
+
+                context.dataStore.edit { preferences ->
+                    preferences[USERNAME_KEY] = username
+                }
+
+                context.dataStore.edit { preferences ->
+                    preferences[PASSWORD_KEY] = password
+                }
+
+                webSocket?.send(
+                    """
+                    {
+                        "type": "signup",
+                        "iccid": "$iccid",
+                        "username": "$username",
+                        "password": "$password"
+                    }
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun setServerIP(serverIP: String) {
+        _serverIP.value = serverIP
+        this@SocketViewModel.webSocket = null
+        _logined.value = false
+        connect()
+
+        viewModelScope.launch {
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[SERVERIP_KEY] = serverIP
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun searchUsername(username: String) {
+        viewModelScope.launch {
+            try {
+                webSocket?.send(
+                    """
+                    {
+                        "type": "search_user",
+                        "username": "$username"
+                    }
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {
+
+            }
+        }
+    }
+
+    fun clearSearchMemory() {
+        _contactSearchList.value = emptyList<SearchEntity>()
+    }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context = getApplication<Application>()
 
-    private val _theme = MutableStateFlow(runBlocking {
-        context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
-    }) // 0: System, 1: Dark, 2: Light
+//    private val _theme = MutableStateFlow(runBlocking {
+//        context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
+//    }) // 0: System, 1: Dark, 2: Light
+//    val theme: StateFlow<Int> = _theme.asStateFlow()
+
+    private val _theme = MutableStateFlow(0)
     val theme: StateFlow<Int> = _theme.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _theme.value = context.dataStore.data
+                .map { it[THEME_KEY] ?: 0 }
+                .first()
+        }
+    }
 
     fun setTheme() {
         _theme.value = when (_theme.value) {
@@ -409,13 +672,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             else -> 0
         }
 
-        _theme.value = _theme.value
+        //_theme.value = _theme.value
 
         viewModelScope.launch {
             context.dataStore.edit { preferences ->
                 preferences[THEME_KEY] = _theme.value
             }
         }
+    }
+
+    suspend fun getDevice(): Int {
+        return context.dataStore.data
+            .map { it[DEVICE_TYPE_KEY] ?: 2 }
+            .first()
+    }
+
+    fun setDevice(deviceType: Int) {
+        viewModelScope.launch {
+            context.dataStore.edit {
+                it[DEVICE_TYPE_KEY] = deviceType
+            }
+        }
+    }
+
+    fun getRules(): String {
+        return context.resources.openRawResource(R.raw.rules).bufferedReader().use { it.readText() }
     }
 }
 
@@ -438,7 +719,8 @@ class MainActivity : ComponentActivity() {
                 2 -> false
                 else -> isSystemInDarkTheme()
             }
-            val contactsList by socketViewModel.contactsList.collectAsState()
+            val chatList by socketViewModel.chatList.collectAsState()
+            val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
             GChatTheme(
                 dynamicColor = false, darkTheme = darkTheme
             ) {
@@ -448,10 +730,28 @@ class MainActivity : ComponentActivity() {
                 MainNavigation(
                     setTheme = { viewModel.setTheme() },
                     theme = theme,
-                    login = { iccid -> socketViewModel.login(iccid = iccid) },
+                    signIn = { username, password ->
+                        socketViewModel.signIn(
+                            username = username, password = password
+                        )
+                    },
+                    signUp = { iccid, username, password ->
+                        socketViewModel.signUp(
+                            iccid = iccid, username = username, password = password
+                        )
+                    },
                     logined = logined,
                     oldLogined = oldLogined,
-                    contactsList = contactsList
+                    chatList = chatList,
+                    setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
+                    serverIP = socketViewModel.serverIP.collectAsState().value,
+                    device = { viewModel.getDevice() },
+                    setDevice = { device -> viewModel.setDevice(deviceType = device) },
+                    loginError = socketViewModel.loginError.collectAsState().value,
+                    getrules = { viewModel.getRules() },
+                    searchContactList = contactsSearchList,
+                    searchContact = { username -> socketViewModel.searchUsername(username = username) },
+                    clearSearchList = { socketViewModel.clearSearchMemory() }
                 )
             }
         }
@@ -521,12 +821,35 @@ fun SetUPNavigationBar(darkTheme: Boolean) {
 fun MainNavigation(
     setTheme: () -> Unit,
     theme: Int,
-    login: (String) -> Unit,
+    signIn: (String, String) -> Unit,
+    signUp: (String, String, String) -> Unit,
     logined: Boolean,
     oldLogined: Boolean,
-    contactsList: List<Person>
+    chatList: List<Person>,
+    setServerIP: (String) -> Unit,
+    serverIP: String,
+    setDevice: (Int) -> Unit,
+    device: suspend () -> Int,
+    loginError: Int,
+    getrules: () -> String,
+    searchContactList: List<SearchEntity>,
+    searchContact: (String) -> Unit,
+    clearSearchList: () -> Unit
 ) {
     val navController = rememberNavController()
+    val context = LocalContext.current
+
+    LaunchedEffect(loginError) {
+        when (loginError) {
+            1 -> Toast.makeText(context, "ICCID already exists", Toast.LENGTH_SHORT).show()
+            2 -> Toast.makeText(context, "Username already exists", Toast.LENGTH_SHORT).show()
+            3 -> Toast.makeText(context, "Password is incorrect", Toast.LENGTH_SHORT).show()
+            4 -> Toast.makeText(context, "Untitled error", Toast.LENGTH_SHORT).show()
+            5 -> Toast.makeText(context, "Username not found", Toast.LENGTH_SHORT).show()
+            6 -> Toast.makeText(context, "Invalid input size", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LaunchedEffect(logined) {
         if (oldLogined) {
             if (logined) {
@@ -540,6 +863,12 @@ fun MainNavigation(
                     popUpTo(0) {
                         inclusive = true
                     }
+                }
+            }
+        } else {
+            navController.navigate("greeting") {
+                popUpTo(0) {
+                    inclusive = true
                 }
             }
         }
@@ -573,21 +902,39 @@ fun MainNavigation(
             )
         }) {
         composable(route = "greeting") {
-            Greeting(
-                setTheme = setTheme, theme = theme, login = login
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                Greeting(setTheme = setTheme, theme = theme, signIn = { username, password ->
+                    signIn(
+                        username, password
+                    )
+                }, signUp = { iccid, username, password ->
+                    signUp(
+                        iccid, username, password
+                    )
+                }, ipConfig = { navController.navigate("ipConfig") }, getrules = getrules, loginError = loginError)
+            }
         }
         composable(route = "mainScreen") {
-            MainScreen(contactsList = contactsList, navHostController = navController)
+            MainScreen(
+                chatList = chatList,
+                navHostController = navController,
+                searchContactList = searchContactList,
+                searchContact = searchContact,
+                clearSearchList = clearSearchList
+            )
         }
         composable(
             route = "chatScreen?id={id}", arguments = listOf(
                 navArgument("id") { type = NavType.StringType })
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
-            ChatScreen(back = { navController.popBackStack() }, id = id)
+            ChatScreen(
+                back = { navController.popBackStack() }, id = id,
+                //whatismybackgroundfiltercolor = { color, show -> }
+            )
         }
         composable(route = "wait") {
+            val view = LocalView.current
             Scaffold(
                 modifier = Modifier.fillMaxSize(), topBar = {
                     TopAppBar(
@@ -596,11 +943,22 @@ fun MainNavigation(
                         }, expandedHeight = 56.dp, colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                         ), modifier = Modifier.shadow(
                             elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
-                    )
+                        ), actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    navController.navigate("ipConfig")
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.tune),
+                                    contentDescription = "IP config"
+                                )
+                            }
+                        })
                 }) { innerPadding ->
                 Box(
                     modifier = Modifier
@@ -623,13 +981,336 @@ fun MainNavigation(
                 }
             }
         }
+        composable(route = "ipConfig") {
+            val view = LocalView.current
+            val focusManager = LocalFocusManager.current
+            var host by remember { mutableStateOf(serverIP.split(":")[0]) }
+            var port by remember { mutableStateOf(serverIP.split(":")[1]) }
+
+            val portNumber = port.toIntOrNull()
+            val portError = portNumber == null || portNumber > 65535 || portNumber < 1
+
+            val networkProtocols = listOf("IPv4", "IPv6", "Domain", "Localhost", "LocalServer")
+            var networkProtocol by remember { mutableStateOf(networkProtocols[0]) }
+            var expanded by remember { mutableStateOf(false) }
+            val devices = listOf("Android Studio Emulator (AVD)", "Genymotion", "Other Diveses")
+            //var selectedDevice by remember { mutableStateOf(devices[device()]) }
+            //var automaticMode by remember { mutableStateOf(device() != 2) }
+            var selectedDevice by remember { mutableStateOf(devices[2]) }
+            var automaticMode by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                val d = device()
+                selectedDevice = devices[d]
+                automaticMode = d != 2
+            }
+
+            val hostError = !when (networkProtocol) {
+                "IPv4" -> {
+                    !host.isBlank() && host.split(".").let { parts ->
+                        parts.size == 4 && parts.all { part ->
+                            val num = part.toIntOrNull()
+                            num != null && num in 0..255
+                        }
+                    }
+                }
+
+                "IPv6" -> {
+                    !host.isBlank() && Regex(
+                        "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,7}:$|" + "^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" + "^[0-9a-fA-F]{1,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,5}:([0-9a-fA-F]{1,4}:){1,5}$|" +  // پوشش بهتر compressed
+                                "^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$"
+                    ).matches(host.removeSurrounding("[", "]"))
+                }
+
+                "Domain" -> {
+                    !host.isBlank() && Regex(
+                        "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\\.[a-zA-Z]{2,}$"
+                    ).matches(host)
+                }
+
+                "Localhost" -> {
+                    !host.isBlank() && host.equals("localhost", ignoreCase = true)
+                }
+
+                "LocalServer" -> {
+                    !host.isBlank() && host.length <= 253 && Regex(
+                        "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+                    ).matches(host)
+                }
+
+                else -> false
+            }
+
+            val keyboardController = LocalSoftwareKeyboardController.current
+
+            Scaffold(
+                modifier = Modifier.fillMaxSize(), topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("Set server IP config")
+                        }, expandedHeight = 56.dp, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        ), navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    navController.popBackStack()
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Back"
+                                )
+                            }
+                        })
+                }) { innerPadding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                            .shadow(
+                                elevation = 2.dp, shape = RoundedCornerShape(2.dp), clip = false
+                            )
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        devices.forEach { thisDevice ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        when (thisDevice) {
+                                            "Android Studio Emulator (AVD)" -> {
+                                                setDevice(0)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.2.2"
+                                                port = "8765"
+                                            }
+
+                                            "Genymotion" -> {
+                                                setDevice(1)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.3.2"
+                                                port = "8765"
+                                            }
+
+                                            "Other Diveses" -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
+
+                                            else -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
+                                        }
+                                        selectedDevice = thisDevice
+                                    }
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = selectedDevice == thisDevice, onClick = {
+                                        when (thisDevice) {
+                                            "Android Studio Emulator (AVD)" -> {
+                                                setDevice(0)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.2.2"
+                                                port = "8765"
+                                            }
+
+                                            "Genymotion" -> {
+                                                setDevice(1)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.3.2"
+                                                port = "8765"
+                                            }
+
+                                            "Other Diveses" -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
+
+                                            else -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
+                                        }
+                                        selectedDevice = thisDevice
+                                    })
+                                Text(
+                                    text = thisDevice,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp)
+                    ) {
+                        TextField(
+                            modifier = Modifier.fillMaxWidth(0.6f),
+                            value = host,
+                            onValueChange = { host = it },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                errorContainerColor = Color.Transparent
+                            ),
+                            label = {
+                                Text(text = "Host")
+                            },
+                            enabled = !automaticMode,
+                            isError = hostError,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextField(
+                            modifier = Modifier.fillMaxWidth(),
+                            value = port,
+                            onValueChange = { port = it },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                errorContainerColor = Color.Transparent
+                            ),
+                            label = {
+                                Text(text = "Port")
+                            },
+                            enabled = !automaticMode,
+                            isError = portError,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    keyboardController?.hide()
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                })
+                        )
+                    }
+
+                    ExposedDropdownMenuBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }) {
+                        TextField(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            value = networkProtocol,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = {
+                                Text("Protocol")
+                            },
+                            enabled = false,/*!automaticMode*/
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                errorContainerColor = Color.Transparent
+                            ),
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                            shape = RoundedCornerShape(2.dp),
+                            modifier = Modifier
+                        ) {
+                            networkProtocols.forEach { item ->
+                                DropdownMenuItem(text = { Text(item) }, onClick = {
+                                    networkProtocol = item
+                                    expanded = false
+                                })
+                            }
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+
+                    Button(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            navController.popBackStack()
+                            setServerIP("$host:$port")
+                        },
+                        enabled = !portError and !hostError,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(56.dp)
+                            .align(Alignment.BottomEnd)
+                            .shadow(
+                                elevation = if (!portError and !hostError) 6.dp else 0.dp,
+                                shape = CircleShape,
+                                clip = false
+                            ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(16.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.check),
+                            contentDescription = "OK",
+                            modifier = Modifier.fillMaxSize(),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
+fun Greeting(
+    setTheme: () -> Unit,
+    theme: Int,
+    signIn: (String, String) -> Unit,
+    signUp: (String, String, String) -> Unit,
+    ipConfig: () -> Unit,
+    getrules: () -> String,
+    loginError: Int
+) {
     val context = LocalContext.current
 
     val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
@@ -641,6 +1322,8 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
 
     var showSupportDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
+    var showSignUpDialog by remember { mutableStateOf(false) }
+    var showSignInDialog by remember { mutableStateOf(false) }
 
     val navController = rememberNavController()
 
@@ -682,6 +1365,25 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
 
         withLink(link) {
             append("term of use and privacy.")
+        }
+    }
+
+    val signInText = buildAnnotatedString {
+        append("Already have an account? ")
+
+        val link = LinkAnnotation.Clickable(
+            tag = "signIn",
+            linkInteractionListener = { showSignInDialog = true },
+            styles = TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline
+                )
+            )
+        )
+
+        withLink(link) {
+            append("Sign in.")
         }
     }
 
@@ -758,6 +1460,10 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
         }
     }
 
+    LaunchedEffect(loginError) {
+        isLoading = false
+    }
+
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -767,6 +1473,18 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.FillBounds
             )
+
+            if (expanded) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(0f)
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }) {
+                            expanded = false
+                        })
+            }
 
             if (windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) {
                 NavHost(
@@ -804,7 +1522,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     .fillMaxHeight(2 / 3f)
                                     .padding(top = 64.dp)
                                     .shadow(
-                                        elevation = 16.dp, clip = true
+                                        elevation = 16.dp, clip = false
                                     )
                                     .background(color = MaterialTheme.colorScheme.surface)
                                     .padding(8.dp)
@@ -877,7 +1595,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     .fillMaxHeight(2 / 3f)
                                     .padding(top = 64.dp)
                                     .shadow(
-                                        elevation = 16.dp, clip = true
+                                        elevation = 16.dp, clip = false
                                     )
                                     .background(color = MaterialTheme.colorScheme.surface)
                             ) {
@@ -894,11 +1612,37 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     )
                                 }
 
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(innerPadding)
+                                        .background(
+                                            brush = Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    MaterialTheme.colorScheme.surface
+                                                )
+                                            )
+                                        )
+                                        .padding(end = 64.dp)
+                                        .align(Alignment.BottomCenter)
+                                        .height(56.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = signInText,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 14.sp
+                                    )
+                                }
+
                                 Button(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        isLoading = true
-                                        login(selectedIccid.toString())
+                                        //isLoading = true
+                                        showSignUpDialog = true
                                     },
                                     enabled = !isLoading and !selectedIccid.isNullOrBlank(),
                                     modifier = Modifier
@@ -919,13 +1663,6 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
                                         tint = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-
-                                if (isLoading) {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.tertiary
                                     )
                                 }
                             }
@@ -1004,15 +1741,15 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                 AnimatedDropMenu(
                     modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                     width = 200.dp,
-                    height = 110.dp,
-                    chord = 230.dp,
+                    height = 160.dp,
+                    chord = 256.dp,
                     isExpanded = expanded,
                     close = { expanded = false },
                     ratioX = 1f,
                     ratioY = 0f,
                     position = Alignment.TopEnd,
-                    hasBackgroundCover = false
-                ) {
+                    hasBackgroundCover = false,
+                    whatismybackgroundfiltercolor = { color, show -> }) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         DropdownMenuItem(text = {
@@ -1038,6 +1775,17 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             expanded = false
                             showSupportDialog = true
+                        })
+                        DropdownMenuItem(text = { Text("IP config") }, leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.tune),
+                                contentDescription = "IP config"
+                            )
+                        }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            expanded = false
+                            ipConfig()
+                            //navController.navigate("ipConfig")
                         })
                     }
                 }
@@ -1078,7 +1826,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     .shadow(
                                         elevation = 16.dp,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp),
-                                        clip = true
+                                        clip = false
                                     )
                                     .background(
                                         color = MaterialTheme.colorScheme.surface,
@@ -1194,15 +1942,15 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                 AnimatedDropMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
-                                    height = 110.dp,
-                                    chord = 230.dp,
+                                    height = 160.dp,
+                                    chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
                                     ratioY = 0f,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false
-                                ) {
+                                    hasBackgroundCover = false,
+                                    whatismybackgroundfiltercolor = { color, show -> }) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -1229,6 +1977,20 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                             expanded = false
                                             showSupportDialog = true
                                         })
+                                        DropdownMenuItem(
+                                            text = { Text("IP config") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.tune),
+                                                    contentDescription = "IP config"
+                                                )
+                                            },
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                expanded = false
+                                                ipConfig()
+                                                //navController.navigate("ipConfig")
+                                            })
                                     }
                                 }
                             }
@@ -1247,7 +2009,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                     .shadow(
                                         elevation = 16.dp,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp),
-                                        clip = true
+                                        clip = false
                                     )
                                     .background(
                                         color = MaterialTheme.colorScheme.surface,
@@ -1260,18 +2022,12 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                         .fillMaxSize()
                                         .verticalScroll(rememberScrollState())
                                         .align(Alignment.Center),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     VerifySimCard(
                                         selectedIccid = selectedIccid,
                                         setSelectedIccid = { value -> selectedIccid = value },
                                         endPadding = 56.dp
-                                    )
-                                }
-
-                                if (isLoading) {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.tertiary
                                     )
                                 }
 
@@ -1292,8 +2048,8 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                 Button(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        isLoading = true
-                                        login(selectedIccid.toString())
+                                        //isLoading = true
+                                        showSignUpDialog = true
                                     },
                                     enabled = !isLoading and !selectedIccid.isNullOrBlank(),
                                     modifier = Modifier
@@ -1354,18 +2110,36 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
 //                                    }
 //                                }
 
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(end = 64.dp)
+                                        .padding(innerPadding)
+                                        .align(Alignment.BottomCenter)
+                                        .height(56.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = signInText,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 14.sp
+                                    )
+                                }
+
                                 AnimatedDropMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
-                                    height = 110.dp,
-                                    chord = 230.dp,
+                                    height = 160.dp,
+                                    chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
                                     ratioY = 0f,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false
-                                ) {
+                                    hasBackgroundCover = false,
+                                    whatismybackgroundfiltercolor = { color, show -> }) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -1392,24 +2166,25 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                                             expanded = false
                                             showSupportDialog = true
                                         })
+                                        DropdownMenuItem(
+                                            text = { Text("IP config") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.tune),
+                                                    contentDescription = "IP config"
+                                                )
+                                            },
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                expanded = false
+                                                ipConfig()
+                                                //navController.navigate("ipConfig")
+                                            })
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                if (expanded) {
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .zIndex(0.5f)
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() }) {
-                                expanded = false
-                            }
-                    )
                 }
 
                 Column {
@@ -1447,7 +2222,8 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                         val uri = "sms:$phoneNumber".toUri()
                         val intent = Intent(Intent.ACTION_VIEW, uri)
                         context.startActivity(intent)
-                    }, shape = RoundedCornerShape(2.dp)
+                    },
+                    shape = RoundedCornerShape(2.dp),
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.sms), contentDescription = null
@@ -1465,17 +2241,20 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                     Text("Dismiss")
                 }
             },
-            modifier = Modifier.shadow(
-                elevation = 16.dp, shape = RoundedCornerShape(2.dp), clip = false
-            )
+            modifier = Modifier
+                .padding(vertical = 16.dp)
+                .shadow(
+                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
+                )
         )
     }
 
     if (showTermsDialog) {
         AlertDialog(
             modifier = Modifier
+                .padding(vertical = 16.dp)
                 .shadow(
-                    elevation = 16.dp, shape = RoundedCornerShape(2.dp), clip = false
+                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
                 )
                 .fillMaxHeight(0.8f),
             onDismissRequest = { showTermsDialog = false },
@@ -1486,7 +2265,7 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(text = RULES)
+                    Text(text = getrules())
                 }
             },
             shape = RoundedCornerShape(2.dp),
@@ -1500,13 +2279,352 @@ fun Greeting(setTheme: () -> Unit, theme: Int, login: (String) -> Unit) {
                 }
             })
     }
+
+    if (showSignUpDialog) {
+        var username by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
+
+        val focusManager = LocalFocusManager.current
+        val passwordVisible = remember { mutableStateOf(false) }
+        val keyboardController = LocalSoftwareKeyboardController.current
+        val coroutineScope = rememberCoroutineScope()
+
+        val usernameFocusRequester = remember { FocusRequester() }
+        val passwordFocusRequester = remember { FocusRequester() }
+
+        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+        val usernameSizeError = username.length !in 1..50
+
+        val isPasswordError = password.length !in 6..128
+
+        var firstClick by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isLoading) showSignUpDialog = false
+            }, title = { Text("Sign-Up") }, text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(text = "Setup your username and password.")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                        value = username,
+                        onValueChange = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            username = it
+                        },
+                        isError = isUsernameError or usernameSizeError and firstClick,
+                        supportingText = {
+                            Column() {
+                                if (isUsernameError and firstClick) {
+                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
+                                }
+                                if (usernameSizeError and firstClick) {
+                                    Text("Username must be less than 50 characters.")
+                                }
+                            }
+                        },
+                        enabled = !isLoading,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        ),
+                        label = { Text("Username") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                passwordFocusRequester.requestFocus()
+                            })
+                    )
+
+                    TextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocusRequester),
+                        value = password,
+                        onValueChange = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            password = it
+                        },
+                        isError = isPasswordError and firstClick,
+                        supportingText = {
+                            if (isPasswordError and firstClick) {
+                                Text("Password must be beetwin 6 and 50 characters.")
+                            }
+                        },
+                        enabled = !isLoading,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        ),
+                        label = {
+                            Text(text = "Password")
+                        },
+                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                enabled = !isLoading, onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    passwordVisible.value = !passwordVisible.value
+                                }) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (passwordVisible.value) R.drawable.visibility_off
+                                        else R.drawable.visibility
+                                    ), contentDescription = null
+                                )
+                            }
+                        },
+                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+                                coroutineScope.launch {
+                                    signUp(selectedIccid.toString(), username, password)
+                                    isLoading = true
+                                }
+                                focusManager.moveFocus(FocusDirection.Down)
+                            })
+                    )
+                }
+            }, shape = RoundedCornerShape(2.dp), confirmButton = {
+                Button(
+                    enabled = (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) or !firstClick,
+                    onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (firstClick) {
+                            signUp(selectedIccid.toString(), username, password)
+                            isLoading = true
+                        } else {
+                            firstClick = true
+                            if (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) {
+                                signUp(selectedIccid.toString(), username, password)
+                                isLoading = true
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(2.dp),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.login),
+                            contentDescription = null
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sign-Up")
+                }
+            }, dismissButton = {
+                TextButton(
+                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        isLoading = false
+                        showSignUpDialog = false
+                    }) {
+                    Text("Cancel")
+                }
+            }, modifier = Modifier
+                .padding(vertical = 16.dp)
+                .shadow(
+                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
+                )
+        )
+    }
+
+    if (showSignInDialog) {
+        var username by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
+
+        val focusManager = LocalFocusManager.current
+        val passwordVisible = remember { mutableStateOf(false) }
+        val keyboardController = LocalSoftwareKeyboardController.current
+        val coroutineScope = rememberCoroutineScope()
+
+        val usernameFocusRequester = remember { FocusRequester() }
+        val passwordFocusRequester = remember { FocusRequester() }
+
+        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+        val usernameSizeError = username.length !in 1..50
+
+        val isPasswordError = password.length !in 6..128
+
+        var firstClick by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isLoading) showSignInDialog = false
+            }, title = { Text("Sign-In") }, text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(text = "Enter your username and password.")
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    TextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                        value = username,
+                        onValueChange = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            username = it
+                        },
+                        isError = isUsernameError or usernameSizeError and firstClick,
+                        supportingText = {
+                            Column() {
+                                if (isUsernameError and firstClick) {
+                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
+                                }
+                                if (usernameSizeError and firstClick) {
+                                    Text("Username must be less than 50 characters.")
+                                }
+                            }
+                        },
+                        enabled = !isLoading,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        ),
+                        label = { Text("Username") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                            })
+                    )
+
+                    TextField(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                        value = password,
+                        onValueChange = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            password = it
+                        },
+                        enabled = !isLoading,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
+                        ),
+                        label = {
+                            Text(text = "Password")
+                        },
+                        isError = isPasswordError and firstClick,
+                        supportingText = {
+                            if (isPasswordError and firstClick) {
+                                Text("Password must be beetwin 6 and 50 characters.")
+                            }
+                        },
+                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                        else PasswordVisualTransformation(),
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(
+                                enabled = !isLoading, onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    passwordVisible.value = !passwordVisible.value
+                                }) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (passwordVisible.value) R.drawable.visibility_off
+                                        else R.drawable.visibility
+                                    ), contentDescription = null
+                                )
+                            }
+                        },
+                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+                                coroutineScope.launch {
+                                    signIn(username, password)
+                                    isLoading = true
+                                }
+                                focusManager.moveFocus(FocusDirection.Down)
+                            })
+                    )
+                }
+            }, shape = RoundedCornerShape(2.dp), confirmButton = {
+                Button(
+                    enabled = (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) or !firstClick,
+                    onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (firstClick) {
+                            signIn(username, password)
+                            isLoading = true
+                        } else {
+                            firstClick = true
+                            if (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) {
+                                signIn(username, password)
+                                isLoading = true
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(2.dp),
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.login),
+                            contentDescription = null
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sign-In")
+                }
+            }, dismissButton = {
+                TextButton(
+                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        isLoading = false
+                        showSignInDialog = false
+                    }) {
+                    Text("Cancel")
+                }
+            }, modifier = Modifier
+                .padding(vertical = 16.dp)
+                .shadow(
+                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
+                )
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VerifySimCard(
-    selectedIccid: String?, setSelectedIccid: (String) -> Unit, endPadding: Dp
-) {
+fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, endPadding: Dp) {
 
     val context = LocalContext.current
     val view = LocalView.current
@@ -1688,7 +2806,11 @@ fun VerifySimCard(
 )
 @Composable
 fun MainScreen(
-    contactsList: List<Person>, navHostController: NavHostController
+    chatList: List<Person>,
+    navHostController: NavHostController,
+    searchContactList: List<SearchEntity>,
+    searchContact: (String) -> Unit,
+    clearSearchList: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -1701,10 +2823,9 @@ fun MainScreen(
     }
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
+    var selectedChat by rememberSaveable { mutableStateOf("") }
 
     val view = LocalView.current
-    val covered by rememberSaveable { mutableStateOf(false) }
-    var searching by rememberSaveable { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -1717,6 +2838,13 @@ fun MainScreen(
                     .background(MaterialTheme.colorScheme.surface)
                     .verticalScroll(rememberScrollState())
             ) {
+
+                var expanded by remember { mutableStateOf(false) }
+                val expansionHeight = animateDpAsState(
+                    targetValue = if (expanded) 160.dp else 0.dp,
+                    animationSpec = tween(durationMillis = 200)
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1730,28 +2858,280 @@ fun MainScreen(
                             drawRect(
                                 brush = Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.1f)
-                                    ),
-                                    startY = size.height - gradientHeight,
-                                    endY = size.height
-                                ),
-                                blendMode = BlendMode.Multiply
+                                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
+                                    ), startY = size.height - gradientHeight, endY = size.height
+                                ), blendMode = BlendMode.Multiply
                             )
-                        }
-                ) {
+                        }) {
                     Image(
                         painter = painterResource(R.drawable.wallpaper_picture),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
+
+                    Column(
+                        modifier = Modifier
+                            //.systemBarsPadding()
+                            .padding(
+                                top = WindowInsets.statusBars.asPaddingValues()
+                                    .calculateTopPadding()
+                            )
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            //verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxHeight()
+                                    .aspectRatio(1f)
+                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                    .clip(CircleShape), shape = CircleShape
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.profile),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Surface(
+                                modifier = Modifier
+                                    .padding(vertical = 16.dp)
+                                    .padding(end = 16.dp)
+                                    .fillMaxHeight(1 / 2f)
+                                    .aspectRatio(1f)
+                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                    .clip(CircleShape), shape = CircleShape
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.profile),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Surface(
+                                modifier = Modifier
+                                    .padding(vertical = 16.dp)
+                                    .padding(end = 16.dp)
+                                    .fillMaxHeight(1 / 2f)
+                                    .aspectRatio(1f)
+                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                    .clip(CircleShape), shape = CircleShape
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.profile),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .height(48.dp)
+                                .fillMaxWidth()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = ripple()
+                                ) {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    expanded = !expanded
+                                }
+                                .padding(start = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                modifier = Modifier.weight(1f),
+                                text = "Imam Ali", // (account name)
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            //Spacer(modifier = Modifier.width(16.dp))
+
+                            //Text(
+                            //    modifier = Modifier.weight(1f),
+                            //    text = "@imam_ali", // (user id)
+                            //    style = MaterialTheme.typography.bodySmall,
+                            //    maxLines = 1,
+                            //    overflow = TextOverflow.Ellipsis,
+                            //    color = MaterialTheme.colorScheme.onPrimary/*.copy(
+                            //        alpha = 0.6f
+                            //    )*/
+                            //)
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    expanded = !expanded
+                                }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.arrow_drop_down),
+                                    contentDescription = null,
+                                    modifier = Modifier.rotate((expansionHeight.value.value / 160) * 180f),
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(expansionHeight.value)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .drawWithContent {
+                            drawContent()
+
+                            val gradientHeight = 8.dp.value //size.height * 0.15f
+
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
+                                    ), startY = size.height - gradientHeight, endY = size.height
+                                ), blendMode = BlendMode.Multiply
+                            )
+                        }
+                        .verticalScroll(rememberScrollState())) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                Column(
+                    Modifier.fillMaxSize()
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.support),
+                            contentDescription = "Support"
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                    })
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         },
     ) {
         //Box
         Row(modifier = Modifier.fillMaxSize()) {
+            var searching by rememberSaveable { mutableStateOf(false) }
+
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -1759,11 +3139,12 @@ fun MainScreen(
                         if (expandedScreen) 0.3f else 1f
                     )
             ) {
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     //.shadow(
                     //    elevation = 16.dp,
-                    //    clip = true
+                    //    clip = false
                     //),
                     topBar = {
                         TopAppBar(
@@ -1801,8 +3182,7 @@ fun MainScreen(
                                 titleContentColor = MaterialTheme.colorScheme.onPrimary,
                                 actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                                 subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier.shadow(
+                            ), modifier = Modifier.shadow(
                                 elevation = 4.dp, shape = RectangleShape, clip = false
                             )
                         )
@@ -1814,7 +3194,7 @@ fun MainScreen(
                                 .padding(innerPadding)
                         ) {
                             items(
-                                items = contactsList, key = { it.id }) { person ->
+                                items = chatList, key = { it.id }) { person ->
 
                                 Surface(
                                     modifier = Modifier
@@ -1824,7 +3204,10 @@ fun MainScreen(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         val id = person.id
-                                        navHostController.navigate("chatScreen?id=$id")
+                                        selectedChat = id
+                                        if (!expandedScreen) {
+                                            navHostController.navigate("chatScreen?id=$id")
+                                        }
                                     }) {
 
                                     Box(
@@ -1853,7 +3236,7 @@ fun MainScreen(
                                                 modifier = Modifier.size(40.dp), shape = CircleShape
                                             ) {
                                                 Image(
-                                                    painter = painterResource(R.drawable.abbas_araghchi),
+                                                    painter = painterResource(R.drawable.profile),
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Crop
@@ -1960,13 +3343,6 @@ fun MainScreen(
                         }
                     }
                 }
-                if (covered) {
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0x44000000))
-                    )
-                }
 
                 //search
                 val heightFraction by animateFloatAsState(
@@ -1975,6 +3351,9 @@ fun MainScreen(
                         durationMillis = 300, easing = FastOutSlowInEasing
                     )
                 )
+
+                var searchContent by remember { mutableStateOf("") }
+                val keyboardController = LocalSoftwareKeyboardController.current
 
                 Scaffold(
                     modifier = Modifier
@@ -1997,21 +3376,217 @@ fun MainScreen(
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             searching = !searching
                         }) {
-                        Row {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    clearSearchList()
+                                    searchContent = ""
                                     searching = false
                                 }) {
                                 Icon(
                                     painter = painterResource(R.drawable.arrow_back),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                                     contentDescription = "Menu"
                                 )
                             }
-                            // بقیه محتوای Card
+                            TextField(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .weight(1f),
+                                value = searchContent,
+                                onValueChange = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    searchContact(it)
+                                    searchContent = it
+                                    println(searchContactList)
+                                },
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                label = {
+                                    Text(text = "Search here...")
+                                },
+                                singleLine = true,
+                                textStyle = TextStyle(textDirection = TextDirection.Content),
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Search
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        keyboardController?.hide()
+                                    }
+                                )
+                            )
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    searchContent = ""
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.close),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    contentDescription = "Menu"
+                                )
+                            }
                         }
                     }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .padding(top = 56.dp)
+                            .padding(8.dp)
+                            .fillMaxSize()
+                            .shadow(
+                                elevation = 4.dp,
+                                shape = RoundedCornerShape(2.dp),
+                                clip = false
+                            )
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    ) {
+                        items(items = searchContactList) { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                }
+                            ) {
+
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+
+                                    Spacer(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(start = 72.dp)
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                            )
+                                    )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+
+                                        Box(Modifier.size(40.dp)) {
+                                            Surface(
+                                                modifier = Modifier.size(40.dp), shape = CircleShape
+                                            ) {
+                                                Image(
+                                                    painter = painterResource(R.drawable.profile),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
+
+                                            Spacer(
+                                                Modifier
+                                                    .size(8.dp)
+                                                    .background(Color(0xFF23A55A), CircleShape)
+                                                    .align(Alignment.TopEnd)
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(16.dp))
+
+                                        Column(
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+
+                                            Text(
+                                                text = item.username,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            Text(
+                                                text = "@${item.username}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(
+                                                    alpha = 0.6f
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        //Spacer(Modifier.width(16.dp))
+
+                                        //Column(
+                                        //    horizontalAlignment = Alignment.End
+                                        //) {
+
+                                        //    Text(
+                                        //        text = item.username,
+                                        //        style = MaterialTheme.typography.bodySmall,
+                                        //        maxLines = 1,
+                                        //        overflow = TextOverflow.Ellipsis
+                                        //    )
+
+                                        //    Spacer(Modifier.height(4.dp))
+
+                                        //    if (item.isOnline) {
+
+                                        //        Box(
+                                        //            modifier = Modifier
+                                        //                .defaultMinSize(minWidth = 20.dp)
+                                        //                .height(20.dp)
+                                        //                .background(
+                                        //                    MaterialTheme.colorScheme.primary,
+                                        //                    RoundedCornerShape(10.dp)
+                                        //                )
+                                        //                .padding(horizontal = 4.dp),
+                                        //            contentAlignment = Alignment.Center
+                                        //        ) {
+
+                                        //            Text(
+                                        //                text = "*",
+                                        //                color = MaterialTheme.colorScheme.onPrimary,
+                                        //                style = MaterialTheme.typography.labelSmall,
+                                        //                maxLines = 1
+                                        //            )
+                                        //        }
+                                        //    }
+                                        //}
+                                    }
+                                }
+                            }
+                        }
+
+                    }
                 }
+
+//                if (expandedScreen and covered) {
+//                    Spacer(
+//                        modifier = Modifier
+//                            .fillMaxSize()
+//                            .background(coverColor)
+//                            .clickable(
+//                                indication = null,
+//                                interactionSource = remember { MutableInteractionSource() }) {
+//                            }
+//                    )
+//                }
             }
 
             if (expandedScreen) {
@@ -2031,7 +3606,13 @@ fun MainScreen(
                                 ), blendMode = BlendMode.Multiply
                             )
                         }) {
-                    ChatScreen(back = { navHostController.popBackStack() }, id = "test 1")
+                    ChatScreen(
+                        back = { navHostController.popBackStack() }, id = selectedChat,
+//                        whatismybackgroundfiltercolor = { color, show ->
+//                            covered = show
+//                            coverColor = color
+//                        }
+                    )
                 }
             }
         }
@@ -2051,6 +3632,8 @@ fun AnimatedDropMenu(
     ratioY: Float,
     position: Alignment,
     hasBackgroundCover: Boolean,
+    tabletView: Boolean = false,
+    whatismybackgroundfiltercolor: (Color, Boolean) -> Unit,
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
@@ -2062,8 +3645,36 @@ fun AnimatedDropMenu(
     //val surface = MaterialTheme.colorScheme.surface
     val surface = MenuDefaults.containerColor
 
+    whatismybackgroundfiltercolor(
+        if (hasBackgroundCover) {
+            Color(0xFF000000).copy(
+                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+                    0f, 0.25f
+                )
+            )
+        } else {
+            Color.Transparent
+        }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
+    )
+
+    LaunchedEffect(
+        key1 = hasBackgroundCover, key2 = sizeBtn, key3 = chord
+    ) {
+        whatismybackgroundfiltercolor(
+            if (hasBackgroundCover) {
+                Color(0xFF000000).copy(
+                    alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+                        0f, 0.25f
+                    )
+                )
+            } else {
+                Color.Transparent
+            }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
+        )
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
-        if (isExpanded) {
+        if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f)) {
             Spacer(
                 modifier = Modifier
                     .fillMaxSize()
@@ -2113,15 +3724,18 @@ fun AnimatedDropMenu(
             ) {
                 val radius = sizeBtn.toPx() / 2
 
+                //Alignment.BottomStart -> buttomLeftmenu
+                //Alignment.TopEnd -> dropdownmenu
+
                 val centerX = when (position) {
                     Alignment.BottomStart -> size.width * ratioX + 24.dp.toPx()
-                    Alignment.TopEnd -> size.width * ratioX - 24.dp.toPx()
+                    Alignment.TopEnd -> if (tabletView) size.width * ratioX - 24.dp.toPx() else size.width * ratioX - 12.dp.toPx()
                     else -> size.width * ratioX // Default fallback
                 }
 
                 val centerY = when (position) {
                     Alignment.BottomStart -> size.height * ratioY - 24.dp.toPx()
-                    Alignment.TopEnd -> size.height * ratioY + 24.dp.toPx()
+                    Alignment.TopEnd -> if (tabletView) size.height * ratioY + 24.dp.toPx() else size.height * ratioY + 12.dp.toPx()
                     else -> size.height * ratioY // Default fallback
                 }
 
@@ -2132,7 +3746,7 @@ fun AnimatedDropMenu(
                 )
             }
 
-            if (isExpanded) {
+            if ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f) {
                 Box(
                     modifier = Modifier.alpha(
                         ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
@@ -2149,7 +3763,24 @@ fun AnimatedDropMenu(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(back: () -> Boolean, id: String) {
+fun ChatScreen(
+    back: () -> Boolean, id: String,
+    //whatismybackgroundfiltercolor: (Color, Boolean) -> Unit
+) {
+    var renderValue by remember { mutableIntStateOf(5) }
+    var isExpandedAttachment by remember { mutableStateOf(false) }
+    //var isExpandedEmoji by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val onSurface = MaterialTheme.colorScheme.onSurface
+
+    var covered by remember { mutableStateOf(false) }
+    //var coverColor by remember { mutableStateOf(Color.Transparent) }
+    val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
+
+    var coverColor by rememberSaveable(
+        stateSaver = colorSaver
+    ) { mutableStateOf(Color.Transparent) }
+
     val view = LocalView.current
 
     Scaffold(
@@ -2157,257 +3788,281 @@ fun ChatScreen(back: () -> Boolean, id: String) {
             .fillMaxSize()
             .background(Color.Transparent),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text("Contact")
-                }, expandedHeight = 56.dp, navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            back()
-                        }) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = "Menu"
-                        )
-                    }
-                }, actions = {
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }) {
-                        Icon(
-                            painter = painterResource(R.drawable.menu_dots),
-                            contentDescription = "Search"
-                        )
-                    }
-                }, colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                ), modifier = Modifier.shadow(
-                    elevation = 4.dp, shape = RectangleShape, clip = false
+            if (id != "") {
+
+                TopAppBar(
+                    title = {
+                        Text("Contact")
+                    }, expandedHeight = 56.dp, navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                back()
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = "Menu"
+                            )
+                        }
+                    }, actions = {
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.menu_dots),
+                                contentDescription = "Search"
+                            )
+                        }
+                    }, colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                    ), modifier = Modifier.shadow(
+                        elevation = 4.dp, shape = RectangleShape, clip = false
+                    )
                 )
-            )
+            }
         },
 
         ) { innerPadding ->
-        var renderValue by remember { mutableIntStateOf(5) }
-        var isExpandedAttachment by remember { mutableStateOf(false) }
-        var isExpandedEmoji by remember { mutableStateOf(false) }
-        var message by remember { mutableStateOf("") }
-        val onSurface = MaterialTheme.colorScheme.onSurface
-
         Column {
             AdvancedDynamicLightEffectOptim(
                 modifier = Modifier.weight(1f), renderValue = renderValue
             )
         }
-
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-        ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f), reverseLayout = true
-            ) {
-
-            }
-            Row(
+        if (id != "") {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 64.dp, max = 256.dp)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .imePadding(),
-                verticalAlignment = Alignment.Bottom
+                    .padding(innerPadding)
+                    .fillMaxSize()
             ) {
-                IconButton(
-                    onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        isExpandedAttachment = true
-                    }, modifier = Modifier
-                        .padding(8.dp)
-                        .size(48.dp)
+                LazyColumn(
+                    modifier = Modifier.weight(1f), reverseLayout = true
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.attach),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+
                 }
-
-                Box(
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(top = 8.dp, bottom = 10.dp)
-                        .shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
-                        .background(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(2.dp)
-                        )
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp, max = 256.dp)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .imePadding(),
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        IconButton({
+                    IconButton(
+                        onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
-                            isExpandedEmoji = true
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.emoji),
-                                contentDescription = null,
-                                tint = onSurface.copy(alpha = 0.5f)
+                            isExpandedAttachment = true
+                        }, modifier = Modifier
+                            .padding(8.dp)
+                            .size(48.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.attach),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(top = 8.dp, bottom = 10.dp)
+                            .shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
                             )
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    ) {
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            //IconButton({
+                            //    view.playSoundEffect(SoundEffectConstants.CLICK)
+                            //    isExpandedEmoji = true
+                            //}) {
+                            //    Icon(
+                            //        painter = painterResource(R.drawable.emoji),
+                            //        contentDescription = null,
+                            //        tint = onSurface.copy(alpha = 0.5f)
+                            //    )
+                            //}
+
+                            AndroidView(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 8.dp),
+                                factory = { context ->
+                                    EditText(context).apply {
+                                        layoutDirection = View.LAYOUT_DIRECTION_LOCALE
+                                        textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+                                        gravity = Gravity.START or Gravity.TOP
+                                        background = null
+
+                                        hint = "Type your message..."
+                                        setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
+
+                                        //addTextChangedListener(object : TextWatcher {
+                                        //    override fun beforeTextChanged(
+                                        //        s: CharSequence?,
+                                        //        start: Int,
+                                        //        count: Int,
+                                        //        after: Int
+                                        //    ) {
+                                        //    }
+
+                                        //    override fun onTextChanged(
+                                        //        s: CharSequence?,
+                                        //        start: Int,
+                                        //        before: Int,
+                                        //        count: Int
+                                        //    ) {
+                                        //        val newText = s.toString()
+                                        //        if (newText != message) {
+                                        //            onValueChange(newText)
+                                        //        }
+                                        //    }
+
+                                        //    override fun afterTextChanged(s: Editable?) {}
+                                        //})
+                                    }
+                                },
+                                update = { editText ->
+                                    val currentText = editText.text.toString()
+                                    if (currentText != message) {
+                                        editText.setText(message)
+                                        editText.setSelection(message.length)
+                                    }
+
+                                    editText.setTextColor(onSurface.toArgb())
+                                })
                         }
+                    }
 
-                        AndroidView(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 8.dp),
-                            factory = { context ->
-                                EditText(context).apply {
-                                    layoutDirection = View.LAYOUT_DIRECTION_LOCALE
-                                    textDirection = View.TEXT_DIRECTION_FIRST_STRONG
-                                    gravity = Gravity.START or Gravity.TOP
-                                    background = null
-
-                                    hint = "type your message..."
-                                    setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
-
-                                    //addTextChangedListener(object : TextWatcher {
-                                    //    override fun beforeTextChanged(
-                                    //        s: CharSequence?,
-                                    //        start: Int,
-                                    //        count: Int,
-                                    //        after: Int
-                                    //    ) {
-                                    //    }
-
-                                    //    override fun onTextChanged(
-                                    //        s: CharSequence?,
-                                    //        start: Int,
-                                    //        before: Int,
-                                    //        count: Int
-                                    //    ) {
-                                    //        val newText = s.toString()
-                                    //        if (newText != message) {
-                                    //            onValueChange(newText)
-                                    //        }
-                                    //    }
-
-                                    //    override fun afterTextChanged(s: Editable?) {}
-                                    //})
-                                }
-                            },
-                            update = { editText ->
-                                val currentText = editText.text.toString()
-                                if (currentText != message) {
-                                    editText.setText(message)
-                                    editText.setSelection(message.length)
-                                }
-
-                                editText.setTextColor(onSurface.toArgb())
-                            })
+                    IconButton(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            renderValue = (1..10).random()
+                        }, modifier = Modifier
+                            .padding(8.dp)
+                            .size(48.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.send),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
+            }
 
-                IconButton(
-                    onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        renderValue = (1..10).random()
-                    }, modifier = Modifier
-                        .padding(8.dp)
-                        .size(48.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.send),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary
+            AnimatedDropMenu(
+                modifier = Modifier.padding(innerPadding),
+                width = 224.dp,
+                height = 112.dp,
+                chord = 250.dp,
+                isExpanded = isExpandedAttachment,
+                close = { isExpandedAttachment = false },
+                ratioX = 0f,
+                ratioY = 1f,
+                position = Alignment.BottomStart,
+                hasBackgroundCover = true,
+                whatismybackgroundfiltercolor = { color, show ->
+                    covered = show
+                    coverColor = color
+                }) {
+                Column {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = "Photos and videos") }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.photo), contentDescription = null
+                            )
+                        }, trailingIcon = { }, enabled = true
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = "File") }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.folder), contentDescription = null
+                            )
+                        }, trailingIcon = { }, enabled = true
                     )
                 }
             }
-        }
 
-        AnimatedDropMenu(
-            modifier = Modifier.padding(innerPadding),
-            width = 224.dp,
-            height = 112.dp,
-            chord = 250.dp,
-            isExpanded = isExpandedAttachment,
-            close = { isExpandedAttachment = false },
-            ratioX = 0f,
-            ratioY = 1f,
-            position = Alignment.BottomStart,
-            hasBackgroundCover = true
-        ) {
-            Column {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                )
-                DropdownMenuItem(
-                    text = { Text(text = "Photos and videos") }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.photo), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
-                )
-                DropdownMenuItem(
-                    text = { Text(text = "File") }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.folder), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
-                )
-            }
+            //AnimatedDropMenu(
+            //    modifier = Modifier.padding(innerPadding),
+            //    width = 400.dp,
+            //    height = 420.dp,
+            //    chord = 580.dp,
+            //    isExpanded = isExpandedEmoji,
+            //    close = { isExpandedEmoji = false },
+            //    ratioX = 0.16f,
+            //    ratioY = 0.98f,
+            //    position = Alignment.BottomStart,
+            //    hasBackgroundCover = true,
+            //    whatismybackgroundfiltercolor = { color, show ->
+            //        covered = show
+            //        coverColor = color
+            //    }) {
+            //    Column {
+            //        Spacer(
+            //            modifier = Modifier
+            //                .fillMaxWidth()
+            //                .height(8.dp)
+            //        )
+            //        DropdownMenuItem(
+            //            text = { Text(text = "Photos and videos") }, onClick = {
+            //                view.playSoundEffect(SoundEffectConstants.CLICK)
+            //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+            //                Icon(
+            //                    painterResource(R.drawable.photo), contentDescription = null
+            //                )
+            //            }, trailingIcon = { }, enabled = true
+            //        )
+            //        DropdownMenuItem(
+            //            text = { Text(text = "File") }, onClick = {
+            //                view.playSoundEffect(SoundEffectConstants.CLICK)
+            //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+            //                Icon(
+            //                    painterResource(R.drawable.folder), contentDescription = null
+            //                )
+            //            }, trailingIcon = { }, enabled = true
+            //        )
+            //    }
+            //}
         }
+    }
 
-        AnimatedDropMenu(
-            modifier = Modifier.padding(innerPadding),
-            width = 400.dp,
-            height = 420.dp,
-            chord = 580.dp,
-            isExpanded = isExpandedEmoji,
-            close = { isExpandedEmoji = false },
-            ratioX = 0.16f,
-            ratioY = 0.98f,
-            position = Alignment.BottomStart,
-            hasBackgroundCover = true
-        ) {
-            Column {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
+    if (covered) {
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(
+                    56.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 )
-                DropdownMenuItem(
-                    text = { Text(text = "Photos and videos") }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.photo), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
-                )
-                DropdownMenuItem(
-                    text = { Text(text = "File") }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.folder), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
-                )
-            }
-        }
+                .background(coverColor)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }) {
+                    //if (isExpandedEmoji) {
+                    //    isExpandedEmoji = false
+                    //} else
+                    if (isExpandedAttachment) {
+                        isExpandedAttachment = false
+                    }
+                })
     }
 }
 
