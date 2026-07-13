@@ -52,4 +52,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    //implementation("androidx.core:core-splashscreen:1.2.0")
 }

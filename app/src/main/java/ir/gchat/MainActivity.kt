@@ -21,6 +21,7 @@ import android.telephony.SubscriptionManager
 import android.view.Gravity
 import android.view.SoundEffectConstants
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -121,7 +122,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -162,7 +162,6 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -172,6 +171,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.datastore.preferences.protobuf.LazyStringArrayList.emptyList
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -275,7 +277,7 @@ val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
 val USERNAME_KEY = stringPreferencesKey("username")
 val PASSWORD_KEY = stringPreferencesKey("password")
 
-data class Person(
+data class Contact(
     val id: String = "",
     val name: String = "",
     val profilePicture: String = "",
@@ -286,8 +288,13 @@ data class Person(
 )
 
 data class SearchEntity(
-    val username: String,
-    val isOnline: Boolean
+    val username: String, val isOnline: Boolean
+)
+
+data class MessageItem(
+    val text: String = "",
+    val date: String = "",
+    val myMessage: Boolean = false,
 )
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
@@ -305,20 +312,18 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _oldLogined = MutableStateFlow(
         //false
-        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() }
-    )
+        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() })
     val oldLogined: StateFlow<Boolean> = _oldLogined.asStateFlow()
 
-    val savedUsername = runBlocking {
+    var savedUsername = runBlocking {
         context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
     }
-    val savedPassword =
+    var savedPassword =
         runBlocking { context.dataStore.data.map { it[PASSWORD_KEY] ?: "" }.first() }
 
     private val _serverIP = MutableStateFlow(
         //"127.0.0.1:8765"
-        runBlocking { context.dataStore.data.map { it[SERVERIP_KEY] ?: "127.0.0.1:8765" }.first() }
-    )
+        runBlocking { context.dataStore.data.map { it[SERVERIP_KEY] ?: "127.0.0.1:8765" }.first() })
     val serverIP: StateFlow<String> = _serverIP.asStateFlow()
 
     //init {
@@ -344,33 +349,14 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private val _loginError = MutableStateFlow(0)
     val loginError: StateFlow<Int> = _loginError.asStateFlow()
 
-    private val _chatList = MutableStateFlow(
-        listOf(
-            Person(
-                name = "عباس عراقچی",
-                id = "test1",
-                lastMessageDate = "12:20",
-                unreadMessages = 999,
-                lastMessageText = "جایگزین کردیم"
-            ), Person(
-                name = "امام خمینی",
-                id = "test2",
-                lastMessageDate = "1360",
-                unreadMessages = 14,
-                lastMessageText = "خیلی خری"
-            ), Person(
-                name = "استاد قنبری",
-                id = "test3",
-                lastMessageDate = "1m",
-                unreadMessages = 0,
-                lastMessageText = "بله خبر دارم."
-            )
-        )
-    )
-    val chatList: StateFlow<List<Person>> = _chatList.asStateFlow()
+    private val _chatList = MutableStateFlow(emptyList<Contact>())
+    val chatList: StateFlow<List<Contact>> = _chatList.asStateFlow()
 
     private val _contactSearchList = MutableStateFlow(emptyList<SearchEntity>())
     val contactSearchList: StateFlow<List<SearchEntity>> = _contactSearchList.asStateFlow()
+
+    private val _messageList = MutableStateFlow(emptyList<MessageItem>())
+    val messageList: StateFlow<List<MessageItem>> = _messageList.asStateFlow()
 
     fun connect() {
 
@@ -405,7 +391,6 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     try {
                         val jsonObject = JSONObject(text)
                         val type = jsonObject.getString("type")
-                        println(jsonObject)
                         //val message = jsonObject.getString("message")
 
                         when (type) {
@@ -515,6 +500,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     val results = jsonObject.getJSONArray("results")
                                     for (i in 0 until results.length()) {
                                         val item = results.getJSONObject(i)
+                                        //خودت رو نشون نده
+                                        if (item.getString("username") == savedUsername) {
+                                            continue
+                                        }
                                         _contactSearchList.value += SearchEntity(
                                             username = item.getString("username"),
                                             isOnline = item.getBoolean("online"),
@@ -525,6 +514,27 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         .show()
                                 }
                             }
+
+                            "get_conversations_response" -> {
+                                if (jsonObject.getString("status") == "success") {
+                                    val results = jsonObject.getJSONArray("conversations")
+                                    for (i in 0 until results.length()) {
+                                        val item = results.getJSONObject(i)
+
+                                        _chatList.value += Contact(
+                                            id = item.getString("with"),
+                                            name = item.getString("with"),
+                                            lastMessageText = item.getString("last_message"),
+                                            lastMessageDate = item.getString("last_timestamp"),
+                                            unreadMessages = item.getInt("unread_count")
+                                        )
+                                    }
+                                } else {
+                                    Toast.makeText(
+                                        context, "Error Reciving chat list", Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         }
                     } catch (_: Exception) {
                     }
@@ -532,6 +542,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                webSocket.cancel()
+                //webSocket.close(1000, "Normal Closure")
                 this@SocketViewModel.webSocket = null
                 _logined.value = false
                 viewModelScope.launch {
@@ -541,6 +553,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.cancel()
+                //webSocket.close(1000, "Normal Closure")
                 this@SocketViewModel.webSocket = null
                 _logined.value = false
                 viewModelScope.launch {
@@ -554,10 +568,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     fun signIn(username: String, password: String) {
         viewModelScope.launch {
             try {
+                savedUsername = username
                 context.dataStore.edit { preferences ->
                     preferences[USERNAME_KEY] = username
                 }
 
+                savedPassword = password
                 context.dataStore.edit { preferences ->
                     preferences[PASSWORD_KEY] = password
                 }
@@ -583,10 +599,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     preferences[ICCID_KEY] = iccid
                 }
 
+                savedUsername = username
                 context.dataStore.edit { preferences ->
                     preferences[USERNAME_KEY] = username
                 }
 
+                savedPassword = password
                 context.dataStore.edit { preferences ->
                     preferences[PASSWORD_KEY] = password
                 }
@@ -608,6 +626,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setServerIP(serverIP: String) {
         _serverIP.value = serverIP
+        webSocket?.cancel()
+        //webSocket.close(1000, "Normal Closure")
         this@SocketViewModel.webSocket = null
         _logined.value = false
         connect()
@@ -642,6 +662,39 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     fun clearSearchMemory() {
         _contactSearchList.value = emptyList<SearchEntity>()
     }
+
+    fun logout() {
+        webSocket?.cancel()
+        //webSocket.close(1000, "Normal Closure")
+        this@SocketViewModel.webSocket = null
+        viewModelScope.launch {
+            _oldLogined.value = false
+            _logined.value = false
+            context.dataStore.edit { preferences ->
+                preferences[LOGINED_KEY] = false
+            }
+            connect()
+        }
+    }
+
+    fun sendMessage(contact: String, message: String) {
+        _messageList.value += MessageItem(text = message, myMessage = true)
+        viewModelScope.launch {
+            try {
+                webSocket?.send(
+                    """
+                    {
+                        "type": "send_dm",
+                        "recipient": "$contact",
+                        "content": "$message"
+                    }
+                    """.trimIndent()
+                )
+            } catch (_: Exception) {
+
+            }
+        }
+    }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -658,9 +711,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            _theme.value = context.dataStore.data
-                .map { it[THEME_KEY] ?: 0 }
-                .first()
+            _theme.value = context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
         }
     }
 
@@ -682,9 +733,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun getDevice(): Int {
-        return context.dataStore.data
-            .map { it[DEVICE_TYPE_KEY] ?: 2 }
-            .first()
+        return context.dataStore.data.map { it[DEVICE_TYPE_KEY] ?: 2 }.first()
     }
 
     fun setDevice(deviceType: Int) {
@@ -705,6 +754,13 @@ class MainActivity : ComponentActivity() {
     val socketViewModel: SocketViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        //val splashScreen = installSplashScreen()
+
+        // لودینگ اولیه بره بعدا
+        //splashScreen.setKeepOnScreenCondition {
+        //    loading
+        //}
+
         super.onCreate(savedInstanceState)
         socketViewModel.connect()
 
@@ -724,9 +780,9 @@ class MainActivity : ComponentActivity() {
             GChatTheme(
                 dynamicColor = false, darkTheme = darkTheme
             ) {
-                SetUPNavigationViewTitleBar()
-                SetUPNotificationBar(darkTheme)
-                SetUPNavigationBar(darkTheme)
+                //SetUPNavigationViewTitleBar()
+                //SetUPNotificationBar(darkTheme)
+                //SetUPNavigationBar(darkTheme)
                 MainNavigation(
                     setTheme = { viewModel.setTheme() },
                     theme = theme,
@@ -751,68 +807,172 @@ class MainActivity : ComponentActivity() {
                     getrules = { viewModel.getRules() },
                     searchContactList = contactsSearchList,
                     searchContact = { username -> socketViewModel.searchUsername(username = username) },
-                    clearSearchList = { socketViewModel.clearSearchMemory() }
-                )
+                    clearSearchList = { socketViewModel.clearSearchMemory() },
+                    logout = { socketViewModel.logout() },
+                    sendMessage = { contact, message ->
+                        socketViewModel.sendMessage(
+                            contact = contact, message = message
+                        )
+                    },messageList = socketViewModel.messageList.collectAsState().value)
+                SetUpSystemBars(darkTheme)
             }
         }
+
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//            splashScreen.setOnExitAnimationListener { splashView ->
+//                splashView.view.animate()
+//                    .alpha(0f)
+//                    .setDuration(400)
+//                    .withEndAction {
+//                        splashView.remove()
+//                    }
+//                    .start()
+//            }
+//        }
+        window.setBackgroundDrawableResource(android.R.color.transparent)
     }
+
+//    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
+//        super.onMultiWindowModeChanged(isInMultiWindowMode)
+//
+//        Log.d("Activity", "MultiWindow = $isInMultiWindowMode")
+//    }
+//
+//    override fun onWindowFocusChanged(hasFocus: Boolean) {
+//        super.onWindowFocusChanged(hasFocus)
+//
+//        Log.d("Activity", "Focus = $hasFocus")
+//    }
+//
+//    override fun onResume() {
+//        super.onResume()
+//
+//        Log.d("Activity", "Resume")
+//    }
 }
 
+//@Composable
+//fun SetUPNavigationViewTitleBar() {
+//    val context = LocalContext.current
+//    val activity = context as? Activity
+//
+//    val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
+//
+//    SideEffect {
+//        activity?.let { act ->
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+//                val taskDescription =
+//                    ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
+//                act.setTaskDescription(taskDescription)
+//            } else {
+//                val taskDescription = ActivityManager.TaskDescription(null, null, primaryColor)
+//                act.setTaskDescription(taskDescription)
+//            }
+//        }
+//    }
+//}
+//
+//@Composable
+//fun SetUPNotificationBar(darkIcons: Boolean) {
+//    val view = LocalView.current
+//    val window = (view.context as ComponentActivity).window
+//
+//    WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkIcons
+//
+//    window.statusBarColor = Color(0x33000000).toArgb()
+//}
+//
+//@Composable
+//fun SetUPNavigationBar(darkTheme: Boolean) {
+//    val view = LocalView.current
+//    val window = (view.context as ComponentActivity).window
+//
+//    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+//        DisposableEffect(Unit) {
+//            window.navigationBarColor = Color.Black.toArgb()
+//            onDispose { }
+//        }
+//    } else {
+//        DisposableEffect(Unit) {
+//            window.navigationBarColor = Color.Transparent.toArgb()
+//            onDispose { }
+//        }
+//
+//        //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//        //    window.decorView.setOnApplyWindowInsetsListener { _, insets ->
+//        //        insets
+//        //    }
+//        //}
+//
+//        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars =
+//            !darkTheme
+//    }
+//}
+
 @Composable
-fun SetUPNavigationViewTitleBar() {
-    val context = LocalContext.current
-    val activity = context as? Activity
+fun SetUpSystemBars(
+    darkTheme: Boolean,
+    statusBarColor: Color = Color(0x33000000),
+    navigationBarColor: Color = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) Color.Black
+    else Color.Transparent
+) {
+    val view = LocalView.current
+    if (view.isInEditMode) return
+
+    val activity = view.context as Activity
+    val window = activity.window
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
 
-    SideEffect {
-        activity?.let { act ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val taskDescription =
-                    ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
-                act.setTaskDescription(taskDescription)
-            } else {
-                val taskDescription = ActivityManager.TaskDescription(null, null, primaryColor)
-                act.setTaskDescription(taskDescription)
-            }
+    fun apply() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            activity.setTaskDescription(
+                ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
+            )
+        } else {
+            @Suppress("DEPRECATION") activity.setTaskDescription(
+                ActivityManager.TaskDescription(
+                    null, null, primaryColor
+                )
+            )
         }
+
+        val controller = WindowCompat.getInsetsController(window, view)
+
+        controller.isAppearanceLightStatusBars = darkTheme
+        controller.isAppearanceLightNavigationBars = !darkTheme
+
+        window.statusBarColor = statusBarColor.toArgb()
+        window.navigationBarColor = navigationBarColor.toArgb()
+
+        //Log.d("SystemBars", "Applied")
     }
-}
 
-@Composable
-fun SetUPNotificationBar(darkIcons: Boolean) {
-    val view = LocalView.current
-    val window = (view.context as ComponentActivity).window
+    SideEffect {
+        apply()
+    }
 
-    WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkIcons
+    DisposableEffect(lifecycleOwner, darkTheme) {
 
-    window.statusBarColor = Color(0x33000000).toArgb()
-}
-
-@Composable
-fun SetUPNavigationBar(darkTheme: Boolean) {
-    val view = LocalView.current
-    val window = (view.context as ComponentActivity).window
-
-    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-        DisposableEffect(Unit) {
-            window.navigationBarColor = Color.Black.toArgb()
-            onDispose { }
-        }
-    } else {
-        DisposableEffect(Unit) {
-            window.navigationBarColor = Color.Transparent.toArgb()
-            onDispose { }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            window.decorView.setOnApplyWindowInsetsListener { _, insets ->
-                insets
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                apply()
             }
         }
 
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars =
-            !darkTheme
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        val focusListener = ViewTreeObserver.OnWindowFocusChangeListener {
+            apply()
+        }
+
+        view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            view.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
+        }
     }
 }
 
@@ -825,7 +985,7 @@ fun MainNavigation(
     signUp: (String, String, String) -> Unit,
     logined: Boolean,
     oldLogined: Boolean,
-    chatList: List<Person>,
+    chatList: List<Contact>,
     setServerIP: (String) -> Unit,
     serverIP: String,
     setDevice: (Int) -> Unit,
@@ -834,7 +994,10 @@ fun MainNavigation(
     getrules: () -> String,
     searchContactList: List<SearchEntity>,
     searchContact: (String) -> Unit,
-    clearSearchList: () -> Unit
+    clearSearchList: () -> Unit,
+    logout: () -> Unit,
+    sendMessage: (String, String) -> Unit,
+    messageList: List<MessageItem>
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -874,9 +1037,7 @@ fun MainNavigation(
         }
     }
     NavHost(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding(),
+        modifier = Modifier.fillMaxSize()/*.imePadding()*/,
         navController = navController,
         startDestination = "greeting",
 
@@ -903,15 +1064,23 @@ fun MainNavigation(
         }) {
         composable(route = "greeting") {
             Box(modifier = Modifier.fillMaxSize()) {
-                Greeting(setTheme = setTheme, theme = theme, signIn = { username, password ->
-                    signIn(
-                        username, password
-                    )
-                }, signUp = { iccid, username, password ->
-                    signUp(
-                        iccid, username, password
-                    )
-                }, ipConfig = { navController.navigate("ipConfig") }, getrules = getrules, loginError = loginError)
+                Greeting(
+                    setTheme = setTheme,
+                    theme = theme,
+                    signIn = { username, password ->
+                        signIn(
+                            username, password
+                        )
+                    },
+                    signUp = { iccid, username, password ->
+                        signUp(
+                            iccid, username, password
+                        )
+                    },
+                    ipConfig = { navController.navigate("ipConfig") },
+                    getrules = getrules,
+                    loginError = loginError
+                )
             }
         }
         composable(route = "mainScreen") {
@@ -920,7 +1089,10 @@ fun MainNavigation(
                 navHostController = navController,
                 searchContactList = searchContactList,
                 searchContact = searchContact,
-                clearSearchList = clearSearchList
+                clearSearchList = clearSearchList,
+                logout = logout,
+                sendMessage = sendMessage,
+                messageList = messageList
             )
         }
         composable(
@@ -929,7 +1101,7 @@ fun MainNavigation(
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
             ChatScreen(
-                back = { navController.popBackStack() }, id = id,
+                back = { navController.popBackStack() }, id = id, sendMessage = sendMessage, messageList = messageList
                 //whatismybackgroundfiltercolor = { color, show -> }
             )
         }
@@ -940,7 +1112,7 @@ fun MainNavigation(
                     TopAppBar(
                         title = {
                             Text("Connecting...")
-                        }, expandedHeight = 56.dp, colors = TopAppBarDefaults.topAppBarColors(
+                        }, /*expandedHeight = 56.dp,*/ colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1048,7 +1220,7 @@ fun MainNavigation(
                     TopAppBar(
                         title = {
                             Text("Set server IP config")
-                        }, expandedHeight = 56.dp, colors = TopAppBarDefaults.topAppBarColors(
+                        }, /*expandedHeight = 56.dp,*/ colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1089,41 +1261,39 @@ fun MainNavigation(
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
                         devices.forEach { thisDevice ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        when (thisDevice) {
-                                            "Android Studio Emulator (AVD)" -> {
-                                                setDevice(0)
-                                                automaticMode = true
-                                                networkProtocol = "IPv4"
-                                                host = "10.0.2.2"
-                                                port = "8765"
-                                            }
-
-                                            "Genymotion" -> {
-                                                setDevice(1)
-                                                automaticMode = true
-                                                networkProtocol = "IPv4"
-                                                host = "10.0.3.2"
-                                                port = "8765"
-                                            }
-
-                                            "Other Diveses" -> {
-                                                setDevice(2)
-                                                automaticMode = false
-                                            }
-
-                                            else -> {
-                                                setDevice(2)
-                                                automaticMode = false
-                                            }
+                            Row(modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    when (thisDevice) {
+                                        "Android Studio Emulator (AVD)" -> {
+                                            setDevice(0)
+                                            automaticMode = true
+                                            networkProtocol = "IPv4"
+                                            host = "10.0.2.2"
+                                            port = "8765"
                                         }
-                                        selectedDevice = thisDevice
+
+                                        "Genymotion" -> {
+                                            setDevice(1)
+                                            automaticMode = true
+                                            networkProtocol = "IPv4"
+                                            host = "10.0.3.2"
+                                            port = "8765"
+                                        }
+
+                                        "Other Diveses" -> {
+                                            setDevice(2)
+                                            automaticMode = false
+                                        }
+
+                                        else -> {
+                                            setDevice(2)
+                                            automaticMode = false
+                                        }
                                     }
-                                    .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically) {
+                                    selectedDevice = thisDevice
+                                }
+                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(
                                     selected = selectedDevice == thisDevice, onClick = {
                                         when (thisDevice) {
@@ -1387,66 +1557,82 @@ fun Greeting(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     var hasPhonePermission by remember {
-        mutableStateOf(checkPhonePermission(context))
+        mutableStateOf(false)
     }
 
     var hasSmsAppRole by remember {
-        mutableStateOf(checkSmsAppRole(context))
+        mutableStateOf(false)
+    }
+
+    fun refreshPermissions() {
+        hasPhonePermission = checkPhonePermission(context)
+
+        hasSmsAppRole = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            checkSmsAppRole(context)
+        } else {
+            true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshPermissions()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshPermissions()
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val phonePermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasPhonePermission = granted
-
-        if (granted) {
-            Toast.makeText(
-                context, "READ_PHONE_STATE granted.", Toast.LENGTH_SHORT
-            ).show()
-        } else {
-            Toast.makeText(
-                context, "READ_PHONE_STATE denied. Closing app.", Toast.LENGTH_LONG
-            ).show()
-            (context as? Activity)?.finishAffinity()
-        }
+        ActivityResultContracts.RequestPermission()
+    ) {
+        refreshPermissions()
     }
 
-    val smsRoleLauncher = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            hasSmsAppRole = result.resultCode == Activity.RESULT_OK
+    val smsRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshPermissions()
+    }
 
-            if (hasSmsAppRole) {
-                Toast.makeText(
-                    context, "SMS Role granted.", Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                Toast.makeText(
-                    context, "SMS Role denied. Closing app.", Toast.LENGTH_LONG
-                ).show()
-                (context as? Activity)?.finishAffinity()
-            }
-        }
-    } else null
+    LaunchedEffect(hasPhonePermission, hasSmsAppRole) {
 
-    LaunchedEffect(hasPhonePermission, hasSmsAppRole) { // تغییر کلید
-        // ابتدا Phone Permission
         if (!hasPhonePermission) {
-            phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+            phonePermissionLauncher.launch(
+                Manifest.permission.READ_PHONE_STATE
+            )
             return@LaunchedEffect
         }
 
-        // سپس SMS Role (فقط یک بار!)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasSmsAppRole) {
+
             val roleManager = context.getSystemService(RoleManager::class.java)
-            smsRoleLauncher?.launch(
-                roleManager.createRequestRoleIntent(RoleManager.ROLE_SMS)
-            )
+
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
+                    RoleManager.ROLE_SMS
+                )
+            ) {
+                smsRoleLauncher.launch(
+                    roleManager.createRequestRoleIntent(
+                        RoleManager.ROLE_SMS
+                    )
+                )
+            }
         }
     }
-
     var selectedIccid by remember { mutableStateOf<String?>(null) }
 
     var isLoading by remember { mutableStateOf(false) }
@@ -2806,11 +2992,14 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
 )
 @Composable
 fun MainScreen(
-    chatList: List<Person>,
+    chatList: List<Contact>,
     navHostController: NavHostController,
     searchContactList: List<SearchEntity>,
     searchContact: (String) -> Unit,
-    clearSearchList: () -> Unit
+    clearSearchList: () -> Unit,
+    logout: () -> Unit,
+    sendMessage: (String, String) -> Unit,
+    messageList: List<MessageItem>
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -2821,6 +3010,8 @@ fun MainScreen(
         Medium -> 0.5f
         else -> 0.3f
     }
+
+    val context = LocalContext.current
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
     var selectedChat by rememberSaveable { mutableStateOf("") }
@@ -2839,11 +3030,11 @@ fun MainScreen(
                     .verticalScroll(rememberScrollState())
             ) {
 
-                var expanded by remember { mutableStateOf(false) }
-                val expansionHeight = animateDpAsState(
-                    targetValue = if (expanded) 160.dp else 0.dp,
-                    animationSpec = tween(durationMillis = 200)
-                )
+                //var expanded by remember { mutableStateOf(false) }
+                //val expansionHeight = animateDpAsState(
+                //    targetValue = if (expanded) 160.dp else 0.dp,
+                //    animationSpec = tween(durationMillis = 200)
+                //)
 
                 Box(
                     modifier = Modifier
@@ -2897,38 +3088,38 @@ fun MainScreen(
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            Surface(
-                                modifier = Modifier
-                                    .padding(vertical = 16.dp)
-                                    .padding(end = 16.dp)
-                                    .fillMaxHeight(1 / 2f)
-                                    .aspectRatio(1f)
-                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape), shape = CircleShape
-                            ) {
-                                Image(
-                                    painter = painterResource(R.drawable.profile),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            Surface(
-                                modifier = Modifier
-                                    .padding(vertical = 16.dp)
-                                    .padding(end = 16.dp)
-                                    .fillMaxHeight(1 / 2f)
-                                    .aspectRatio(1f)
-                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape), shape = CircleShape
-                            ) {
-                                Image(
-                                    painter = painterResource(R.drawable.profile),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
+                            //Surface(
+                            //    modifier = Modifier
+                            //        .padding(vertical = 16.dp)
+                            //        .padding(end = 16.dp)
+                            //        .fillMaxHeight(1 / 2f)
+                            //        .aspectRatio(1f)
+                            //        .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                            //        .clip(CircleShape), shape = CircleShape
+                            //) {
+                            //    Image(
+                            //        painter = painterResource(R.drawable.profile),
+                            //        contentDescription = null,
+                            //        modifier = Modifier.fillMaxSize(),
+                            //        contentScale = ContentScale.Crop
+                            //    )
+                            //}
+                            //Surface(
+                            //    modifier = Modifier
+                            //        .padding(vertical = 16.dp)
+                            //        .padding(end = 16.dp)
+                            //        .fillMaxHeight(1 / 2f)
+                            //        .aspectRatio(1f)
+                            //        .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                            //        .clip(CircleShape), shape = CircleShape
+                            //) {
+                            //    Image(
+                            //        painter = painterResource(R.drawable.profile),
+                            //        contentDescription = null,
+                            //        modifier = Modifier.fillMaxSize(),
+                            //        contentScale = ContentScale.Crop
+                            //    )
+                            //}
                         }
                         Row(
                             modifier = Modifier
@@ -2939,13 +3130,16 @@ fun MainScreen(
                                     indication = ripple()
                                 ) {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    expanded = !expanded
+                                    //expanded = !expanded
                                 }
                                 .padding(start = 16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
+                            // runBlocking نباشه به خدا نزدیک تره
                             Text(
                                 modifier = Modifier.weight(1f),
-                                text = "Imam Ali", // (account name)
+                                text = runBlocking {
+                                    context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
+                                }, // (account name)
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                             //Spacer(modifier = Modifier.width(16.dp))
@@ -2963,12 +3157,14 @@ fun MainScreen(
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    expanded = !expanded
+                                    // بجاش بریم صفحه پروفایل
+                                    //expanded = !expanded
                                 }) {
                                 Icon(
-                                    painter = painterResource(id = R.drawable.arrow_drop_down),
+                                    //painter = painterResource(id = R.drawable.arrow_drop_down),
+                                    painter = painterResource(id = R.drawable.account_circle),
                                     contentDescription = null,
-                                    modifier = Modifier.rotate((expansionHeight.value.value / 160) * 180f),
+                                    //modifier = Modifier.rotate((expansionHeight.value.value / 160) * 180f),
                                     tint = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
@@ -2976,152 +3172,65 @@ fun MainScreen(
                     }
                 }
 
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(expansionHeight.value)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .drawWithContent {
-                            drawContent()
-
-                            val gradientHeight = 8.dp.value //size.height * 0.15f
-
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
-                                    ), startY = size.height - gradientHeight, endY = size.height
-                                ), blendMode = BlendMode.Multiply
-                            )
-                        }
-                        .verticalScroll(rememberScrollState())) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
+                //Column(
+                //    Modifier
+                //        .fillMaxWidth()
+                //        .height(expansionHeight.value)
+                //        .background(MaterialTheme.colorScheme.surfaceContainer)
+                //        .drawWithContent {
+                //            drawContent()
+//
+                //            val gradientHeight = 8.dp.value //size.height * 0.15f
+//
+                //            drawRect(
+                //                brush = Brush.verticalGradient(
+                //                    colors = listOf(
+                //                        Color.Transparent, Color.Black.copy(alpha = 0.1f)
+                //                    ), startY = size.height - gradientHeight, endY = size.height
+                //                ), blendMode = BlendMode.Multiply
+                //            )
+                //        }
+                //        .verticalScroll(rememberScrollState())) {
+                //    Spacer(modifier = Modifier.height(8.dp))
+                //    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                //        Icon(
+                //            painter = painterResource(id = R.drawable.support),
+                //            contentDescription = "Support"
+                //        )
+                //    }, onClick = {
+                //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                //    })
+                //    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                //        Icon(
+                //            painter = painterResource(id = R.drawable.support),
+                //            contentDescription = "Support"
+                //        )
+                //    }, onClick = {
+                //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                //    })
+                //    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                //        Icon(
+                //            painter = painterResource(id = R.drawable.support),
+                //            contentDescription = "Support"
+                //        )
+                //    }, onClick = {
+                //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                //    })
+                //    Spacer(modifier = Modifier.height(8.dp))
+                //}
 
                 Column(
                     Modifier.fillMaxSize()
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                    DropdownMenuItem(text = { Text("Logout") }, leadingIcon = {
                         Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
+                            painter = painterResource(id = R.drawable.door_open),
+                            contentDescription = "Logout"
                         )
                     }, onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                    })
-                    DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-                        Icon(
-                            painter = painterResource(id = R.drawable.support),
-                            contentDescription = "Support"
-                        )
-                    }, onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        logout()
                     })
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -3150,7 +3259,7 @@ fun MainScreen(
                         TopAppBar(
                             title = {
                                 Text("GChat")
-                            }, expandedHeight = 56.dp, navigationIcon = {
+                            }, /*expandedHeight = 56.dp,*/ navigationIcon = {
                                 IconButton(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -3194,7 +3303,7 @@ fun MainScreen(
                                 .padding(innerPadding)
                         ) {
                             items(
-                                items = chatList, key = { it.id }) { person ->
+                                items = chatList, key = { it.id }) { contact ->
 
                                 Surface(
                                     modifier = Modifier
@@ -3203,7 +3312,7 @@ fun MainScreen(
                                     color = MaterialTheme.colorScheme.surface,
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        val id = person.id
+                                        val id = contact.id
                                         selectedChat = id
                                         if (!expandedScreen) {
                                             navHostController.navigate("chatScreen?id=$id")
@@ -3250,13 +3359,13 @@ fun MainScreen(
                                             ) {
 
                                                 Text(
-                                                    text = person.name,
+                                                    text = contact.name,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
 
                                                 Text(
-                                                    text = person.lastMessageText,
+                                                    text = contact.lastMessageText,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurface.copy(
                                                         alpha = 0.6f
@@ -3273,7 +3382,7 @@ fun MainScreen(
                                             ) {
 
                                                 Text(
-                                                    text = person.lastMessageDate,
+                                                    text = contact.lastMessageDate,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
@@ -3281,7 +3390,7 @@ fun MainScreen(
 
                                                 Spacer(Modifier.height(4.dp))
 
-                                                if (person.unreadMessages > 0) {
+                                                if (contact.unreadMessages > 0) {
 
                                                     Box(
                                                         modifier = Modifier
@@ -3296,7 +3405,7 @@ fun MainScreen(
                                                     ) {
 
                                                         Text(
-                                                            text = person.unreadMessages.toString(),
+                                                            text = contact.unreadMessages.toString(),
                                                             color = MaterialTheme.colorScheme.onPrimary,
                                                             style = MaterialTheme.typography.labelSmall,
                                                             maxLines = 1
@@ -3319,28 +3428,28 @@ fun MainScreen(
                             }
                         }
 
-                        Button(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                            },
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .padding(innerPadding)
-                                .size(56.dp)
-                                .align(Alignment.BottomEnd)
-                                .shadow(
-                                    elevation = 6.dp, shape = CircleShape, clip = false
-                                ),
-                            shape = CircleShape,
-                            contentPadding = PaddingValues(16.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.edit),
-                                contentDescription = "Accept and Sign-In",
-                                modifier = Modifier.fillMaxSize(),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+                        //Button(
+                        //    onClick = {
+                        //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        //    },
+                        //    modifier = Modifier
+                        //        .padding(8.dp)
+                        //        .padding(innerPadding)
+                        //        .size(56.dp)
+                        //        .align(Alignment.BottomEnd)
+                        //        .shadow(
+                        //            elevation = 6.dp, shape = CircleShape, clip = false
+                        //        ),
+                        //    shape = CircleShape,
+                        //    contentPadding = PaddingValues(16.dp)
+                        //) {
+                        //    Icon(
+                        //        painter = painterResource(R.drawable.edit),
+                        //        contentDescription = "Accept and Sign-In",
+                        //        modifier = Modifier.fillMaxSize(),
+                        //        tint = MaterialTheme.colorScheme.onPrimary
+                        //    )
+                        //}
                     }
                 }
 
@@ -3400,9 +3509,12 @@ fun MainScreen(
                                 value = searchContent,
                                 onValueChange = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    searchContact(it)
+                                    if (it.isBlank()) {
+                                        clearSearchList()
+                                    } else {
+                                        searchContact(it)
+                                    }
                                     searchContent = it
-                                    println(searchContactList)
                                 },
                                 colors = TextFieldDefaults.colors(
                                     focusedContainerColor = Color.Transparent,
@@ -3421,12 +3533,11 @@ fun MainScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         keyboardController?.hide()
-                                    }
-                                )
-                            )
+                                    }))
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    clearSearchList()
                                     searchContent = ""
                                 }) {
                                 Icon(
@@ -3445,9 +3556,7 @@ fun MainScreen(
                             .padding(8.dp)
                             .fillMaxSize()
                             .shadow(
-                                elevation = 4.dp,
-                                shape = RoundedCornerShape(2.dp),
-                                clip = false
+                                elevation = 4.dp, shape = RoundedCornerShape(2.dp), clip = false
                             )
                             .background(
                                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -3462,8 +3571,12 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.surface,
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }
-                            ) {
+                                    val id = item.username
+                                    selectedChat = id
+                                    if (!expandedScreen) {
+                                        navHostController.navigate("chatScreen?id=$id")
+                                    }
+                                }) {
 
                                 Box(
                                     modifier = Modifier.fillMaxSize()
@@ -3499,12 +3612,15 @@ fun MainScreen(
                                                 )
                                             }
 
-                                            Spacer(
-                                                Modifier
-                                                    .size(8.dp)
-                                                    .background(Color(0xFF23A55A), CircleShape)
-                                                    .align(Alignment.TopEnd)
-                                            )
+                                            if (item.isOnline) {
+                                                Spacer(
+                                                    Modifier
+                                                        .align(Alignment.TopEnd)
+                                                        .padding(2.dp)
+                                                        .size(8.dp)
+                                                        .background(Color(0xFF23A55A), CircleShape)
+                                                )
+                                            }
                                         }
 
                                         Spacer(Modifier.width(16.dp))
@@ -3607,8 +3723,10 @@ fun MainScreen(
                             )
                         }) {
                     ChatScreen(
-                        back = { navHostController.popBackStack() }, id = selectedChat,
-//                        whatismybackgroundfiltercolor = { color, show ->
+                        back = { navHostController.popBackStack() },
+                        id = selectedChat,
+                        sendMessage = sendMessage, messageList = messageList
+                        //                        whatismybackgroundfiltercolor = { color, show ->
 //                            covered = show
 //                            coverColor = color
 //                        }
@@ -3764,7 +3882,10 @@ fun AnimatedDropMenu(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    back: () -> Boolean, id: String,
+    back: () -> Boolean,
+    id: String,
+    sendMessage: (String, String) -> Unit,
+    messageList: List<MessageItem>,
     //whatismybackgroundfiltercolor: (Color, Boolean) -> Unit
 ) {
     var renderValue by remember { mutableIntStateOf(5) }
@@ -3783,286 +3904,336 @@ fun ChatScreen(
 
     val view = LocalView.current
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        topBar = {
-            if (id != "") {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+                .background(Color.Transparent),
+            topBar = {
+                if (id != "") {
 
-                TopAppBar(
-                    title = {
-                        Text("Contact")
-                    }, expandedHeight = 56.dp, navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                back()
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_back),
-                                contentDescription = "Menu"
-                            )
-                        }
-                    }, actions = {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.menu_dots),
-                                contentDescription = "Search"
-                            )
-                        }
-                    }, colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                    ), modifier = Modifier.shadow(
-                        elevation = 4.dp, shape = RectangleShape, clip = false
-                    )
-                )
-            }
-        },
-
-        ) { innerPadding ->
-        Column {
-            AdvancedDynamicLightEffectOptim(
-                modifier = Modifier.weight(1f), renderValue = renderValue
-            )
-        }
-        if (id != "") {
-            Column(
-                modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxSize()
-            ) {
-                LazyColumn(
-                    modifier = Modifier.weight(1f), reverseLayout = true
-                ) {
-
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 64.dp, max = 256.dp)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .imePadding(),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            isExpandedAttachment = true
-                        }, modifier = Modifier
-                            .padding(8.dp)
-                            .size(48.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.attach),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(top = 8.dp, bottom = 10.dp)
-                            .shadow(
-                                elevation = 4.dp, shape = RectangleShape, clip = false
-                            )
-                            .background(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = RoundedCornerShape(2.dp)
-                            )
-                    ) {
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            //IconButton({
-                            //    view.playSoundEffect(SoundEffectConstants.CLICK)
-                            //    isExpandedEmoji = true
-                            //}) {
-                            //    Icon(
-                            //        painter = painterResource(R.drawable.emoji),
-                            //        contentDescription = null,
-                            //        tint = onSurface.copy(alpha = 0.5f)
-                            //    )
-                            //}
-
-                            AndroidView(
+                    TopAppBar(
+                        title = {
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(end = 8.dp),
-                                factory = { context ->
-                                    EditText(context).apply {
-                                        layoutDirection = View.LAYOUT_DIRECTION_LOCALE
-                                        textDirection = View.TEXT_DIRECTION_FIRST_STRONG
-                                        gravity = Gravity.START or Gravity.TOP
-                                        background = null
+                                    .height(64.dp)
+                                    //.clip(HalfCutCircleShape())
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false)
+                                    ) {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    }, verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        //.padding(16.dp)
+                                        //.fillMaxHeight()
+                                        .height(48.dp)
+                                        .aspectRatio(1f)
+                                        //.shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                        .clip(CircleShape), shape = CircleShape
+                                ) {
+                                    Image(
+                                        painter = painterResource(R.drawable.profile),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = id, modifier = Modifier.weight(1f))
+                            }
+                        }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    back()
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        }, actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.menu_dots),
+                                    contentDescription = "Search"
+                                )
+                            }
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
+                    )
+                }
+            },
 
-                                        hint = "Type your message..."
-                                        setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
-
-                                        //addTextChangedListener(object : TextWatcher {
-                                        //    override fun beforeTextChanged(
-                                        //        s: CharSequence?,
-                                        //        start: Int,
-                                        //        count: Int,
-                                        //        after: Int
-                                        //    ) {
-                                        //    }
-
-                                        //    override fun onTextChanged(
-                                        //        s: CharSequence?,
-                                        //        start: Int,
-                                        //        before: Int,
-                                        //        count: Int
-                                        //    ) {
-                                        //        val newText = s.toString()
-                                        //        if (newText != message) {
-                                        //            onValueChange(newText)
-                                        //        }
-                                        //    }
-
-                                        //    override fun afterTextChanged(s: Editable?) {}
-                                        //})
-                                    }
-                                },
-                                update = { editText ->
-                                    val currentText = editText.text.toString()
-                                    if (currentText != message) {
-                                        editText.setText(message)
-                                        editText.setSelection(message.length)
-                                    }
-
-                                    editText.setTextColor(onSurface.toArgb())
-                                })
+            ) { innerPadding ->
+            Column {
+                AdvancedDynamicLightEffectOptim(
+                    modifier = Modifier.weight(1f), renderValue = renderValue
+                )
+            }
+            if (id != "") {
+                Column(
+                    modifier = Modifier
+                        .padding(innerPadding)
+                        .fillMaxSize()
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f), reverseLayout = true
+                    ) {
+                        items(items = messageList) { item ->
+                            Text(item.text)
+                            Message(item.myMessage, item.text)
                         }
                     }
-
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            renderValue = (1..10).random()
-                        }, modifier = Modifier
-                            .padding(8.dp)
-                            .size(48.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp, max = 256.dp)
+                            .background(MaterialTheme.colorScheme.primary)/*.imePadding()*/,
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.send),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                isExpandedAttachment = true
+                            }, modifier = Modifier
+                                .padding(8.dp)
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.attach),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 8.dp, bottom = 10.dp)
+                                .shadow(
+                                    elevation = 4.dp, shape = RectangleShape, clip = false
+                                )
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        ) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                //IconButton({
+                                //    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                //    isExpandedEmoji = true
+                                //}) {
+                                //    Icon(
+                                //        painter = painterResource(R.drawable.emoji),
+                                //        contentDescription = null,
+                                //        tint = onSurface.copy(alpha = 0.5f)
+                                //    )
+                                //}
+
+                                AndroidView(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    //.padding(end = 8.dp),
+                                    factory = { context ->
+                                        EditText(context).apply {
+                                            layoutDirection = View.LAYOUT_DIRECTION_LOCALE
+                                            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+                                            gravity = Gravity.START or Gravity.TOP
+                                            background = null
+
+                                            hint = "Type your message..."
+                                            setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
+
+                                            //addTextChangedListener(object : TextWatcher {
+                                            //    override fun beforeTextChanged(
+                                            //        s: CharSequence?,
+                                            //        start: Int,
+                                            //        count: Int,
+                                            //        after: Int
+                                            //    ) {
+                                            //    }
+
+                                            //    override fun onTextChanged(
+                                            //        s: CharSequence?,
+                                            //        start: Int,
+                                            //        before: Int,
+                                            //        count: Int
+                                            //    ) {
+                                            //        val newText = s.toString()
+                                            //        if (newText != message) {
+                                            //            onValueChange(newText)
+                                            //        }
+                                            //    }
+
+                                            //    override fun afterTextChanged(s: Editable?) {}
+                                            //})
+                                        }
+                                    }, update = { editText ->
+                                        val currentText = editText.text.toString()
+                                        if (currentText != message) {
+                                            editText.setText(message)
+                                            editText.setSelection(message.length)
+                                        }
+
+                                        editText.setTextColor(onSurface.toArgb())
+                                    })
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                renderValue = (1..10).random()
+                                sendMessage(id, message)
+                            }, modifier = Modifier
+                                .padding(8.dp)
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.send),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+
+                AnimatedDropMenu(
+                    modifier = Modifier.padding(innerPadding),
+                    width = 224.dp,
+                    height = 112.dp,
+                    chord = 250.dp,
+                    isExpanded = isExpandedAttachment,
+                    close = { isExpandedAttachment = false },
+                    ratioX = 0f,
+                    ratioY = 1f,
+                    position = Alignment.BottomStart,
+                    hasBackgroundCover = true,
+                    whatismybackgroundfiltercolor = { color, show ->
+                        covered = show
+                        coverColor = color
+                    }) {
+                    Column {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Photos and videos") }, onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.photo), contentDescription = null
+                                )
+                            }, trailingIcon = { }, enabled = true
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "File") }, onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.folder), contentDescription = null
+                                )
+                            }, trailingIcon = { }, enabled = true
                         )
                     }
                 }
-            }
 
-            AnimatedDropMenu(
-                modifier = Modifier.padding(innerPadding),
-                width = 224.dp,
-                height = 112.dp,
-                chord = 250.dp,
-                isExpanded = isExpandedAttachment,
-                close = { isExpandedAttachment = false },
-                ratioX = 0f,
-                ratioY = 1f,
-                position = Alignment.BottomStart,
-                hasBackgroundCover = true,
-                whatismybackgroundfiltercolor = { color, show ->
-                    covered = show
-                    coverColor = color
-                }) {
-                Column {
-                    Spacer(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = "Photos and videos") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.photo), contentDescription = null
-                            )
-                        }, trailingIcon = { }, enabled = true
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = "File") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.folder), contentDescription = null
-                            )
-                        }, trailingIcon = { }, enabled = true
-                    )
-                }
+                //AnimatedDropMenu(
+                //    modifier = Modifier.padding(innerPadding),
+                //    width = 400.dp,
+                //    height = 420.dp,
+                //    chord = 580.dp,
+                //    isExpanded = isExpandedEmoji,
+                //    close = { isExpandedEmoji = false },
+                //    ratioX = 0.16f,
+                //    ratioY = 0.98f,
+                //    position = Alignment.BottomStart,
+                //    hasBackgroundCover = true,
+                //    whatismybackgroundfiltercolor = { color, show ->
+                //        covered = show
+                //        coverColor = color
+                //    }) {
+                //    Column {
+                //        Spacer(
+                //            modifier = Modifier
+                //                .fillMaxWidth()
+                //                .height(8.dp)
+                //        )
+                //        DropdownMenuItem(
+                //            text = { Text(text = "Photos and videos") }, onClick = {
+                //                view.playSoundEffect(SoundEffectConstants.CLICK)
+                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                //                Icon(
+                //                    painterResource(R.drawable.photo), contentDescription = null
+                //                )
+                //            }, trailingIcon = { }, enabled = true
+                //        )
+                //        DropdownMenuItem(
+                //            text = { Text(text = "File") }, onClick = {
+                //                view.playSoundEffect(SoundEffectConstants.CLICK)
+                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                //                Icon(
+                //                    painterResource(R.drawable.folder), contentDescription = null
+                //                )
+                //            }, trailingIcon = { }, enabled = true
+                //        )
+                //    }
+                //}
             }
+        }
 
-            //AnimatedDropMenu(
-            //    modifier = Modifier.padding(innerPadding),
-            //    width = 400.dp,
-            //    height = 420.dp,
-            //    chord = 580.dp,
-            //    isExpanded = isExpandedEmoji,
-            //    close = { isExpandedEmoji = false },
-            //    ratioX = 0.16f,
-            //    ratioY = 0.98f,
-            //    position = Alignment.BottomStart,
-            //    hasBackgroundCover = true,
-            //    whatismybackgroundfiltercolor = { color, show ->
-            //        covered = show
-            //        coverColor = color
-            //    }) {
-            //    Column {
-            //        Spacer(
-            //            modifier = Modifier
-            //                .fillMaxWidth()
-            //                .height(8.dp)
-            //        )
-            //        DropdownMenuItem(
-            //            text = { Text(text = "Photos and videos") }, onClick = {
-            //                view.playSoundEffect(SoundEffectConstants.CLICK)
-            //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-            //                Icon(
-            //                    painterResource(R.drawable.photo), contentDescription = null
-            //                )
-            //            }, trailingIcon = { }, enabled = true
-            //        )
-            //        DropdownMenuItem(
-            //            text = { Text(text = "File") }, onClick = {
-            //                view.playSoundEffect(SoundEffectConstants.CLICK)
-            //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-            //                Icon(
-            //                    painterResource(R.drawable.folder), contentDescription = null
-            //                )
-            //            }, trailingIcon = { }, enabled = true
-            //        )
-            //    }
-            //}
+        if (covered) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(
+                        64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                    )
+                    //top app bar size + notification bar size
+                    //.requiredHeight(64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                    .background(coverColor)
+                    .align(Alignment.TopCenter)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
+                        //if (isExpandedEmoji) {
+                        //    isExpandedEmoji = false
+                        //} else
+                        if (isExpandedAttachment) {
+                            isExpandedAttachment = false
+                        }
+                    })
         }
     }
+}
 
-    if (covered) {
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(
-                    56.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                )
-                .background(coverColor)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }) {
-                    //if (isExpandedEmoji) {
-                    //    isExpandedEmoji = false
-                    //} else
-                    if (isExpandedAttachment) {
-                        isExpandedAttachment = false
-                    }
-                })
+@Composable
+fun Message(isYourMessage: Boolean, message: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Surface(
+            modifier = Modifier.align(if (isYourMessage) Alignment.CenterEnd else Alignment.CenterStart).padding(16.dp),
+            color = if (isYourMessage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+            onClick = { }
+        ) {
+            Text(message)
+        }
     }
 }
 
