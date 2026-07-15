@@ -18,6 +18,8 @@ import android.os.Bundle
 import android.os.IBinder
 import android.provider.Telephony
 import android.telephony.SubscriptionManager
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.SoundEffectConstants
 import android.view.View
@@ -25,16 +27,20 @@ import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -813,7 +819,8 @@ class MainActivity : ComponentActivity() {
                         socketViewModel.sendMessage(
                             contact = contact, message = message
                         )
-                    },messageList = socketViewModel.messageList.collectAsState().value)
+                    }, messageList = socketViewModel.messageList.collectAsState().value
+                )
                 SetUpSystemBars(darkTheme)
             }
         }
@@ -1101,7 +1108,10 @@ fun MainNavigation(
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
             ChatScreen(
-                back = { navController.popBackStack() }, id = id, sendMessage = sendMessage, messageList = messageList
+                back = { navController.popBackStack() },
+                id = id,
+                sendMessage = sendMessage,
+                messageList = messageList
                 //whatismybackgroundfiltercolor = { color, show -> }
             )
         }
@@ -1261,39 +1271,41 @@ fun MainNavigation(
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
                         devices.forEach { thisDevice ->
-                            Row(modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    when (thisDevice) {
-                                        "Android Studio Emulator (AVD)" -> {
-                                            setDevice(0)
-                                            automaticMode = true
-                                            networkProtocol = "IPv4"
-                                            host = "10.0.2.2"
-                                            port = "8765"
-                                        }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        when (thisDevice) {
+                                            "Android Studio Emulator (AVD)" -> {
+                                                setDevice(0)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.2.2"
+                                                port = "8765"
+                                            }
 
-                                        "Genymotion" -> {
-                                            setDevice(1)
-                                            automaticMode = true
-                                            networkProtocol = "IPv4"
-                                            host = "10.0.3.2"
-                                            port = "8765"
-                                        }
+                                            "Genymotion" -> {
+                                                setDevice(1)
+                                                automaticMode = true
+                                                networkProtocol = "IPv4"
+                                                host = "10.0.3.2"
+                                                port = "8765"
+                                            }
 
-                                        "Other Diveses" -> {
-                                            setDevice(2)
-                                            automaticMode = false
-                                        }
+                                            "Other Diveses" -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
 
-                                        else -> {
-                                            setDevice(2)
-                                            automaticMode = false
+                                            else -> {
+                                                setDevice(2)
+                                                automaticMode = false
+                                            }
                                         }
+                                        selectedDevice = thisDevice
                                     }
-                                    selectedDevice = thisDevice
-                                }
-                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(
                                     selected = selectedDevice == thisDevice, onClick = {
                                         when (thisDevice) {
@@ -2509,7 +2521,7 @@ fun Greeting(
                         },
                         isError = isUsernameError or usernameSizeError and firstClick,
                         supportingText = {
-                            Column() {
+                            Column {
                                 if (isUsernameError and firstClick) {
                                     Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                 }
@@ -2680,7 +2692,7 @@ fun Greeting(
                         },
                         isError = isUsernameError or usernameSizeError and firstClick,
                         supportingText = {
-                            Column() {
+                            Column {
                                 if (isUsernameError and firstClick) {
                                     Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                 }
@@ -3464,6 +3476,18 @@ fun MainScreen(
                 var searchContent by remember { mutableStateOf("") }
                 val keyboardController = LocalSoftwareKeyboardController.current
 
+                BackHandler(enabled = searching) {
+                    searching = false
+                }
+
+                LaunchedEffect(searchContent) {
+                    if (searchContent.isBlank()) {
+                        clearSearchList()
+                    } else {
+                        searchContact(searchContent)
+                    }
+                }
+
                 Scaffold(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3509,12 +3533,13 @@ fun MainScreen(
                                 value = searchContent,
                                 onValueChange = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    searchContent = it
+
                                     if (it.isBlank()) {
                                         clearSearchList()
                                     } else {
                                         searchContact(it)
                                     }
-                                    searchContent = it
                                 },
                                 colors = TextFieldDefaults.colors(
                                     focusedContainerColor = Color.Transparent,
@@ -3533,7 +3558,8 @@ fun MainScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         keyboardController?.hide()
-                                    }))
+                                    })
+                            )
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -3993,39 +4019,59 @@ fun ChatScreen(
                         .fillMaxSize()
                 ) {
                     LazyColumn(
-                        modifier = Modifier.weight(1f), reverseLayout = true
+                        modifier = Modifier.weight(1f)
                     ) {
-                        items(items = messageList) { item ->
-                            Text(item.text)
-                            Message(item.myMessage, item.text)
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        items(
+                            items = messageList,
+                            //key = { it.id } // یک id یکتا لازم است
+                        ) { item ->
+
+                            //var visible by remember { mutableStateOf(false) }
+//
+                            //LaunchedEffect(Unit) {
+                            //    visible = true
+                            //}
+
+                            AnimatedVisibility(
+                                visible = true/*visible*/,
+                                enter = slideInVertically(
+                                    initialOffsetY = { it } // از پایین وارد شود
+                                ) + fadeIn()
+                            ) {
+                                Message(item.myMessage, item.text)
+                            }
                         }
                     }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 64.dp, max = 256.dp)
+                            .heightIn(min = 64.dp/*, max = 256.dp*/)
                             .background(MaterialTheme.colorScheme.primary)/*.imePadding()*/,
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                isExpandedAttachment = true
-                            }, modifier = Modifier
-                                .padding(8.dp)
-                                .size(48.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.attach),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
+                        //IconButton(
+                        //    onClick = {
+                        //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        //        isExpandedAttachment = true
+                        //    }, modifier = Modifier
+                        //        .padding(8.dp)
+                        //        .size(48.dp)
+                        //) {
+                        //    Icon(
+                        //        painter = painterResource(R.drawable.attach),
+                        //        contentDescription = null,
+                        //        tint = MaterialTheme.colorScheme.onPrimary
+                        //    )
+                        //}
 
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(top = 8.dp, bottom = 10.dp)
+                                .padding(top = 8.dp, start = 8.dp, bottom = 10.dp)
                                 .shadow(
                                     elevation = 4.dp, shape = RectangleShape, clip = false
                                 )
@@ -4047,59 +4093,56 @@ fun ChatScreen(
                                 //}
 
                                 AndroidView(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    //.padding(end = 8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp),
                                     factory = { context ->
                                         EditText(context).apply {
-                                            layoutDirection = View.LAYOUT_DIRECTION_LOCALE
-                                            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
-                                            gravity = Gravity.START or Gravity.TOP
-                                            background = null
 
-                                            hint = "Type your message..."
-                                            setHintTextColor(onSurface.copy(alpha = 0.5f).toArgb())
+                                            maxLines = 5
 
-                                            //addTextChangedListener(object : TextWatcher {
-                                            //    override fun beforeTextChanged(
-                                            //        s: CharSequence?,
-                                            //        start: Int,
-                                            //        count: Int,
-                                            //        after: Int
-                                            //    ) {
-                                            //    }
+                                            addTextChangedListener(object : TextWatcher {
 
-                                            //    override fun onTextChanged(
-                                            //        s: CharSequence?,
-                                            //        start: Int,
-                                            //        before: Int,
-                                            //        count: Int
-                                            //    ) {
-                                            //        val newText = s.toString()
-                                            //        if (newText != message) {
-                                            //            onValueChange(newText)
-                                            //        }
-                                            //    }
+                                                override fun beforeTextChanged(
+                                                    s: CharSequence?,
+                                                    start: Int,
+                                                    count: Int,
+                                                    after: Int
+                                                ) {
+                                                }
 
-                                            //    override fun afterTextChanged(s: Editable?) {}
-                                            //})
+                                                override fun onTextChanged(
+                                                    s: CharSequence?,
+                                                    start: Int,
+                                                    before: Int,
+                                                    count: Int
+                                                ) {
+                                                    message = s?.toString() ?: ""
+                                                }
+
+                                                override fun afterTextChanged(s: Editable?) {}
+                                            })
                                         }
-                                    }, update = { editText ->
-                                        val currentText = editText.text.toString()
-                                        if (currentText != message) {
+                                    },
+                                    update = { editText ->
+                                        if (editText.text.toString() != message) {
                                             editText.setText(message)
                                             editText.setSelection(message.length)
                                         }
-
-                                        editText.setTextColor(onSurface.toArgb())
-                                    })
+                                    }
+                                )
                             }
                         }
 
                         IconButton(
                             onClick = {
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                renderValue = (1..10).random()
-                                sendMessage(id, message)
+                                if (message.isNotBlank()) {
+                                    message = message.replace(Regex("\\n+$"), "").trim()
+                                    renderValue = (1..10).random()
+                                    sendMessage(id, message)
+                                    message = ""
+                                }
                             }, modifier = Modifier
                                 .padding(8.dp)
                                 .size(48.dp)
@@ -4219,20 +4262,31 @@ fun ChatScreen(
                         if (isExpandedAttachment) {
                             isExpandedAttachment = false
                         }
-                    })
+                    }
+            )
         }
     }
 }
 
 @Composable
-fun Message(isYourMessage: Boolean, message: String) {
-    Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+fun Message(isMe: Boolean, message: String) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 8.dp),
+        contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
         Surface(
-            modifier = Modifier.align(if (isYourMessage) Alignment.CenterEnd else Alignment.CenterStart).padding(16.dp),
-            color = if (isYourMessage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-            onClick = { }
+            color = if (isMe) Color(0xFFEFFEDD/*DCF8C6*/) else Color.White,
+            shape = RoundedCornerShape(
+                topStart = 2.dp,
+                topEnd = 2.dp,
+                bottomStart = if (isMe) 2.dp else 2.dp,
+                bottomEnd = if (isMe) 2.dp else 2.dp
+            )
         ) {
-            Text(message)
+            Text(
+                text = message,
+                modifier = Modifier.padding(12.dp)
+            )
         }
     }
 }
@@ -4395,11 +4449,8 @@ class HeadlessSmsSendService : Service() {
 
     private fun isDefaultSmsApp(): Boolean {
         val packageName = packageName
-        val defaultSms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        val defaultSms =
             Telephony.Sms.getDefaultSmsPackage(this)
-        } else {
-            null
-        }
         return packageName == defaultSms
     }
 
