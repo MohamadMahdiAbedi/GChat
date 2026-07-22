@@ -544,6 +544,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             id = item.getInt("id"),
                                             myMessage = item.getString("sender") == savedUsername,
                                             date = item.getString("timestamp"),
+                                            seened = item.getBoolean("read")
                                         )
                                     }
                                 } else {
@@ -582,6 +583,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         text = jsonObject.getString("content"),
                                         myMessage = false,
                                         date = jsonObject.getString("timestamp"),
+                                        seened = jsonObject.getBoolean("read")
                                     )
                                 }
                             }
@@ -4157,7 +4159,9 @@ fun ChatScreen(
 
                             LaunchedEffect(Unit) {
                                 visible = true
-                                seenMessage(id, item.id)
+                                if (!item.seened) {
+                                    seenMessage(id, item.id)
+                                }
                                 // پیام هایی که خودت نوشتی رو سین زدی!
                             }
 
