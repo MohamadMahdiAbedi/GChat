@@ -30,6 +30,7 @@ android {
         compileOptions {
             sourceCompatibility = JavaVersion.VERSION_17
             targetCompatibility = JavaVersion.VERSION_17
+            isCoreLibraryDesugaringEnabled = true
         }
     buildFeatures {
         compose = true
@@ -53,5 +54,5 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-    //implementation("androidx.core:core-splashscreen:1.2.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

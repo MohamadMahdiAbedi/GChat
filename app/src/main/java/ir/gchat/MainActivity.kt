@@ -144,6 +144,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -151,20 +152,26 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -209,9 +216,12 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
+import java.time.LocalDate
 
 fun getIccidsFromSubscriptionManager(context: Context): List<String> {
     if (ContextCompat.checkSelfPermission(
@@ -425,6 +435,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "iccid_error" -> {
                                         _loginError.value = 1
+                                        Toast.makeText(
+                                            context, "ICCID already exists", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -434,6 +447,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "username_error" -> {
                                         _loginError.value = 2
+                                        Toast.makeText(
+                                            context, "Username already exists", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -443,6 +459,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "error" -> {
                                         _loginError.value = 4
+                                        Toast.makeText(
+                                            context, "Untitled error", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -452,6 +471,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "invalid_input" -> {
                                         _loginError.value = 6
+                                        Toast.makeText(
+                                            context, "Invalid input size", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -475,6 +497,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "password_error" -> {
                                         _loginError.value = 3
+                                        Toast.makeText(
+                                            context, "Password is incorrect", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -484,6 +509,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "error" -> {
                                         _loginError.value = 4
+                                        Toast.makeText(
+                                            context, "Untitled error", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -493,6 +521,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "username_error" -> {
                                         _loginError.value = 5
+                                        Toast.makeText(
+                                            context, "Username not found", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -502,6 +533,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                     "invalid_input" -> {
                                         _loginError.value = 6
+                                        Toast.makeText(
+                                            context, "Invalid input size", Toast.LENGTH_SHORT
+                                        ).show()
                                         _oldLogined.value = false
                                         _logined.value = false
                                         context.dataStore.edit { preferences ->
@@ -579,13 +613,21 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                             "new_dm" -> {
                                 getConversations()
                                 if (jsonObject.getString("sender") == openedChat.value) {
-                                    _messageList.value += MessageItem(
-                                        text = jsonObject.getString("content"),
-                                        myMessage = false,
-                                        date = jsonObject.getString("timestamp"),
-                                        seened = jsonObject.getBoolean("read")
-                                    )
+                                    //هندل بدون رفرش کامل
+                                    //_messageList.value += MessageItem(
+                                    //    text = jsonObject.getString("content"),
+                                    //    myMessage = false,
+                                    //    date = jsonObject.getString("timestamp"),
+                                    //    seened = jsonObject.getBoolean("read")
+                                    //)
+                                    getMessagesList(openedChat.value)
                                 }
+                            }
+
+                            "mark_read_response" -> {
+                                // اگر سین نخورده بود یه بار دیگه سین بزن
+                                getConversations()
+                                getMessagesList(openedChat.value)
                             }
                         }
                     } catch (_: Exception) {
@@ -746,7 +788,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
             }
         }
-        getConversations()
+        //getConversations()
+        getMessagesList(contact)
     }
 
     fun getConversations() {
@@ -768,6 +811,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     fun getMessagesList(contact: String) {
         //اینجا احتمالا یه باگ با شرف داریم
         openedChat.value = contact
+        getConversations()
         viewModelScope.launch {
             try {
                 webSocket?.send(
@@ -924,8 +968,7 @@ class MainActivity : ComponentActivity() {
                     messageList = socketViewModel.messageList.collectAsState().value,
                     getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
                     getConversations = { socketViewModel.getConversations() },
-                    seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) }
-                )
+                    seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) })
                 SetUpSystemBars(darkTheme)
             }
         }
@@ -1117,37 +1160,46 @@ fun MainNavigation(
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    LaunchedEffect(loginError) {
-        when (loginError) {
-            1 -> Toast.makeText(context, "ICCID already exists", Toast.LENGTH_SHORT).show()
-            2 -> Toast.makeText(context, "Username already exists", Toast.LENGTH_SHORT).show()
-            3 -> Toast.makeText(context, "Password is incorrect", Toast.LENGTH_SHORT).show()
-            4 -> Toast.makeText(context, "Untitled error", Toast.LENGTH_SHORT).show()
-            5 -> Toast.makeText(context, "Username not found", Toast.LENGTH_SHORT).show()
-            6 -> Toast.makeText(context, "Invalid input size", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     LaunchedEffect(logined) {
+        //if (oldLogined) {
+        //    if (logined) {
+        //        navController.navigate("mainScreen") {
+        //            popUpTo(0) {
+        //                inclusive = true
+        //            }
+        //        }
+        //    } else {
+        //        navController.navigate("wait") {
+        //            popUpTo(0) {
+        //                inclusive = true
+        //            }
+        //        }
+        //    }
+        //} else {
+        //    navController.navigate("greeting") {
+        //        popUpTo(0) {
+        //            inclusive = true
+        //        }
+        //    }
+        //}
+
         if (oldLogined) {
             if (logined) {
-                navController.navigate("mainScreen") {
-                    popUpTo(0) {
-                        inclusive = true
+                if (navController.currentBackStackEntry?.destination?.route?.contains("mainScreen") != true &&
+                    navController.currentBackStackEntry?.destination?.route?.contains("chatScreen") != true
+                ) {
+                    navController.navigate("mainScreen") {
+                        popUpTo("greeting") { inclusive = true }
                     }
                 }
             } else {
                 navController.navigate("wait") {
-                    popUpTo(0) {
-                        inclusive = true
-                    }
+                    popUpTo("greeting") { inclusive = true }
                 }
             }
         } else {
             navController.navigate("greeting") {
-                popUpTo(0) {
-                    inclusive = true
-                }
+                popUpTo(0) { inclusive = true }
             }
         }
     }
@@ -1223,7 +1275,8 @@ fun MainNavigation(
                 id = id,
                 sendMessage = sendMessage,
                 messageList = messageList,
-                seenMessage = seenMessage
+                seenMessage = seenMessage,
+                getMessagesList = getMessagesList
                 //whatismybackgroundfiltercolor = { color, show -> }
             )
         }
@@ -3869,7 +3922,8 @@ fun MainScreen(
                         id = selectedChat,
                         sendMessage = sendMessage,
                         messageList = messageList,
-                        seenMessage = seenMessage
+                        seenMessage = seenMessage,
+                        getMessagesList = getMessagesList
                         //                        whatismybackgroundfiltercolor = { color, show ->
 //                            covered = show
 //                            coverColor = color
@@ -4030,9 +4084,16 @@ fun ChatScreen(
     id: String,
     sendMessage: (String, String) -> Unit,
     messageList: List<MessageItem>,
-    seenMessage: (String, Int) -> Unit
+    seenMessage: (String, Int) -> Unit,
+    getMessagesList: (String) -> Unit
     //whatismybackgroundfiltercolor: (Color, Boolean) -> Unit
 ) {
+    LaunchedEffect(id) {
+        if (id.isNotBlank()) {
+            getMessagesList(id)
+        }
+    }
+
     var renderValue by remember { mutableIntStateOf(5) }
     var isExpandedAttachment by remember { mutableStateOf(false) }
     //var isExpandedEmoji by remember { mutableStateOf(false) }
@@ -4142,23 +4203,20 @@ fun ChatScreen(
                 ) {
                     val listState = rememberLazyListState()
                     LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        state = listState
+                        modifier = Modifier.weight(1f), state = listState
                     ) {
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        items(
-                            items = messageList,
-                            key = { it.id } // یک id یکتا لازم است
+                        items(items = messageList, key = { it.id } // یک id یکتا لازم است
                             // این id تو چت یکتا هست برای همین موقع سین باید پاس بدیم که برای کدوم چت هست
                         ) { item ->
 
-                            var visible by remember { mutableStateOf(false) }
+                            //var visible by remember { mutableStateOf(false) }
 
                             LaunchedEffect(Unit) {
-                                visible = true
+                                //visible = true
                                 if (!item.seened) {
                                     seenMessage(id, item.id)
                                 }
@@ -4166,10 +4224,15 @@ fun ChatScreen(
                             }
 
                             AnimatedVisibility(
-                                visible = visible,
+                                visible = true/*visible*/,
                                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
                             ) {
-                                Message(item.myMessage, item.text, item.seened)
+                                Message(
+                                    isMe = item.myMessage,
+                                    message = item.text,
+                                    seened = item.seened,
+                                    timestamp = item.date
+                                )
                             }
                         }
                     }
@@ -4394,7 +4457,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun Message(isMe: Boolean, message: String, seened: Boolean) {
+fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -4411,14 +4474,272 @@ fun Message(isMe: Boolean, message: String, seened: Boolean) {
                 bottomEnd = if (isMe) 2.dp else 2.dp
             )
         ) {
-            Text(
-                text = message, modifier = Modifier.padding(12.dp)
-            )
-            if (seened) {
-                Icon(
-                    painterResource(R.drawable.check), contentDescription = null
+            Box(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(end = if (isMe and seened) 16.dp else 0.dp)
                 )
+
+                if (isMe) {
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (seened) {
+                            Icon(
+                                painter = painterResource(R.drawable.double_check),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
+//            Column(
+//                modifier = Modifier.padding(8.dp),
+//                verticalArrangement = Arrangement.spacedBy(8.dp),
+//                horizontalAlignment = Alignment.End
+//            ) {
+//                Text(
+//                    text = message
+//                )
+//                if (seened and isMe) {
+//                    Icon(
+//                        painterResource(R.drawable.double_check),
+//                        contentDescription = null,
+//                        modifier = Modifier.size(16.dp)
+//                    )
+//                }
+//            }
+        }
+        var lineCount by remember(message) { mutableIntStateOf(0) }
+        val formatMessageTime = formatMessageTime(timestamp)
+        var timeWidth by remember { mutableStateOf(0.dp) }
+        val density = LocalDensity.current
+        Surface(
+            color = if (isMe) Color(0xFFEFFEDD) else Color.White, shape = RoundedCornerShape(
+                topStart = 2.dp,
+                topEnd = 2.dp,
+                bottomStart = if (isMe) 2.dp else 2.dp,
+                bottomEnd = if (isMe) 2.dp else 2.dp
+            )
+        ) {
+            Box(
+                modifier = Modifier.padding(8.dp)
+            ) {
+
+                Text(
+                    text = message, modifier = Modifier.padding(
+                        end = if (isMe && lineCount == 1 && seened) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                        bottom = if (isMe && lineCount > 1 && seened) 24.dp else 0.dp
+                    ), onTextLayout = {
+                        if (lineCount == 0) {
+                            lineCount = it.lineCount
+                        }
+                    })
+                Row(
+                    modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = formatMessageTime, style = MaterialTheme.typography.labelSmall.copy(
+                            fontStyle = FontStyle.Normal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        onTextLayout = {
+                            timeWidth = with(density) { it.size.width.toDp() }
+                        }
+                    )
+                    if (isMe and seened) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            painter = painterResource(R.drawable.double_check),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                //Row(
+                //    modifier = Modifier.align(Alignment.BottomEnd),
+                //    verticalAlignment = Alignment.CenterVertically
+                //) {
+                //    Text(
+                //        text = timestamp,
+                //        style = MaterialTheme.typography.labelSmall.copy(
+                //            fontStyle = FontStyle.Normal,
+                //            color = MaterialTheme.colorScheme.onSurfaceVariant
+                //        )
+                //    )
+                //
+                //    if (isMe && seened) {
+                //        Spacer(modifier = Modifier.width(2.dp))
+                //
+                //        Icon(
+                //            painter = painterResource(R.drawable.double_check),
+                //            contentDescription = null,
+                //            modifier = Modifier.size(15.dp),
+                //            tint = MaterialTheme.colorScheme.primary
+                //        )
+                //    }
+                //}
+            }
+        }
+//        Surface(
+//            color = if (isMe) Color(0xFFEFFEDD) else Color.White,
+//            shape = RoundedCornerShape(2.dp)
+//        ) {
+//
+//            SubcomposeLayout(
+//                modifier = Modifier.padding(8.dp)
+//            ) { constraints ->
+//
+//                var textLayout: TextLayoutResult? = null
+//
+//                // متن
+//                val textPlaceable = subcompose("text") {
+//                    Text(
+//                        text = message,
+//                        onTextLayout = { textLayout = it }
+//                    )
+//                }.first().measure(constraints)
+//
+//                // ساعت
+//                val statusPlaceable = subcompose("status") {
+//                    Row(
+//                        verticalAlignment = Alignment.CenterVertically
+//                    ) {
+//                        Text(
+//                            text = timestamp,
+//                            fontSize = 12.sp
+//                        )
+//
+//                        if (isMe && seened) {
+//                            Icon(
+//                                painter = painterResource(R.drawable.double_check),
+//                                contentDescription = null,
+//                                modifier = Modifier.size(16.dp)
+//                            )
+//                        }
+//                    }
+//                }.first().measure(constraints)
+//
+//                val gap = 6.dp.roundToPx()
+//
+//                val fits = textLayout?.let { layout ->
+//                    val last = layout.lineCount - 1
+//
+//                    val lastLineWidth =
+//                        layout.getLineRight(last) - layout.getLineLeft(last)
+//
+//                    val freeSpace =
+//                        textPlaceable.width - lastLineWidth
+//
+//                    freeSpace >= statusPlaceable.width + gap
+//                } ?: false
+//
+//                val width = maxOf(
+//                    textPlaceable.width,
+//                    statusPlaceable.width
+//                )
+//
+//                val height =
+//                    if (fits) {
+//                        textPlaceable.height
+//                    } else {
+//                        textPlaceable.height +
+//                                statusPlaceable.height +
+//                                gap
+//                    }
+//
+//                layout(width, height) {
+//
+//                    textPlaceable.place(0, 0)
+//
+//                    if (fits) {
+//                        statusPlaceable.place(
+//                            x = width - statusPlaceable.width,
+//                            y = textPlaceable.height - statusPlaceable.height
+//                        )
+//                    } else {
+//                        statusPlaceable.place(
+//                            x = width - statusPlaceable.width,
+//                            y = textPlaceable.height + gap
+//                        )
+//                    }
+//                }
+//            }
+//        }
+    }
+}
+
+// تاریخ هجری شمسی و هجری قمری اضافه بشه
+fun formatMessageTime(timestamp: String): String {
+    val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
+
+    val today = LocalDate.now()
+    val date = dateTime.toLocalDate()
+
+    return when {
+        date == today -> {
+            dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+        }
+
+        date == today.minusDays(1) -> {
+            "Yesterday, ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+        }
+
+        date.isAfter(today.minusDays(7)) -> {
+            val dayName = when (date.dayOfWeek.value) {
+                1 -> "Monday"
+                2 -> "Tuesday"
+                3 -> "Wednesday"
+                4 -> "Thursday"
+                5 -> "Friday"
+                6 -> "Saturday"
+                7 -> "Sunday"
+                else -> ""
+            }
+            "$dayName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+        }
+
+        date.year == today.year -> {
+            val monthName = when (date.monthValue) {
+                1 -> "January"
+                2 -> "February"
+                3 -> "March"
+                4 -> "April"
+                5 -> "May"
+                6 -> "June"
+                7 -> "July"
+                8 -> "August"
+                9 -> "September"
+                10 -> "October"
+                11 -> "November"
+                12 -> "December"
+                else -> ""
+            }
+            "${date.dayOfMonth} $monthName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+        }
+
+        else -> {
+            val monthName = when (date.monthValue) {
+                1 -> "January"
+                2 -> "February"
+                3 -> "March"
+                4 -> "April"
+                5 -> "May"
+                6 -> "June"
+                7 -> "July"
+                8 -> "August"
+                9 -> "September"
+                10 -> "October"
+                11 -> "November"
+                12 -> "December"
+                else -> ""
+            }
+            "${date.dayOfMonth} $monthName ${date.year}، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
         }
     }
 }
