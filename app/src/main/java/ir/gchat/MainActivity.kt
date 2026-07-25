@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION", "AssignedValueIsNeverRead", "SpellCheckingInspection")
-
 package ir.gchat
 
 import android.Manifest
@@ -7,24 +5,18 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.Application
-import android.app.Service
 import android.app.role.RoleManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
-import android.os.IBinder
-import android.provider.Telephony
-import android.telephony.SubscriptionManager
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.Gravity
 import android.view.SoundEffectConstants
-import android.view.View
 import android.view.ViewTreeObserver
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -40,7 +32,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -60,8 +51,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +58,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -87,10 +77,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -118,13 +108,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -144,7 +132,6 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -152,11 +139,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -165,23 +149,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -189,7 +168,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.datastore.preferences.protobuf.LazyStringArrayList.emptyList
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -216,84 +194,15 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
-import java.time.LocalDate
-
-fun getIccidsFromSubscriptionManager(context: Context): List<String> {
-    if (ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_PHONE_STATE
-        ) != PackageManager.PERMISSION_GRANTED
-    ) {
-        return emptyList()
-    }
-
-    return try {
-        val subscriptionManager =
-            context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-        val activeList = subscriptionManager.activeSubscriptionInfoList
-
-        if (activeList.isNullOrEmpty()) {
-            return emptyList()
-        }
-
-        val maxSlotIndex = activeList.maxOfOrNull { it.simSlotIndex } ?: -1
-        if (maxSlotIndex < 0) return emptyList()
-
-        val iccids = MutableList(maxSlotIndex + 1) { "" }
-
-        for (subscription in activeList) {
-            try {
-                val iccid = subscription.iccId
-                val slotIndex = subscription.simSlotIndex
-
-                if (!iccid.isNullOrEmpty() && slotIndex >= 0 && slotIndex < iccids.size) {
-                    iccids[slotIndex] = iccid
-                }
-            } catch (_: SecurityException) {
-            } catch (_: Exception) {
-            }
-        }
-
-        iccids
-    } catch (_: SecurityException) {
-        emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
-}
-//class IccidCollector(private val context: Context) {
-//    fun getIccidsFromSubscriptionManager(): List<String> {
-//        val iccids = mutableListOf("", "")
-//        val subscriptionManager = context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-//
-//        try {
-//            val activeList = subscriptionManager.activeSubscriptionInfoList
-//            activeList?.forEach { subscription ->
-//                try {
-//                    val iccid = subscription.iccId
-//                    val slotIndex = subscription.simSlotIndex
-//
-//                    if (!iccid.isNullOrEmpty() && slotIndex in 0..1) {
-//                        iccids[slotIndex] = iccid
-//                    }
-//                } catch (e: SecurityException) {
-//                }
-//            }
-//        } catch (e: SecurityException) {
-//        }
-//
-//        return iccids
-//    }
-//}
+import kotlin.time.Duration.Companion.milliseconds
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
 
 val ICCID_KEY = stringPreferencesKey("iccid")
-val LOGINED_KEY = booleanPreferencesKey("logined")
+val LOGGED_IN_STATUS_KEY = booleanPreferencesKey("loggedIn")
 val THEME_KEY = intPreferencesKey("theme")
 val SERVERIP_KEY = stringPreferencesKey("serverIP")
 val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
@@ -307,7 +216,7 @@ data class Contact(
     val lastMessageText: String = "",
     val lastMessageDate: String = "",
     val unreadMessages: Int = 0,
-    val conectionStatus: Boolean = false,
+    val connectionStatus: Boolean = false,
 )
 
 data class SearchEntity(
@@ -319,7 +228,7 @@ data class MessageItem(
     val id: Int = 0,
     val date: String = "",
     val myMessage: Boolean = false,
-    val seened: Boolean = false
+    val seen: Boolean = false
 )
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
@@ -329,16 +238,16 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     var webSocket: WebSocket? = null
     private val client = OkHttpClient()
 
-    private val _logined = MutableStateFlow(
-        //runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() }
+    private val _loggedIn = MutableStateFlow(
+        //runBlocking { context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first() }
         false
     )
-    val logined: StateFlow<Boolean> = _logined.asStateFlow()
+    val loggedIn: StateFlow<Boolean> = _loggedIn.asStateFlow()
 
-    private val _oldLogined = MutableStateFlow(
+    private val _oldLoggedIn = MutableStateFlow(
         //false
-        runBlocking { context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first() })
-    val oldLogined: StateFlow<Boolean> = _oldLogined.asStateFlow()
+        runBlocking { context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first() })
+    val oldLoggedIn: StateFlow<Boolean> = _oldLoggedIn.asStateFlow()
 
     var savedUsername = runBlocking {
         context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
@@ -355,7 +264,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     //viewModelScope.launch {
     //context.dataStore.data.collect { preferences ->
     //_serverIP.value = preferences[SERVERIP_KEY] ?: "127.0.0.1:8765"
-    //_oldLogined.value = preferences[LOGINED_KEY] ?: false
+    //_oldLoggedIn.value = preferences[LOGGED_IN_STATUS_KEY] ?: false
     //}
     //}
     //}
@@ -365,8 +274,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     //val device: StateFlow<Int> = _device.asStateFlow()
 
     // 0 -> success
-    // 1 -> iccid alreasy exist
-    // 2 -> username alreasy exist
+    // 1 -> iccid already exist
+    // 2 -> username already exist
     // 3 -> password is incorrect
     // 4 -> untitled error
     // 5 -> username not found
@@ -397,7 +306,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 viewModelScope.launch {
                     try {
-                        if (_oldLogined.value/*context.dataStore.data.map { it[LOGINED_KEY] ?: false }.first()*/) {
+                        if (_oldLoggedIn.value/*context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first()*/) {
                             webSocket.send(
                                 """
                                 {
@@ -426,10 +335,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 when (message) {
                                     "success" -> {
                                         _loginError.value = 0
-                                        _oldLogined.value = true
-                                        _logined.value = true
+                                        _oldLoggedIn.value = true
+                                        _loggedIn.value = true
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = true
+                                            preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
                                     }
 
@@ -438,10 +347,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "ICCID already exists", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -450,10 +359,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Username already exists", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -462,10 +371,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Untitled error", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -474,10 +383,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Invalid input size", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
                                 }
@@ -488,10 +397,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 when (message) {
                                     "success" -> {
                                         _loginError.value = 0
-                                        _oldLogined.value = true
-                                        _logined.value = true
+                                        _oldLoggedIn.value = true
+                                        _loggedIn.value = true
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = true
+                                            preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
                                     }
 
@@ -500,10 +409,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Password is incorrect", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -512,10 +421,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Untitled error", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -524,10 +433,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Username not found", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
 
@@ -536,10 +445,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         Toast.makeText(
                                             context, "Invalid input size", Toast.LENGTH_SHORT
                                         ).show()
-                                        _oldLogined.value = false
-                                        _logined.value = false
+                                        _oldLoggedIn.value = false
+                                        _loggedIn.value = false
                                         context.dataStore.edit { preferences ->
-                                            preferences[LOGINED_KEY] = false
+                                            preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
                                 }
@@ -578,12 +487,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             id = item.getInt("id"),
                                             myMessage = item.getString("sender") == savedUsername,
                                             date = item.getString("timestamp"),
-                                            seened = item.getBoolean("read")
+                                            seen = item.getBoolean("read")
                                         )
                                     }
                                 } else {
                                     Toast.makeText(
-                                        context, "Error Reciving messages", Toast.LENGTH_SHORT
+                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
@@ -605,7 +514,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
                                 } else {
                                     Toast.makeText(
-                                        context, "Error Reciving messages", Toast.LENGTH_SHORT
+                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
@@ -618,7 +527,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     //    text = jsonObject.getString("content"),
                                     //    myMessage = false,
                                     //    date = jsonObject.getString("timestamp"),
-                                    //    seened = jsonObject.getBoolean("read")
+                                    //    seen = jsonObject.getBoolean("read")
                                     //)
                                     getMessagesList(openedChat.value)
                                 }
@@ -639,9 +548,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                 webSocket.cancel()
                 //webSocket.close(1000, "Normal Closure")
                 this@SocketViewModel.webSocket = null
-                _logined.value = false
+                _loggedIn.value = false
                 viewModelScope.launch {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     connect()
                 }
             }
@@ -650,9 +559,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                 webSocket.cancel()
                 //webSocket.close(1000, "Normal Closure")
                 this@SocketViewModel.webSocket = null
-                _logined.value = false
+                _loggedIn.value = false
                 viewModelScope.launch {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     connect()
                 }
             }
@@ -723,7 +632,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         webSocket?.cancel()
         //webSocket.close(1000, "Normal Closure")
         this@SocketViewModel.webSocket = null
-        _logined.value = false
+        _loggedIn.value = false
         connect()
 
         viewModelScope.launch {
@@ -762,10 +671,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         //webSocket.close(1000, "Normal Closure")
         this@SocketViewModel.webSocket = null
         viewModelScope.launch {
-            _oldLogined.value = false
-            _logined.value = false
+            _oldLoggedIn.value = false
+            _loggedIn.value = false
             context.dataStore.edit { preferences ->
-                preferences[LOGINED_KEY] = false
+                preferences[LOGGED_IN_STATUS_KEY] = false
             }
             connect()
         }
@@ -918,8 +827,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val theme by viewModel.theme.collectAsState()
-            val logined by socketViewModel.logined.collectAsState()
-            val oldLogined by socketViewModel.oldLogined.collectAsState()
+            val loggedIn by socketViewModel.loggedIn.collectAsState()
+            val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
             val darkTheme = when (theme) {
                 0 -> isSystemInDarkTheme()
                 1 -> true
@@ -947,15 +856,15 @@ class MainActivity : ComponentActivity() {
                             iccid = iccid, username = username, password = password
                         )
                     },
-                    logined = logined,
-                    oldLogined = oldLogined,
+                    loggedIn = loggedIn,
+                    oldLoggedIn = oldLoggedIn,
                     chatList = chatList,
                     setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
                     serverIP = socketViewModel.serverIP.collectAsState().value,
                     device = { viewModel.getDevice() },
                     setDevice = { device -> viewModel.setDevice(deviceType = device) },
                     loginError = socketViewModel.loginError.collectAsState().value,
-                    getrules = { viewModel.getRules() },
+                    getRules = { viewModel.getRules() },
                     searchContactList = contactsSearchList,
                     searchContact = { username -> socketViewModel.searchUsername(username = username) },
                     clearSearchList = { socketViewModel.clearSearchMemory() },
@@ -1098,8 +1007,13 @@ fun SetUpSystemBars(
         controller.isAppearanceLightStatusBars = darkTheme
         controller.isAppearanceLightNavigationBars = !darkTheme
 
-        window.statusBarColor = statusBarColor.toArgb()
-        window.navigationBarColor = navigationBarColor.toArgb()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            @Suppress("DEPRECATION")
+            window.statusBarColor = statusBarColor.toArgb()
+
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = navigationBarColor.toArgb()
+        }
 
         //Log.d("SystemBars", "Applied")
     }
@@ -1138,15 +1052,15 @@ fun MainNavigation(
     theme: Int,
     signIn: (String, String) -> Unit,
     signUp: (String, String, String) -> Unit,
-    logined: Boolean,
-    oldLogined: Boolean,
+    loggedIn: Boolean,
+    oldLoggedIn: Boolean,
     chatList: List<Contact>,
     setServerIP: (String) -> Unit,
     serverIP: String,
     setDevice: (Int) -> Unit,
     device: suspend () -> Int,
     loginError: Int,
-    getrules: () -> String,
+    getRules: () -> String,
     searchContactList: List<SearchEntity>,
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
@@ -1158,11 +1072,10 @@ fun MainNavigation(
     seenMessage: (String, Int) -> Unit
 ) {
     val navController = rememberNavController()
-    val context = LocalContext.current
 
-    LaunchedEffect(logined) {
-        //if (oldLogined) {
-        //    if (logined) {
+    LaunchedEffect(loggedIn) {
+        //if (oldLoggedIn) {
+        //    if (loggedIn) {
         //        navController.navigate("mainScreen") {
         //            popUpTo(0) {
         //                inclusive = true
@@ -1183,8 +1096,8 @@ fun MainNavigation(
         //    }
         //}
 
-        if (oldLogined) {
-            if (logined) {
+        if (oldLoggedIn) {
+            if (loggedIn) {
                 if (navController.currentBackStackEntry?.destination?.route?.contains("mainScreen") != true &&
                     navController.currentBackStackEntry?.destination?.route?.contains("chatScreen") != true
                 ) {
@@ -1245,7 +1158,7 @@ fun MainNavigation(
                         )
                     },
                     ipConfig = { navController.navigate("ipConfig") },
-                    getrules = getrules,
+                    getRules = getRules,
                     loginError = loginError
                 )
             }
@@ -1277,7 +1190,7 @@ fun MainNavigation(
                 messageList = messageList,
                 seenMessage = seenMessage,
                 getMessagesList = getMessagesList
-                //whatismybackgroundfiltercolor = { color, show -> }
+                //whatIsMyBackgroundFilterColor = { color, show -> }
             )
         }
         composable(route = "wait") {
@@ -1318,7 +1231,18 @@ fun MainNavigation(
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator()
+                        //CircularProgressIndicator()
+                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+
+                        AndroidView(
+                            modifier = Modifier.size(48.dp),
+                            factory = { context ->
+                                ProgressBar(context).apply {
+                                    isIndeterminate = true
+                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
+                                }
+                            }
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "After connecting, you will be taken to the home page.",
@@ -1329,316 +1253,342 @@ fun MainNavigation(
             }
         }
         composable(route = "ipConfig") {
-            val view = LocalView.current
-            val focusManager = LocalFocusManager.current
-            var host by remember { mutableStateOf(serverIP.split(":")[0]) }
-            var port by remember { mutableStateOf(serverIP.split(":")[1]) }
+            IpConfig(
+                serverIP = serverIP,
+                device = device,
+                back = { navController.popBackStack() },
+                setDevice = setDevice,
+                setServerIP = setServerIP
+            )
+        }
+    }
+}
 
-            val portNumber = port.toIntOrNull()
-            val portError = portNumber == null || portNumber > 65535 || portNumber < 1
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun IpConfig(
+    serverIP: String,
+    device: suspend () -> Int,
+    back: () -> Unit,
+    setDevice: (Int) -> Unit,
+    setServerIP: (String) -> Unit
+) {
+    val view = LocalView.current
+    val focusManager = LocalFocusManager.current
+    var host by remember { mutableStateOf(serverIP.split(":")[0]) }
+    var port by remember { mutableStateOf(serverIP.split(":")[1]) }
 
-            val networkProtocols = listOf("IPv4", "IPv6", "Domain", "Localhost", "LocalServer")
-            var networkProtocol by remember { mutableStateOf(networkProtocols[0]) }
-            var expanded by remember { mutableStateOf(false) }
-            val devices = listOf("Android Studio Emulator (AVD)", "Genymotion", "Other Diveses")
-            //var selectedDevice by remember { mutableStateOf(devices[device()]) }
-            //var automaticMode by remember { mutableStateOf(device() != 2) }
-            var selectedDevice by remember { mutableStateOf(devices[2]) }
-            var automaticMode by remember { mutableStateOf(false) }
+    val portNumber = port.toIntOrNull()
+    val portError = portNumber == null || portNumber > 65535 || portNumber < 1
 
-            LaunchedEffect(Unit) {
-                val d = device()
-                selectedDevice = devices[d]
-                automaticMode = d != 2
+    val networkProtocols = listOf("IPv4", "IPv6", "Domain", "Localhost", "LocalServer")
+    var networkProtocol by remember { mutableStateOf(networkProtocols[0]) }
+    var expanded by remember { mutableStateOf(false) }
+    val devices = listOf("Android Studio Emulator (AVD)", "Genymotion", "Other Devices")
+    //var selectedDevice by remember { mutableStateOf(devices[device()]) }
+    //var automaticMode by remember { mutableStateOf(device() != 2) }
+    var selectedDevice by remember { mutableStateOf(devices[2]) }
+    var automaticMode by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val d = device()
+        selectedDevice = devices[d]
+        automaticMode = d != 2
+    }
+
+    val hostError = !when (networkProtocol) {
+        "IPv4" -> {
+            !host.isBlank() && host.split(".").let { parts ->
+                parts.size == 4 && parts.all { part ->
+                    val num = part.toIntOrNull()
+                    num != null && num in 0..255
+                }
             }
+        }
 
-            val hostError = !when (networkProtocol) {
-                "IPv4" -> {
-                    !host.isBlank() && host.split(".").let { parts ->
-                        parts.size == 4 && parts.all { part ->
-                            val num = part.toIntOrNull()
-                            num != null && num in 0..255
-                        }
+        "IPv6" -> {
+            !host.isBlank() && Regex(
+                "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,7}:$|" + "^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" + "^[0-9a-fA-F]{1,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,5}:([0-9a-fA-F]{1,4}:){1,5}$|" +  // پوشش بهتر compressed
+                        "^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$"
+            ).matches(host.removeSurrounding("[", "]"))
+        }
+
+        "Domain" -> {
+            !host.isBlank() && Regex(
+                "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\\.[a-zA-Z]{2,}$"
+            ).matches(host)
+        }
+
+        "Localhost" -> {
+            !host.isBlank() && host.equals("localhost", ignoreCase = true)
+        }
+
+        "LocalServer" -> {
+            !host.isBlank() && host.length <= 253 && Regex(
+                "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+            ).matches(host)
+        }
+
+        else -> false
+    }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(), topBar = {
+            TopAppBar(
+                title = {
+                    Text("Set server IP config")
+                }, /*expandedHeight = 56.dp,*/ colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp, shape = RectangleShape, clip = false
+                ), navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            back()
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = "Back"
+                        )
                     }
-                }
-
-                "IPv6" -> {
-                    !host.isBlank() && Regex(
-                        "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,7}:$|" + "^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" + "^[0-9a-fA-F]{1,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,5}:([0-9a-fA-F]{1,4}:){1,5}$|" +  // پوشش بهتر compressed
-                                "^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$"
-                    ).matches(host.removeSurrounding("[", "]"))
-                }
-
-                "Domain" -> {
-                    !host.isBlank() && Regex(
-                        "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\\.[a-zA-Z]{2,}$"
-                    ).matches(host)
-                }
-
-                "Localhost" -> {
-                    !host.isBlank() && host.equals("localhost", ignoreCase = true)
-                }
-
-                "LocalServer" -> {
-                    !host.isBlank() && host.length <= 253 && Regex(
-                        "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
-                    ).matches(host)
-                }
-
-                else -> false
-            }
-
-            val keyboardController = LocalSoftwareKeyboardController.current
-
-            Scaffold(
-                modifier = Modifier.fillMaxSize(), topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("Set server IP config")
-                        }, /*expandedHeight = 56.dp,*/ colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        ), navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    navController.popBackStack()
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    contentDescription = "Back"
-                                )
-                            }
-                        })
-                }) { innerPadding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                shape = RoundedCornerShape(2.dp)
-                            )
-                            .shadow(
-                                elevation = 2.dp, shape = RoundedCornerShape(2.dp), clip = false
-                            )
-                    ) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        devices.forEach { thisDevice ->
-                            Row(modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    when (thisDevice) {
-                                        "Android Studio Emulator (AVD)" -> {
-                                            setDevice(0)
-                                            automaticMode = true
-                                            networkProtocol = "IPv4"
-                                            host = "10.0.2.2"
-                                            port = "8765"
-                                        }
-
-                                        "Genymotion" -> {
-                                            setDevice(1)
-                                            automaticMode = true
-                                            networkProtocol = "IPv4"
-                                            host = "10.0.3.2"
-                                            port = "8765"
-                                        }
-
-                                        "Other Diveses" -> {
-                                            setDevice(2)
-                                            automaticMode = false
-                                        }
-
-                                        else -> {
-                                            setDevice(2)
-                                            automaticMode = false
-                                        }
-                                    }
-                                    selectedDevice = thisDevice
-                                }
-                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                RadioButton(
-                                    selected = selectedDevice == thisDevice, onClick = {
-                                        when (thisDevice) {
-                                            "Android Studio Emulator (AVD)" -> {
-                                                setDevice(0)
-                                                automaticMode = true
-                                                networkProtocol = "IPv4"
-                                                host = "10.0.2.2"
-                                                port = "8765"
-                                            }
-
-                                            "Genymotion" -> {
-                                                setDevice(1)
-                                                automaticMode = true
-                                                networkProtocol = "IPv4"
-                                                host = "10.0.3.2"
-                                                port = "8765"
-                                            }
-
-                                            "Other Diveses" -> {
-                                                setDevice(2)
-                                                automaticMode = false
-                                            }
-
-                                            else -> {
-                                                setDevice(2)
-                                                automaticMode = false
-                                            }
-                                        }
-                                        selectedDevice = thisDevice
-                                    })
-                                Text(
-                                    text = thisDevice,
-                                    fontSize = 16.sp,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
+                })
+        }) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        shape = RoundedCornerShape(2.dp)
+                    )
+                    .shadow(
+                        elevation = 2.dp, shape = RoundedCornerShape(2.dp), clip = false
+                    )
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                devices.forEach { thisDevice ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 8.dp)
-                    ) {
-                        TextField(
-                            modifier = Modifier.fillMaxWidth(0.6f),
-                            value = host,
-                            onValueChange = { host = it },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                errorContainerColor = Color.Transparent
-                            ),
-                            label = {
-                                Text(text = "Host")
-                            },
-                            enabled = !automaticMode,
-                            isError = hostError,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(
-                                onNext = { focusManager.moveFocus(FocusDirection.Down) })
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextField(
-                            modifier = Modifier.fillMaxWidth(),
-                            value = port,
-                            onValueChange = { port = it },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                errorContainerColor = Color.Transparent
-                            ),
-                            label = {
-                                Text(text = "Port")
-                            },
-                            enabled = !automaticMode,
-                            isError = portError,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    keyboardController?.hide()
-                                    focusManager.moveFocus(FocusDirection.Down)
-                                })
-                        )
-                    }
+                            .clickable {
+                                when (thisDevice) {
+                                    "Android Studio Emulator (AVD)" -> {
+                                        setDevice(0)
+                                        automaticMode = true
+                                        networkProtocol = "IPv4"
+                                        host = "10.0.2.2"
+                                        port = "8765"
+                                    }
 
-                    ExposedDropdownMenuBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded }) {
-                        TextField(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            value = networkProtocol,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = {
-                                Text("Protocol")
-                            },
-                            enabled = false,/*!automaticMode*/
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                errorContainerColor = Color.Transparent
-                            ),
-                        )
+                                    "Genymotion" -> {
+                                        setDevice(1)
+                                        automaticMode = true
+                                        networkProtocol = "IPv4"
+                                        host = "10.0.3.2"
+                                        port = "8765"
+                                    }
 
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                            shape = RoundedCornerShape(2.dp),
-                            modifier = Modifier
-                        ) {
-                            networkProtocols.forEach { item ->
-                                DropdownMenuItem(text = { Text(item) }, onClick = {
-                                    networkProtocol = item
-                                    expanded = false
-                                })
+                                    "Other Devices" -> {
+                                        setDevice(2)
+                                        automaticMode = false
+                                    }
+
+                                    else -> {
+                                        setDevice(2)
+                                        automaticMode = false
+                                    }
+                                }
+                                selectedDevice = thisDevice
                             }
-                        }
-                    }
-                }
+                            .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = selectedDevice == thisDevice, onClick = {
+                                when (thisDevice) {
+                                    "Android Studio Emulator (AVD)" -> {
+                                        setDevice(0)
+                                        automaticMode = true
+                                        networkProtocol = "IPv4"
+                                        host = "10.0.2.2"
+                                        port = "8765"
+                                    }
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
+                                    "Genymotion" -> {
+                                        setDevice(1)
+                                        automaticMode = true
+                                        networkProtocol = "IPv4"
+                                        host = "10.0.3.2"
+                                        port = "8765"
+                                    }
 
-                    Button(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            navController.popBackStack()
-                            setServerIP("$host:$port")
-                        },
-                        enabled = !portError and !hostError,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .size(56.dp)
-                            .align(Alignment.BottomEnd)
-                            .shadow(
-                                elevation = if (!portError and !hostError) 6.dp else 0.dp,
-                                shape = CircleShape,
-                                clip = false
-                            ),
-                        shape = CircleShape,
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.check),
-                            contentDescription = "OK",
-                            modifier = Modifier.fillMaxSize(),
-                            tint = MaterialTheme.colorScheme.onPrimary
+                                    "Other Devices" -> {
+                                        setDevice(2)
+                                        automaticMode = false
+                                    }
+
+                                    else -> {
+                                        setDevice(2)
+                                        automaticMode = false
+                                    }
+                                }
+                                selectedDevice = thisDevice
+                            })
+                        Text(
+                            text = thisDevice,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp)
+            ) {
+                TextField(
+                    modifier = Modifier.fillMaxWidth(0.6f),
+                    value = host,
+                    onValueChange = { host = it },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        errorContainerColor = Color.Transparent
+                    ),
+                    label = {
+                        Text(text = "Host")
+                    },
+                    enabled = !automaticMode,
+                    isError = hostError,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = port,
+                    onValueChange = { port = it },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        errorContainerColor = Color.Transparent
+                    ),
+                    label = {
+                        Text(text = "Port")
+                    },
+                    enabled = !automaticMode,
+                    isError = portError,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            keyboardController?.hide()
+                            focusManager.moveFocus(FocusDirection.Down)
+                        })
+                )
+            }
+
+            val enabled = false
+
+            ExposedDropdownMenuBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                expanded = expanded,
+                onExpandedChange = {
+                    if (enabled) expanded = !expanded
+                }
+            ) {
+                TextField(
+                    value = networkProtocol,
+                    onValueChange = {},
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled),
+                    readOnly = true,
+                    enabled = enabled,
+                    label = { Text("Protocol") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        errorContainerColor = Color.Transparent
+                    )
+                )
+
+                ExposedDropdownMenu(
+                    expanded = enabled && expanded,
+                    onDismissRequest = { expanded = false },
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    networkProtocols.forEach { protocol ->
+                        DropdownMenuItem(
+                            text = { Text(protocol) },
+                            onClick = {
+                                networkProtocol = protocol
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+
+            Button(
+                onClick = {
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    back()
+                    setServerIP("$host:$port")
+                },
+                enabled = !portError && !hostError,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .size(56.dp)
+                    .align(Alignment.BottomEnd)
+                    .shadow(
+                        elevation = if (!portError && !hostError) 6.dp else 0.dp,
+                        shape = CircleShape,
+                        clip = false
+                    ),
+                shape = CircleShape,
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.check),
+                    contentDescription = "OK",
+                    modifier = Modifier.fillMaxSize(),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
             }
         }
     }
@@ -1653,7 +1603,7 @@ fun Greeting(
     signIn: (String, String) -> Unit,
     signUp: (String, String, String) -> Unit,
     ipConfig: () -> Unit,
-    getrules: () -> String,
+    getRules: () -> String,
     loginError: Int
 ) {
     val context = LocalContext.current
@@ -1667,8 +1617,8 @@ fun Greeting(
 
     var showSupportDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
-    var showSignUpDialog by remember { mutableStateOf(false) }
-    var showSignInDialog by remember { mutableStateOf(false) }
+    //var showSignUpDialog by remember { mutableStateOf(false) }
+    //var showSignInDialog by remember { mutableStateOf(false) }
 
     val navController = rememberNavController()
 
@@ -1709,7 +1659,7 @@ fun Greeting(
         )
 
         withLink(link) {
-            append("term of use and privacy.")
+            append("term of use&&privacy.")
         }
     }
 
@@ -1718,7 +1668,7 @@ fun Greeting(
 
         val link = LinkAnnotation.Clickable(
             tag = "signIn",
-            linkInteractionListener = { showSignInDialog = true },
+            linkInteractionListener = { navController.navigate("signIn") /*showSignInDialog = true */ },
             styles = TextLinkStyles(
                 style = SpanStyle(
                     color = MaterialTheme.colorScheme.primary,
@@ -1814,7 +1764,7 @@ fun Greeting(
 
     LaunchedEffect(isLoading) {
         if (isLoading) {
-            delay(10000)
+            delay(10000.milliseconds)
             if (isLoading) {
                 isLoading = false
             }
@@ -1824,6 +1774,25 @@ fun Greeting(
     LaunchedEffect(loginError) {
         isLoading = false
     }
+
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    val focusManager = LocalFocusManager.current
+    val passwordVisible = remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val usernameFocusRequester = remember { FocusRequester() }
+    val passwordFocusRequester = remember { FocusRequester() }
+
+    val isUsernameError =
+        (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+    val usernameSizeError = username.length !in 1..50
+
+    val isPasswordError = password.length !in 6..128
+
+    var firstClick by remember { mutableStateOf(false) }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
 
@@ -1848,6 +1817,75 @@ fun Greeting(
             }
 
             if (windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(1 / 3f)
+                            .padding(innerPadding)
+                    ) {
+                        IconButton(
+                            modifier = Modifier.align(Alignment.TopEnd), onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                expanded = true
+                            }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.menu_dots),
+                                contentDescription = "Menu",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        }
+
+//                        Box(
+//                            modifier = Modifier
+//                                .padding(16.dp)
+//                                .align(Alignment.TopEnd)
+//                        ) {
+//                            DropdownMenu(
+//                                modifier = Modifier.width(200.dp),
+//                                expanded = expanded,
+//                                onDismissRequest = { expanded = false }) {
+//                                DropdownMenuItem(text = {
+//                                    Text(
+//                                        text = dropdownThemeText
+//                                    )
+//                                }, leadingIcon = {
+//                                    Icon(
+//                                        painter = painterResource(
+//                                            id = dropdownThemeIcon
+//                                        ), contentDescription = "Theme"
+//                                    )
+//                                }, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    setTheme()
+//                                })
+//                                DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+//                                    Icon(
+//                                        painter = painterResource(id = R.drawable.support),
+//                                        contentDescription = "Support"
+//                                    )
+//                                }, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    expanded = false
+//                                    showSupportDialog = true
+//                                })
+//                            }
+//                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .height(64.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "GChat", style = MaterialTheme.typography.titleLarge.copy(
+                                color = Color(0xFFDFE4DD)
+                            )
+                        )
+                    }
+                }
+
                 NavHost(
                     modifier = Modifier.fillMaxSize(),
                     navController = navController,
@@ -1889,7 +1927,7 @@ fun Greeting(
                                     .padding(8.dp)
                             ) {
                                 Text(
-                                    text = "GChat is secure and optimized for some tasks.",
+                                    text = "GChat is secure&&optimized for some tasks.",
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
@@ -1910,9 +1948,9 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,          // سایه مطابق MD1
+                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,
                                             shape = CircleShape,
-                                            clip = false               // اجازه خروج سایه از محدوده
+                                            clip = false
                                         ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp),
@@ -1920,7 +1958,7 @@ fun Greeting(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.arrow_forward),
-                                        contentDescription = "Accept and Sign-In",
+                                        contentDescription = "Accept&&Sign-In",
                                         modifier = Modifier.fillMaxSize(),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
@@ -2003,18 +2041,19 @@ fun Greeting(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         //isLoading = true
-                                        showSignUpDialog = true
+                                        //showSignUpDialog = true
+                                        navController.navigate("signUp")
                                     },
-                                    enabled = !isLoading and !selectedIccid.isNullOrBlank(),
+                                    enabled = !isLoading && !selectedIccid.isNullOrBlank(),
                                     modifier = Modifier
                                         .padding(innerPadding)
                                         .padding(8.dp)
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (!isLoading and !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
+                                            elevation = if (!isLoading && !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,
                                             shape = CircleShape,
-                                            clip = false               // اجازه خروج سایه از محدوده
+                                            clip = false
                                         ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
@@ -2029,73 +2068,395 @@ fun Greeting(
                             }
                         }
                     }
-                }
-                Column {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(1 / 3f)
-                            .padding(innerPadding)
-                    ) {
-                        IconButton(
-                            modifier = Modifier.align(Alignment.TopEnd), onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                expanded = true
-                            }) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.menu_dots),
-                                contentDescription = "Menu",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
 
-//                        Box(
-//                            modifier = Modifier
-//                                .padding(16.dp)
-//                                .align(Alignment.TopEnd)
-//                        ) {
-//                            DropdownMenu(
-//                                modifier = Modifier.width(200.dp),
-//                                expanded = expanded,
-//                                onDismissRequest = { expanded = false }) {
-//                                DropdownMenuItem(text = {
-//                                    Text(
-//                                        text = dropdownThemeText
-//                                    )
-//                                }, leadingIcon = {
-//                                    Icon(
-//                                        painter = painterResource(
-//                                            id = dropdownThemeIcon
-//                                        ), contentDescription = "Theme"
-//                                    )
-//                                }, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    setTheme()
-//                                })
-//                                DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-//                                    Icon(
-//                                        painter = painterResource(id = R.drawable.support),
-//                                        contentDescription = "Support"
-//                                    )
-//                                }, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    expanded = false
-//                                    showSupportDialog = true
-//                                })
-//                            }
-//                        }
+                    composable("signIn") {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .imePadding()
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(2 / 3f)
+                                    .padding(top = 64.dp)
+                                    .shadow(
+                                        elevation = 16.dp, clip = false
+                                    )
+                                    .background(color = MaterialTheme.colorScheme.surface)
+                            ) {
+                                //if it is not loading
+                                BackHandler(enabled = isLoading) {
+                                    //back
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(24.dp)
+                                ) {
+                                    Text(
+                                        text = "To sign-in to your account, enter your username&&password.",
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                        value = username,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            username = it
+                                        },
+                                        isError = isUsernameError or usernameSizeError && firstClick,
+                                        supportingText = {
+                                            Column {
+                                                if (isUsernameError && firstClick) {
+                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                }
+                                                if (usernameSizeError && firstClick) {
+                                                    Text("Username must be less than 50 characters.")
+                                                }
+                                            }
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = { Text("Username") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = {
+                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                            })
+                                    )
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                        value = password,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            password = it
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = {
+                                            Text(text = "Password")
+                                        },
+                                        isError = isPasswordError && firstClick,
+                                        supportingText = {
+                                            if (isPasswordError && firstClick) {
+                                                Text("Password must be between 6&&128 characters.")
+                                            }
+                                        },
+                                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            IconButton(
+                                                enabled = !isLoading, onClick = {
+                                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                    passwordVisible.value = !passwordVisible.value
+                                                }) {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        if (passwordVisible.value) R.drawable.visibility_off
+                                                        else R.drawable.visibility
+                                                    ), contentDescription = null
+                                                )
+                                            }
+                                        },
+                                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                keyboardController?.hide()
+                                                coroutineScope.launch {
+                                                    signIn(username, password)
+                                                    isLoading = true
+                                                }
+                                                focusManager.moveFocus(FocusDirection.Down)
+                                            })
+                                    )
+                                }
+
+                                //Text("Sign-In")
+
+                                Button(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        if (firstClick) {
+                                            signIn(username, password)
+                                            isLoading = true
+                                        } else {
+                                            firstClick = true
+                                            if (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) {
+                                                signIn(username, password)
+                                                isLoading = true
+                                            }
+                                        }
+                                    },
+                                    enabled = (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .navigationBarsPadding()
+                                        .padding(8.dp)
+                                        .size(56.dp)
+                                        .shadow(
+                                            elevation = if ((!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick) 6.dp else 0.dp,
+                                            shape = CircleShape,
+                                            clip = false
+                                        ),
+                                    shape = CircleShape,
+                                    contentPadding = PaddingValues(16.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.check),
+                                        contentDescription = "OK Sign-In",
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+
+                                val progressColor =
+                                    MaterialTheme.colorScheme.primary.toArgb()
+
+                                if (isLoading) {
+                                    AndroidView(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .fillMaxWidth()
+                                            .offset(y = (-6).dp),
+                                        factory = { context ->
+                                            ProgressBar(
+                                                context,
+                                                null,
+                                                android.R.attr.progressBarStyleHorizontal
+                                            ).apply {
+                                                isIndeterminate = true
+                                                progressTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                                indeterminateTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Row(
-                        modifier = Modifier
-                            .height(64.dp)
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "GChat", style = MaterialTheme.typography.titleLarge.copy(
-                                color = Color(0xFFDFE4DD)
-                            )
-                        )
+
+                    composable("signUp") {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .imePadding()
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(2 / 3f)
+                                    .padding(top = 64.dp)
+                                    .shadow(
+                                        elevation = 16.dp, clip = false
+                                    )
+                                    .background(color = MaterialTheme.colorScheme.surface)
+                            ) {
+                                //if it is not loading
+                                BackHandler(enabled = isLoading) {
+                                    //back
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(24.dp)
+                                ) {
+                                    Text(
+                                        text = "To sign-up for an account, set up a username&&password.",
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                        value = username,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            username = it
+                                        },
+                                        isError = isUsernameError or usernameSizeError && firstClick,
+                                        supportingText = {
+                                            Column {
+                                                if (isUsernameError && firstClick) {
+                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                }
+                                                if (usernameSizeError && firstClick) {
+                                                    Text("Username must be less than 50 characters.")
+                                                }
+                                            }
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = { Text("Username") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = {
+                                                passwordFocusRequester.requestFocus()
+                                            })
+                                    )
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(passwordFocusRequester),
+                                        value = password,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            password = it
+                                        },
+                                        isError = isPasswordError && firstClick,
+                                        supportingText = {
+                                            if (isPasswordError && firstClick) {
+                                                Text("Password must be between 6&&128 characters.")
+                                            }
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = {
+                                            Text(text = "Password")
+                                        },
+                                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            IconButton(
+                                                enabled = !isLoading, onClick = {
+                                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                    passwordVisible.value = !passwordVisible.value
+                                                }) {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        if (passwordVisible.value) R.drawable.visibility_off
+                                                        else R.drawable.visibility
+                                                    ), contentDescription = null
+                                                )
+                                            }
+                                        },
+                                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                keyboardController?.hide()
+                                                coroutineScope.launch {
+                                                    signUp(
+                                                        selectedIccid.toString(),
+                                                        username,
+                                                        password
+                                                    )
+                                                    isLoading = true
+                                                }
+                                                focusManager.moveFocus(FocusDirection.Down)
+                                            })
+                                    )
+                                }
+
+                                //Text("Sign-In")
+
+                                Button(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        if (firstClick) {
+                                            signUp(selectedIccid.toString(), username, password)
+                                            isLoading = true
+                                        } else {
+                                            firstClick = true
+                                            if (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) {
+                                                signUp(selectedIccid.toString(), username, password)
+                                                isLoading = true
+                                            }
+                                        }
+                                    },
+                                    enabled = (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .navigationBarsPadding()
+                                        .padding(8.dp)
+                                        .size(56.dp)
+                                        .shadow(
+                                            elevation = if ((!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick) 6.dp else 0.dp,
+                                            shape = CircleShape,
+                                            clip = false
+                                        ),
+                                    shape = CircleShape,
+                                    contentPadding = PaddingValues(16.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.check),
+                                        contentDescription = "OK Sign-In",
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+
+                                val progressColor =
+                                    MaterialTheme.colorScheme.primary.toArgb()
+
+                                if (isLoading) {
+                                    AndroidView(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .fillMaxWidth()
+                                            .offset(y = (-6).dp),
+                                        factory = { context ->
+                                            ProgressBar(
+                                                context,
+                                                null,
+                                                android.R.attr.progressBarStyleHorizontal
+                                            ).apply {
+                                                isIndeterminate = true
+                                                progressTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                                indeterminateTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2110,7 +2471,7 @@ fun Greeting(
                     ratioY = 0f,
                     position = Alignment.TopEnd,
                     hasBackgroundCover = false,
-                    whatismybackgroundfiltercolor = { color, show -> }) {
+                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         DropdownMenuItem(text = {
@@ -2247,7 +2608,7 @@ fun Greeting(
 //                                }
 
                                 Text(
-                                    text = "GChat is secure and optimized for some tasks.",
+                                    text = "GChat is secure&&optimized for some tasks.",
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -2277,7 +2638,7 @@ fun Greeting(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.arrow_forward),
-                                        contentDescription = "Accept and Sign-In",
+                                        contentDescription = "Accept&&Sign-In",
                                         modifier = Modifier.fillMaxSize(),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
@@ -2311,7 +2672,7 @@ fun Greeting(
                                     ratioY = 0f,
                                     position = Alignment.TopEnd,
                                     hasBackgroundCover = false,
-                                    whatismybackgroundfiltercolor = { color, show -> }) {
+                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -2410,16 +2771,17 @@ fun Greeting(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         //isLoading = true
-                                        showSignUpDialog = true
+                                        //showSignUpDialog = true
+                                        navController.navigate("signUp")
                                     },
-                                    enabled = !isLoading and !selectedIccid.isNullOrBlank(),
+                                    enabled = !isLoading && !selectedIccid.isNullOrBlank(),
                                     modifier = Modifier
                                         .padding(8.dp)
                                         .padding(innerPadding)
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (!isLoading and !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
+                                            elevation = if (!isLoading && !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
                                             shape = CircleShape,
                                             clip = false               // اجازه خروج سایه از محدوده
                                         ),
@@ -2500,7 +2862,542 @@ fun Greeting(
                                     ratioY = 0f,
                                     position = Alignment.TopEnd,
                                     hasBackgroundCover = false,
-                                    whatismybackgroundfiltercolor = { color, show -> }) {
+                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        DropdownMenuItem(text = {
+                                            Text(
+                                                text = dropdownThemeText
+                                            )
+                                        }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(
+                                                    id = dropdownThemeIcon
+                                                ), contentDescription = "Theme"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            setTheme()
+                                        })
+                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.support),
+                                                contentDescription = "Support"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            expanded = false
+                                            showSupportDialog = true
+                                        })
+                                        DropdownMenuItem(
+                                            text = { Text("IP config") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.tune),
+                                                    contentDescription = "IP config"
+                                                )
+                                            },
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                expanded = false
+                                                ipConfig()
+                                                //navController.navigate("ipConfig")
+                                            })
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    composable("signIn") {
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(x = ((LocalConfiguration.current.screenWidthDp - 600) * 0.3f).dp)
+                                    .width(600.dp)
+                                    .fillMaxHeight(0.8f)
+                                    .shadow(
+                                        elevation = 16.dp,
+                                        shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp),
+                                        clip = false
+                                    )
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
+                                    )
+                            ) {
+                                BackHandler(enabled = isLoading) {
+
+                                }
+
+                                Text(
+                                    text = "To sign-in to your account, enter your username&&password.",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .width(384.dp)
+                                        .padding(24.dp)
+                                ) {
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                        value = username,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            username = it
+                                        },
+                                        isError = isUsernameError or usernameSizeError && firstClick,
+                                        supportingText = {
+                                            Column {
+                                                if (isUsernameError && firstClick) {
+                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                }
+                                                if (usernameSizeError && firstClick) {
+                                                    Text("Username must be less than 50 characters.")
+                                                }
+                                            }
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = { Text("Username") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = {
+                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                            })
+                                    )
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                        value = password,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            password = it
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = {
+                                            Text(text = "Password")
+                                        },
+                                        isError = isPasswordError && firstClick,
+                                        supportingText = {
+                                            if (isPasswordError && firstClick) {
+                                                Text("Password must be between 6&&128 characters.")
+                                            }
+                                        },
+                                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            IconButton(
+                                                enabled = !isLoading, onClick = {
+                                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                    passwordVisible.value = !passwordVisible.value
+                                                }) {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        if (passwordVisible.value) R.drawable.visibility_off
+                                                        else R.drawable.visibility
+                                                    ), contentDescription = null
+                                                )
+                                            }
+                                        },
+                                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                keyboardController?.hide()
+                                                coroutineScope.launch {
+                                                    signIn(username, password)
+                                                    isLoading = true
+                                                }
+                                                focusManager.moveFocus(FocusDirection.Down)
+                                            })
+                                    )
+                                }
+
+                                //Text("Sign-In")
+
+                                Button(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        if (firstClick) {
+                                            signIn(username, password)
+                                            isLoading = true
+                                        } else {
+                                            firstClick = true
+                                            if (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) {
+                                                signIn(username, password)
+                                                isLoading = true
+                                            }
+                                        }
+                                    },
+                                    enabled = (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick,
+
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .padding(innerPadding)
+                                        .align(Alignment.BottomEnd)
+                                        .size(56.dp)
+                                        .shadow(
+                                            elevation = if ((!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick) 6.dp else 0.dp,
+                                            shape = CircleShape,
+                                            clip = false
+                                        ),
+                                    shape = CircleShape,
+                                    contentPadding = PaddingValues(16.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.check),
+                                        contentDescription = "OK Sign-In",
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+
+                                val progressColor =
+                                    MaterialTheme.colorScheme.primary.toArgb()
+
+                                if (isLoading) {
+                                    AndroidView(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .fillMaxWidth()
+                                            .offset(y = (-6).dp),
+                                        factory = { context ->
+                                            ProgressBar(
+                                                context,
+                                                null,
+                                                android.R.attr.progressBarStyleHorizontal
+                                            ).apply {
+                                                isIndeterminate = true
+                                                progressTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                                indeterminateTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                            }
+                                        }
+                                    )
+                                }
+
+                                IconButton(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp), onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        expanded = true
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.menu_dots),
+                                        contentDescription = "Menu",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+
+                                AnimatedDropMenu(
+                                    modifier = Modifier.zIndex(1f),
+                                    width = 200.dp,
+                                    height = 160.dp,
+                                    chord = 256.dp,
+                                    isExpanded = expanded,
+                                    close = { expanded = false },
+                                    ratioX = 1f,
+                                    ratioY = 0f,
+                                    position = Alignment.TopEnd,
+                                    hasBackgroundCover = false,
+                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    Column(modifier = Modifier.fillMaxSize()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        DropdownMenuItem(text = {
+                                            Text(
+                                                text = dropdownThemeText
+                                            )
+                                        }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(
+                                                    id = dropdownThemeIcon
+                                                ), contentDescription = "Theme"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            setTheme()
+                                        })
+                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.support),
+                                                contentDescription = "Support"
+                                            )
+                                        }, onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            expanded = false
+                                            showSupportDialog = true
+                                        })
+                                        DropdownMenuItem(
+                                            text = { Text("IP config") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(id = R.drawable.tune),
+                                                    contentDescription = "IP config"
+                                                )
+                                            },
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                expanded = false
+                                                ipConfig()
+                                                //navController.navigate("ipConfig")
+                                            })
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    composable("signUp") {
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(x = ((LocalConfiguration.current.screenWidthDp - 600) * 0.3f).dp)
+                                    .width(600.dp)
+                                    .fillMaxHeight(0.8f)
+                                    .shadow(
+                                        elevation = 16.dp,
+                                        shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp),
+                                        clip = false
+                                    )
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
+                                    )
+                            ) {
+                                BackHandler(enabled = isLoading) {
+
+                                }
+
+                                Text(
+                                    text = "To sign-up for an account, set up a username&&password.",
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp)
+                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .width(384.dp)
+                                        .padding(24.dp)
+                                ) {
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                        value = username,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            username = it
+                                        },
+                                        isError = isUsernameError or usernameSizeError && firstClick,
+                                        supportingText = {
+                                            Column {
+                                                if (isUsernameError && firstClick) {
+                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                }
+                                                if (usernameSizeError && firstClick) {
+                                                    Text("Username must be less than 50 characters.")
+                                                }
+                                            }
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = { Text("Username") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = {
+                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                            })
+                                    )
+
+                                    TextField(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                        value = password,
+                                        onValueChange = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            password = it
+                                        },
+                                        enabled = !isLoading,
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent,
+                                            errorContainerColor = Color.Transparent
+                                        ),
+                                        label = {
+                                            Text(text = "Password")
+                                        },
+                                        isError = isPasswordError && firstClick,
+                                        supportingText = {
+                                            if (isPasswordError && firstClick) {
+                                                Text("Password must be between 6&&128 characters.")
+                                            }
+                                        },
+                                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+                                        else PasswordVisualTransformation(),
+                                        singleLine = true,
+                                        trailingIcon = {
+                                            IconButton(
+                                                enabled = !isLoading, onClick = {
+                                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                                    passwordVisible.value = !passwordVisible.value
+                                                }) {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        if (passwordVisible.value) R.drawable.visibility_off
+                                                        else R.drawable.visibility
+                                                    ), contentDescription = null
+                                                )
+                                            }
+                                        },
+                                        textStyle = TextStyle(textDirection = TextDirection.Content),
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                keyboardController?.hide()
+                                                coroutineScope.launch {
+                                                    signIn(username, password)
+                                                    isLoading = true
+                                                }
+                                                focusManager.moveFocus(FocusDirection.Down)
+                                            })
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        if (firstClick) {
+                                            signUp(selectedIccid.toString(), username, password)
+                                            isLoading = true
+                                        } else {
+                                            firstClick = true
+                                            if (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) {
+                                                signUp(selectedIccid.toString(), username, password)
+                                                isLoading = true
+                                            }
+                                        }
+                                    },
+                                    enabled = (!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick,
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .padding(innerPadding)
+                                        .align(Alignment.BottomEnd)
+                                        .size(56.dp)
+                                        .shadow(
+                                            elevation = if ((!isLoading && !(isUsernameError or usernameSizeError) && username.isNotBlank() && !isPasswordError) or !firstClick) 6.dp else 0.dp,
+                                            shape = CircleShape,
+                                            clip = false
+                                        ),
+                                    shape = CircleShape,
+                                    contentPadding = PaddingValues(16.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.check),
+                                        contentDescription = "OK Sign-In",
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+
+                                val progressColor =
+                                    MaterialTheme.colorScheme.primary.toArgb()
+
+                                if (isLoading) {
+                                    AndroidView(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .fillMaxWidth()
+                                            .offset(y = (-6).dp),
+                                        factory = { context ->
+                                            ProgressBar(
+                                                context,
+                                                null,
+                                                android.R.attr.progressBarStyleHorizontal
+                                            ).apply {
+                                                isIndeterminate = true
+                                                progressTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                                indeterminateTintList =
+                                                    ColorStateList.valueOf(progressColor)
+                                            }
+                                        }
+                                    )
+                                }
+
+                                IconButton(
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp), onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        expanded = true
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.menu_dots),
+                                        contentDescription = "Menu",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+
+                                AnimatedDropMenu(
+                                    modifier = Modifier.zIndex(1f),
+                                    width = 200.dp,
+                                    height = 160.dp,
+                                    chord = 256.dp,
+                                    isExpanded = expanded,
+                                    close = { expanded = false },
+                                    ratioX = 1f,
+                                    ratioY = 0f,
+                                    position = Alignment.TopEnd,
+                                    hasBackgroundCover = false,
+                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -2619,14 +3516,14 @@ fun Greeting(
                 )
                 .fillMaxHeight(0.8f),
             onDismissRequest = { showTermsDialog = false },
-            title = { Text("Term of use and privacy") },
+            title = { Text("Term of use&&privacy") },
             text = {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(text = getrules())
+                    Text(text = getRules())
                 }
             },
             shape = RoundedCornerShape(2.dp),
@@ -2641,346 +3538,368 @@ fun Greeting(
             })
     }
 
-    if (showSignUpDialog) {
-        var username by remember { mutableStateOf("") }
-        var password by remember { mutableStateOf("") }
-
-        val focusManager = LocalFocusManager.current
-        val passwordVisible = remember { mutableStateOf(false) }
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val coroutineScope = rememberCoroutineScope()
-
-        val usernameFocusRequester = remember { FocusRequester() }
-        val passwordFocusRequester = remember { FocusRequester() }
-
-        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
-        val usernameSizeError = username.length !in 1..50
-
-        val isPasswordError = password.length !in 6..128
-
-        var firstClick by remember { mutableStateOf(false) }
-
-        AlertDialog(
-            onDismissRequest = {
-            if (!isLoading) showSignUpDialog = false
-        }, title = { Text("Sign-Up") }, text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(text = "Setup your username and password.")
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(usernameFocusRequester), // ← اضافه شد
-                    value = username,
-                    onValueChange = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        username = it
-                    },
-                    isError = isUsernameError or usernameSizeError and firstClick,
-                    supportingText = {
-                        Column {
-                            if (isUsernameError and firstClick) {
-                                Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
-                            }
-                            if (usernameSizeError and firstClick) {
-                                Text("Username must be less than 50 characters.")
-                            }
-                        }
-                    },
-                    enabled = !isLoading,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    ),
-                    label = { Text("Username") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(
-                        onNext = {
-                            passwordFocusRequester.requestFocus()
-                        })
-                )
-
-                TextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(passwordFocusRequester),
-                    value = password,
-                    onValueChange = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        password = it
-                    },
-                    isError = isPasswordError and firstClick,
-                    supportingText = {
-                        if (isPasswordError and firstClick) {
-                            Text("Password must be beetwin 6 and 50 characters.")
-                        }
-                    },
-                    enabled = !isLoading,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    ),
-                    label = {
-                        Text(text = "Password")
-                    },
-                    visualTransformation = if (passwordVisible.value) VisualTransformation.None
-                    else PasswordVisualTransformation(),
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            enabled = !isLoading, onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                passwordVisible.value = !passwordVisible.value
-                            }) {
-                            Icon(
-                                painter = painterResource(
-                                    if (passwordVisible.value) R.drawable.visibility_off
-                                    else R.drawable.visibility
-                                ), contentDescription = null
-                            )
-                        }
-                    },
-                    textStyle = TextStyle(textDirection = TextDirection.Content),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            keyboardController?.hide()
-                            coroutineScope.launch {
-                                signUp(selectedIccid.toString(), username, password)
-                                isLoading = true
-                            }
-                            focusManager.moveFocus(FocusDirection.Down)
-                        })
-                )
-            }
-        }, shape = RoundedCornerShape(2.dp), confirmButton = {
-            Button(
-                enabled = (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) or !firstClick,
-                onClick = {
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    if (firstClick) {
-                        signUp(selectedIccid.toString(), username, password)
-                        isLoading = true
-                    } else {
-                        firstClick = true
-                        if (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) {
-                            signUp(selectedIccid.toString(), username, password)
-                            isLoading = true
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(2.dp),
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Icon(
-                        painter = painterResource(id = R.drawable.login),
-                        contentDescription = null
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign-Up")
-            }
-        }, dismissButton = {
-            TextButton(
-                enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    isLoading = false
-                    showSignUpDialog = false
-                }) {
-                Text("Cancel")
-            }
-        }, modifier = Modifier
-                .padding(vertical = 16.dp)
-                .shadow(
-                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
-                )
-        )
-    }
-
-    if (showSignInDialog) {
-        var username by remember { mutableStateOf("") }
-        var password by remember { mutableStateOf("") }
-
-        val focusManager = LocalFocusManager.current
-        val passwordVisible = remember { mutableStateOf(false) }
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val coroutineScope = rememberCoroutineScope()
-
-        val usernameFocusRequester = remember { FocusRequester() }
-        val passwordFocusRequester = remember { FocusRequester() }
-
-        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
-        val usernameSizeError = username.length !in 1..50
-
-        val isPasswordError = password.length !in 6..128
-
-        var firstClick by remember { mutableStateOf(false) }
-
-        AlertDialog(
-            onDismissRequest = {
-            if (!isLoading) showSignInDialog = false
-        }, title = { Text("Sign-In") }, text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text(text = "Enter your username and password.")
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(usernameFocusRequester), // ← اضافه شد
-                    value = username,
-                    onValueChange = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        username = it
-                    },
-                    isError = isUsernameError or usernameSizeError and firstClick,
-                    supportingText = {
-                        Column {
-                            if (isUsernameError and firstClick) {
-                                Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
-                            }
-                            if (usernameSizeError and firstClick) {
-                                Text("Username must be less than 50 characters.")
-                            }
-                        }
-                    },
-                    enabled = !isLoading,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    ),
-                    label = { Text("Username") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(
-                        onNext = {
-                            passwordFocusRequester.requestFocus() // ← تغییر کرد
-                        })
-                )
-
-                TextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(passwordFocusRequester), // ← اضافه شد
-                    value = password,
-                    onValueChange = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        password = it
-                    },
-                    enabled = !isLoading,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent
-                    ),
-                    label = {
-                        Text(text = "Password")
-                    },
-                    isError = isPasswordError and firstClick,
-                    supportingText = {
-                        if (isPasswordError and firstClick) {
-                            Text("Password must be beetwin 6 and 50 characters.")
-                        }
-                    },
-                    visualTransformation = if (passwordVisible.value) VisualTransformation.None
-                    else PasswordVisualTransformation(),
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(
-                            enabled = !isLoading, onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                passwordVisible.value = !passwordVisible.value
-                            }) {
-                            Icon(
-                                painter = painterResource(
-                                    if (passwordVisible.value) R.drawable.visibility_off
-                                    else R.drawable.visibility
-                                ), contentDescription = null
-                            )
-                        }
-                    },
-                    textStyle = TextStyle(textDirection = TextDirection.Content),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            keyboardController?.hide()
-                            coroutineScope.launch {
-                                signIn(username, password)
-                                isLoading = true
-                            }
-                            focusManager.moveFocus(FocusDirection.Down)
-                        })
-                )
-            }
-        }, shape = RoundedCornerShape(2.dp), confirmButton = {
-            Button(
-                enabled = (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) or !firstClick,
-                onClick = {
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    if (firstClick) {
-                        signIn(username, password)
-                        isLoading = true
-                    } else {
-                        firstClick = true
-                        if (!isLoading and !(isUsernameError or usernameSizeError) and username.isNotBlank() and !isPasswordError) {
-                            signIn(username, password)
-                            isLoading = true
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(2.dp),
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Icon(
-                        painter = painterResource(id = R.drawable.login),
-                        contentDescription = null
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign-In")
-            }
-        }, dismissButton = {
-            TextButton(
-                enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    isLoading = false
-                    showSignInDialog = false
-                }) {
-                Text("Cancel")
-            }
-        }, modifier = Modifier
-                .padding(vertical = 16.dp)
-                .shadow(
-                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
-                )
-        )
-    }
+//    if (showSignUpDialog) {
+//        var username by remember { mutableStateOf("") }
+//        var password by remember { mutableStateOf("") }
+//
+//        val focusManager = LocalFocusManager.current
+//        val passwordVisible = remember { mutableStateOf(false) }
+//        val keyboardController = LocalSoftwareKeyboardController.current
+//        val coroutineScope = rememberCoroutineScope()
+//
+//        val usernameFocusRequester = remember { FocusRequester() }
+//        val passwordFocusRequester = remember { FocusRequester() }
+//
+//        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+//        val usernameSizeError = username.length !in 1..50
+//
+//        val isPasswordError = password.length !in 6..128
+//
+//        var firstClick by remember { mutableStateOf(false) }
+//
+//        AlertDialog(
+//            onDismissRequest = {
+//                if (!isLoading) showSignUpDialog = false
+//            }, title = { Text("Sign-Up") }, text = {
+//                Column(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .verticalScroll(rememberScrollState())
+//                ) {
+//                    Text(text = "Setup your username&&password.")
+//
+//                    Spacer(modifier = Modifier.height(8.dp))
+//
+//                    TextField(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+//                        value = username,
+//                        onValueChange = {
+//                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                            username = it
+//                        },
+//                        isError = isUsernameError or usernameSizeError&&firstClick,
+//                        supportingText = {
+//                            Column {
+//                                if (isUsernameError&&firstClick) {
+//                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+//                                }
+//                                if (usernameSizeError&&firstClick) {
+//                                    Text("Username must be less than 50 characters.")
+//                                }
+//                            }
+//                        },
+//                        enabled = !isLoading,
+//                        colors = TextFieldDefaults.colors(
+//                            focusedContainerColor = Color.Transparent,
+//                            unfocusedContainerColor = Color.Transparent,
+//                            disabledContainerColor = Color.Transparent,
+//                            errorContainerColor = Color.Transparent
+//                        ),
+//                        label = { Text("Username") },
+//                        singleLine = true,
+//                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+//                        keyboardActions = KeyboardActions(
+//                            onNext = {
+//                                passwordFocusRequester.requestFocus()
+//                            })
+//                    )
+//
+//                    TextField(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .focusRequester(passwordFocusRequester),
+//                        value = password,
+//                        onValueChange = {
+//                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                            password = it
+//                        },
+//                        isError = isPasswordError&&firstClick,
+//                        supportingText = {
+//                            if (isPasswordError&&firstClick) {
+//                                Text("Password must be between 6&&128 characters.")
+//                            }
+//                        },
+//                        enabled = !isLoading,
+//                        colors = TextFieldDefaults.colors(
+//                            focusedContainerColor = Color.Transparent,
+//                            unfocusedContainerColor = Color.Transparent,
+//                            disabledContainerColor = Color.Transparent,
+//                            errorContainerColor = Color.Transparent
+//                        ),
+//                        label = {
+//                            Text(text = "Password")
+//                        },
+//                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+//                        else PasswordVisualTransformation(),
+//                        singleLine = true,
+//                        trailingIcon = {
+//                            IconButton(
+//                                enabled = !isLoading, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    passwordVisible.value = !passwordVisible.value
+//                                }) {
+//                                Icon(
+//                                    painter = painterResource(
+//                                        if (passwordVisible.value) R.drawable.visibility_off
+//                                        else R.drawable.visibility
+//                                    ), contentDescription = null
+//                                )
+//                            }
+//                        },
+//                        textStyle = TextStyle(textDirection = TextDirection.Content),
+//                        keyboardOptions = KeyboardOptions(
+//                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
+//                        ),
+//                        keyboardActions = KeyboardActions(
+//                            onDone = {
+//                                keyboardController?.hide()
+//                                coroutineScope.launch {
+//                                    signUp(selectedIccid.toString(), username, password)
+//                                    isLoading = true
+//                                }
+//                                focusManager.moveFocus(FocusDirection.Down)
+//                            })
+//                    )
+//                }
+//            }, shape = RoundedCornerShape(2.dp), confirmButton = {
+//                Button(
+//                    enabled = (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) or !firstClick,
+//                    onClick = {
+//                        view.playSoundEffect(SoundEffectConstants.CLICK)
+//                        if (firstClick) {
+//                            signUp(selectedIccid.toString(), username, password)
+//                            isLoading = true
+//                        } else {
+//                            firstClick = true
+//                            if (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) {
+//                                signUp(selectedIccid.toString(), username, password)
+//                                isLoading = true
+//                            }
+//                        }
+//                    },
+//                    shape = RoundedCornerShape(2.dp),
+//                ) {
+//                    if (isLoading) {
+//                        //CircularProgressIndicator(modifier = Modifier.size(24.dp))
+//                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+//
+//                        AndroidView(
+//                            modifier = Modifier.size(24.dp),
+//                            factory = { context ->
+//                                ProgressBar(context).apply {
+//                                    isIndeterminate = true
+//                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
+//                                }
+//                            }
+//                        )
+//                    } else {
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.login),
+//                            contentDescription = null
+//                        )
+//                    }
+//                    Spacer(modifier = Modifier.width(8.dp))
+//                    Text("Sign-Up")
+//                }
+//            }, dismissButton = {
+//                TextButton(
+//                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
+//                        view.playSoundEffect(SoundEffectConstants.CLICK)
+//                        isLoading = false
+//                        showSignUpDialog = false
+//                    }) {
+//                    Text("Cancel")
+//                }
+//            }, modifier = Modifier
+//                .padding(vertical = 16.dp)
+//                .shadow(
+//                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
+//                )
+//        )
+//    }
+//
+//    if (showSignInDialog) {
+//        var username by remember { mutableStateOf("") }
+//        var password by remember { mutableStateOf("") }
+//
+//        val focusManager = LocalFocusManager.current
+//        val passwordVisible = remember { mutableStateOf(false) }
+//        val keyboardController = LocalSoftwareKeyboardController.current
+//        val coroutineScope = rememberCoroutineScope()
+//
+//        val usernameFocusRequester = remember { FocusRequester() }
+//        val passwordFocusRequester = remember { FocusRequester() }
+//
+//        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+//        val usernameSizeError = username.length !in 1..50
+//
+//        val isPasswordError = password.length !in 6..128
+//
+//        var firstClick by remember { mutableStateOf(false) }
+//
+//        AlertDialog(
+//            onDismissRequest = {
+//                if (!isLoading) showSignInDialog = false
+//            }, title = { Text("Sign-In") }, text = {
+//                Column(
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .verticalScroll(rememberScrollState())
+//                ) {
+//                    Text(text = "Enter your username&&password.")
+//
+//                    Spacer(modifier = Modifier.height(8.dp))
+//
+//                    TextField(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+//                        value = username,
+//                        onValueChange = {
+//                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                            username = it
+//                        },
+//                        isError = isUsernameError or usernameSizeError&&firstClick,
+//                        supportingText = {
+//                            Column {
+//                                if (isUsernameError&&firstClick) {
+//                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+//                                }
+//                                if (usernameSizeError&&firstClick) {
+//                                    Text("Username must be less than 50 characters.")
+//                                }
+//                            }
+//                        },
+//                        enabled = !isLoading,
+//                        colors = TextFieldDefaults.colors(
+//                            focusedContainerColor = Color.Transparent,
+//                            unfocusedContainerColor = Color.Transparent,
+//                            disabledContainerColor = Color.Transparent,
+//                            errorContainerColor = Color.Transparent
+//                        ),
+//                        label = { Text("Username") },
+//                        singleLine = true,
+//                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+//                        keyboardActions = KeyboardActions(
+//                            onNext = {
+//                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+//                            })
+//                    )
+//
+//                    TextField(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+//                        value = password,
+//                        onValueChange = {
+//                            view.playSoundEffect(SoundEffectConstants.CLICK)
+//                            password = it
+//                        },
+//                        enabled = !isLoading,
+//                        colors = TextFieldDefaults.colors(
+//                            focusedContainerColor = Color.Transparent,
+//                            unfocusedContainerColor = Color.Transparent,
+//                            disabledContainerColor = Color.Transparent
+//                        ),
+//                        label = {
+//                            Text(text = "Password")
+//                        },
+//                        isError = isPasswordError&&firstClick,
+//                        supportingText = {
+//                            if (isPasswordError&&firstClick) {
+//                                Text("Password must be between 6&&128 characters.")
+//                            }
+//                        },
+//                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
+//                        else PasswordVisualTransformation(),
+//                        singleLine = true,
+//                        trailingIcon = {
+//                            IconButton(
+//                                enabled = !isLoading, onClick = {
+//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+//                                    passwordVisible.value = !passwordVisible.value
+//                                }) {
+//                                Icon(
+//                                    painter = painterResource(
+//                                        if (passwordVisible.value) R.drawable.visibility_off
+//                                        else R.drawable.visibility
+//                                    ), contentDescription = null
+//                                )
+//                            }
+//                        },
+//                        textStyle = TextStyle(textDirection = TextDirection.Content),
+//                        keyboardOptions = KeyboardOptions(
+//                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
+//                        ),
+//                        keyboardActions = KeyboardActions(
+//                            onDone = {
+//                                keyboardController?.hide()
+//                                coroutineScope.launch {
+//                                    signIn(username, password)
+//                                    isLoading = true
+//                                }
+//                                focusManager.moveFocus(FocusDirection.Down)
+//                            })
+//                    )
+//                }
+//            }, shape = RoundedCornerShape(2.dp), confirmButton = {
+//                Button(
+//                    enabled = (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) or !firstClick,
+//                    onClick = {
+//                        view.playSoundEffect(SoundEffectConstants.CLICK)
+//                        if (firstClick) {
+//                            signIn(username, password)
+//                            isLoading = true
+//                        } else {
+//                            firstClick = true
+//                            if (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) {
+//                                signIn(username, password)
+//                                isLoading = true
+//                            }
+//                        }
+//                    },
+//                    shape = RoundedCornerShape(2.dp),
+//                ) {
+//                    if (isLoading) {
+//                        //CircularProgressIndicator(modifier = Modifier.size(24.dp))
+//                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+//
+//                        AndroidView(
+//                            modifier = Modifier.size(24.dp),
+//                            factory = { context ->
+//                                ProgressBar(context).apply {
+//                                    isIndeterminate = true
+//                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
+//                                }
+//                            }
+//                        )
+//                    } else {
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.login),
+//                            contentDescription = null
+//                        )
+//                    }
+//                    Spacer(modifier = Modifier.width(8.dp))
+//                    Text("Sign-In")
+//                }
+//            }, dismissButton = {
+//                TextButton(
+//                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
+//                        view.playSoundEffect(SoundEffectConstants.CLICK)
+//                        isLoading = false
+//                        showSignInDialog = false
+//                    }) {
+//                    Text("Cancel")
+//                }
+//            }, modifier = Modifier
+//                .padding(vertical = 16.dp)
+//                .shadow(
+//                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
+//                )
+//        )
+//    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3427,6 +4346,7 @@ fun MainScreen(
                     .fillMaxWidth(
                         if (expandedScreen) 0.3f else 1f
                     )
+                    .zIndex(1f)
             ) {
 
                 Scaffold(
@@ -3438,42 +4358,42 @@ fun MainScreen(
                     topBar = {
                         TopAppBar(
                             title = {
-                            Text("GChat")
-                        }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    scope.launch {
-                                        drawerState.apply {
-                                            if (isClosed) open() else close()
+                                Text("GChat")
+                            }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                                IconButton(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        scope.launch {
+                                            drawerState.apply {
+                                                if (isClosed) open() else close()
+                                            }
                                         }
-                                    }
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.menu),
-                                    contentDescription = "Menu"
-                                )
-                            }
-                        }, actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    searching = true
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.search),
-                                    contentDescription = "Search"
-                                )
-                            }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.menu),
+                                        contentDescription = "Menu"
+                                    )
+                                }
+                            }, actions = {
+                                IconButton(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        searching = true
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.search),
+                                        contentDescription = "Search"
+                                    )
+                                }
+                            }, colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                                titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                            ), modifier = Modifier.shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
                         )
                     }) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -3625,7 +4545,7 @@ fun MainScreen(
                         //) {
                         //    Icon(
                         //        painter = painterResource(R.drawable.edit),
-                        //        contentDescription = "Accept and Sign-In",
+                        //        contentDescription = "Accept&&Sign-In",
                         //        modifier = Modifier.fillMaxSize(),
                         //        tint = MaterialTheme.colorScheme.onPrimary
                         //    )
@@ -3886,27 +4806,13 @@ fun MainScreen(
 
                     }
                 }
-
-//                if (expandedScreen and covered) {
-//                    Spacer(
-//                        modifier = Modifier
-//                            .fillMaxSize()
-//                            .background(coverColor)
-//                            .clickable(
-//                                indication = null,
-//                                interactionSource = remember { MutableInteractionSource() }) {
-//                            }
-//                    )
-//                }
             }
 
             if (expandedScreen) {
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        //.fillMaxWidth(0.7f)
-                        .fillMaxWidth()
-                        //.align(Alignment.CenterEnd)
+                        .fillMaxSize()
+                        .zIndex(0f)
                         .drawWithContent {
                             drawContent()
                             drawRect(
@@ -3924,10 +4830,6 @@ fun MainScreen(
                         messageList = messageList,
                         seenMessage = seenMessage,
                         getMessagesList = getMessagesList
-                        //                        whatismybackgroundfiltercolor = { color, show ->
-//                            covered = show
-//                            coverColor = color
-//                        }
                     )
                 }
             }
@@ -3949,7 +4851,7 @@ fun AnimatedDropMenu(
     position: Alignment,
     hasBackgroundCover: Boolean,
     tabletView: Boolean = false,
-    whatismybackgroundfiltercolor: (Color, Boolean) -> Unit,
+    whatIsMyBackgroundFilterColor: (Color, Boolean) -> Unit,
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
@@ -3961,7 +4863,7 @@ fun AnimatedDropMenu(
     //val surface = MaterialTheme.colorScheme.surface
     val surface = MenuDefaults.containerColor
 
-    whatismybackgroundfiltercolor(
+    whatIsMyBackgroundFilterColor(
         if (hasBackgroundCover) {
             Color(0xFF000000).copy(
                 alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
@@ -3976,7 +4878,7 @@ fun AnimatedDropMenu(
     LaunchedEffect(
         key1 = hasBackgroundCover, key2 = sizeBtn, key3 = chord
     ) {
-        whatismybackgroundfiltercolor(
+        whatIsMyBackgroundFilterColor(
             if (hasBackgroundCover) {
                 Color(0xFF000000).copy(
                     alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
@@ -4025,7 +4927,7 @@ fun AnimatedDropMenu(
                 .clip(RoundedCornerShape(2.dp))
                 .align(position)
         ) {
-            val canvasmodifier =
+            val canvasModifier =
                 if (sizeBtn / 2 != 24.dp) Modifier
                     .fillMaxSize()
                     .align(Alignment.Center)
@@ -4036,12 +4938,12 @@ fun AnimatedDropMenu(
                     .align(Alignment.Center)
 
             Canvas(
-                modifier = canvasmodifier
+                modifier = canvasModifier
             ) {
                 val radius = sizeBtn.toPx() / 2
 
-                //Alignment.BottomStart -> buttomLeftmenu
-                //Alignment.TopEnd -> dropdownmenu
+                //Alignment.BottomStart -> bottomLeft Menu
+                //Alignment.TopEnd -> dropdown Menu
 
                 val centerX = when (position) {
                     Alignment.BottomStart -> size.width * ratioX + 24.dp.toPx()
@@ -4086,7 +4988,7 @@ fun ChatScreen(
     messageList: List<MessageItem>,
     seenMessage: (String, Int) -> Unit,
     getMessagesList: (String) -> Unit
-    //whatismybackgroundfiltercolor: (Color, Boolean) -> Unit
+    //whatIsMyBackgroundFilterColor: (Color, Boolean) -> Unit
 ) {
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
@@ -4095,25 +4997,23 @@ fun ChatScreen(
     }
 
     var renderValue by remember { mutableIntStateOf(5) }
-    var isExpandedAttachment by remember { mutableStateOf(false) }
+    //var isExpandedAttachment by remember { mutableStateOf(false) }
     //var isExpandedEmoji by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    val onSurface = MaterialTheme.colorScheme.onSurface
 
-    var covered by remember { mutableStateOf(false) }
     //var coverColor by remember { mutableStateOf(Color.Transparent) }
-    val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
+    //val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
 
-    var coverColor by rememberSaveable(
-        stateSaver = colorSaver
-    ) { mutableStateOf(Color.Transparent) }
+    //var coverColor by rememberSaveable(
+    //    stateSaver = colorSaver
+    //) { mutableStateOf(Color.Transparent) }
 
     val view = LocalView.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column {
-            AdvancedDynamicLightEffectOptim(
-                modifier = Modifier.weight(1f), renderValue = renderValue
+            AdvancedDynamicLightEffectOptimized(
+                modifier = Modifier.fillMaxSize(), renderValue = renderValue
             )
         }
 
@@ -4128,67 +5028,67 @@ fun ChatScreen(
 
                     TopAppBar(
                         title = {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                //.clip(HalfCutCircleShape())
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(bounded = false)
-                                ) {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }, verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
+                            Row(
                                 modifier = Modifier
-                                    //.padding(16.dp)
-                                    //.fillMaxHeight()
-                                    .height(48.dp)
-                                    .aspectRatio(1f)
-                                    //.shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape), shape = CircleShape
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    //.clip(HalfCutCircleShape())
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false)
+                                    ) {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    }, verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Image(
-                                    painter = painterResource(R.drawable.profile),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    contentScale = ContentScale.Crop
+                                Surface(
+                                    modifier = Modifier
+                                        //.padding(16.dp)
+                                        //.fillMaxHeight()
+                                        .height(48.dp)
+                                        .aspectRatio(1f)
+                                        //.shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+                                        .clip(CircleShape), shape = CircleShape
+                                ) {
+                                    Image(
+                                        painter = painterResource(R.drawable.profile),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = id, modifier = Modifier.weight(1f))
+                            }
+                        }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    back()
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
                                 )
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = id, modifier = Modifier.weight(1f))
-                        }
-                    }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                back()
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_back),
-                                contentDescription = "Menu"
-                            )
-                        }
-                    }, actions = {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.menu_dots),
-                                contentDescription = "Search"
-                            )
-                        }
-                    }, colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                    ), modifier = Modifier.shadow(
-                        elevation = 4.dp, shape = RectangleShape, clip = false
-                    )
+                        }, actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.menu_dots),
+                                    contentDescription = "Search"
+                                )
+                            }
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
                     )
                 }
             },
@@ -4209,28 +5109,21 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        items(items = messageList, key = { it.id } // یک id یکتا لازم است
-                            // این id تو چت یکتا هست برای همین موقع سین باید پاس بدیم که برای کدوم چت هست
-                        ) { item ->
-
-                            //var visible by remember { mutableStateOf(false) }
-
+                        items(items = messageList, key = { it.id }) { item ->
                             LaunchedEffect(Unit) {
-                                //visible = true
-                                if (!item.seened) {
+                                if (!item.seen && !item.myMessage) {
                                     seenMessage(id, item.id)
                                 }
-                                // پیام هایی که خودت نوشتی رو سین زدی!
                             }
 
                             AnimatedVisibility(
-                                visible = true/*visible*/,
+                                visible = true,
                                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
                             ) {
                                 Message(
                                     isMe = item.myMessage,
                                     message = item.text,
-                                    seened = item.seened,
+                                    seen = item.seen,
                                     timestamp = item.date
                                 )
                             }
@@ -4345,47 +5238,47 @@ fun ChatScreen(
                     }
                 }
 
-                AnimatedDropMenu(
-                    modifier = Modifier.padding(innerPadding),
-                    width = 224.dp,
-                    height = 112.dp,
-                    chord = 250.dp,
-                    isExpanded = isExpandedAttachment,
-                    close = { isExpandedAttachment = false },
-                    ratioX = 0f,
-                    ratioY = 1f,
-                    position = Alignment.BottomStart,
-                    hasBackgroundCover = true,
-                    whatismybackgroundfiltercolor = { color, show ->
-                        covered = show
-                        coverColor = color
-                    }) {
-                    Column {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "Photos and videos") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.photo), contentDescription = null
-                            )
-                        }, trailingIcon = { }, enabled = true
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "File") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.folder), contentDescription = null
-                            )
-                        }, trailingIcon = { }, enabled = true
-                        )
-                    }
-                }
+                //AnimatedDropMenu(
+                //    modifier = Modifier.padding(innerPadding),
+                //    width = 224.dp,
+                //    height = 112.dp,
+                //    chord = 250.dp,
+                //    isExpanded = isExpandedAttachment,
+                //    close = { isExpandedAttachment = false },
+                //    ratioX = 0f,
+                //    ratioY = 1f,
+                //    position = Alignment.BottomStart,
+                //    hasBackgroundCover = true,
+                //    whatIsMyBackgroundFilterColor = { color, show ->
+                //        covered = show
+                //        coverColor = color
+                //    }) {
+                //    Column {
+                //        Spacer(
+                //            modifier = Modifier
+                //                .fillMaxWidth()
+                //                .height(8.dp)
+                //        )
+                //        DropdownMenuItem(
+                //            text = { Text(text = "Photos&&videos") }, onClick = {
+                //                view.playSoundEffect(SoundEffectConstants.CLICK)
+                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                //                Icon(
+                //                    painterResource(R.drawable.photo), contentDescription = null
+                //                )
+                //            }, trailingIcon = { }, enabled = true
+                //        )
+                //        DropdownMenuItem(
+                //            text = { Text(text = "File") }, onClick = {
+                //                view.playSoundEffect(SoundEffectConstants.CLICK)
+                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                //                Icon(
+                //                    painterResource(R.drawable.folder), contentDescription = null
+                //                )
+                //            }, trailingIcon = { }, enabled = true
+                //        )
+                //    }
+                //}
 
                 //AnimatedDropMenu(
                 //    modifier = Modifier.padding(innerPadding),
@@ -4398,7 +5291,7 @@ fun ChatScreen(
                 //    ratioY = 0.98f,
                 //    position = Alignment.BottomStart,
                 //    hasBackgroundCover = true,
-                //    whatismybackgroundfiltercolor = { color, show ->
+                //    whatIsMyBackgroundFilterColor = { color, show ->
                 //        covered = show
                 //        coverColor = color
                 //    }) {
@@ -4409,7 +5302,7 @@ fun ChatScreen(
                 //                .height(8.dp)
                 //        )
                 //        DropdownMenuItem(
-                //            text = { Text(text = "Photos and videos") }, onClick = {
+                //            text = { Text(text = "Photos&&videos") }, onClick = {
                 //                view.playSoundEffect(SoundEffectConstants.CLICK)
                 //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
                 //                Icon(
@@ -4431,33 +5324,33 @@ fun ChatScreen(
             }
         }
 
-        if (covered) {
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(
-                        64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                    )
-                    //top app bar size + notification bar size
-                //.requiredHeight(64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                .background(coverColor)
-                    .align(Alignment.TopCenter)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
-                        //if (isExpandedEmoji) {
-                        //    isExpandedEmoji = false
-                        //} else
-                        if (isExpandedAttachment) {
-                            isExpandedAttachment = false
-                        }
-                    })
-        }
+        //if (covered) {
+        //    Spacer(
+        //        modifier = Modifier
+        //            .fillMaxWidth()
+        //            .height(
+        //                64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        //            )
+        //            //top app bar size + notification bar size
+        //            //.requiredHeight(64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+        //            .background(coverColor)
+        //            .align(Alignment.TopCenter)
+        //            .clickable(
+        //                indication = null,
+        //                interactionSource = remember { MutableInteractionSource() }) {
+        //                if (isExpandedEmoji) {
+        //                    isExpandedEmoji = false
+        //                } else if (isExpandedAttachment) {
+        //                    isExpandedAttachment = false
+        //                }
+        //            }
+        //    )
+        //}
     }
 }
 
 @Composable
-fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) {
+fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -4465,63 +5358,17 @@ fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) 
             .padding(bottom = 8.dp),
         contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Surface(
-            color = if (isMe) Color(0xFFEFFEDD/*DCF8C6*/) else Color.White,
-            shape = RoundedCornerShape(
-                topStart = 2.dp,
-                topEnd = 2.dp,
-                bottomStart = if (isMe) 2.dp else 2.dp,
-                bottomEnd = if (isMe) 2.dp else 2.dp
-            )
-        ) {
-            Box(modifier = Modifier.padding(8.dp)) {
-                Text(
-                    text = message,
-                    modifier = Modifier.padding(end = if (isMe and seened) 16.dp else 0.dp)
-                )
-
-                if (isMe) {
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomEnd),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (seened) {
-                            Icon(
-                                painter = painterResource(R.drawable.double_check),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-//            Column(
-//                modifier = Modifier.padding(8.dp),
-//                verticalArrangement = Arrangement.spacedBy(8.dp),
-//                horizontalAlignment = Alignment.End
-//            ) {
-//                Text(
-//                    text = message
-//                )
-//                if (seened and isMe) {
-//                    Icon(
-//                        painterResource(R.drawable.double_check),
-//                        contentDescription = null,
-//                        modifier = Modifier.size(16.dp)
-//                    )
-//                }
-//            }
-        }
         var lineCount by remember(message) { mutableIntStateOf(0) }
         val formatMessageTime = formatMessageTime(timestamp)
         var timeWidth by remember { mutableStateOf(0.dp) }
         val density = LocalDensity.current
         Surface(
             color = if (isMe) Color(0xFFEFFEDD) else Color.White, shape = RoundedCornerShape(
-                topStart = 2.dp,
-                topEnd = 2.dp,
-                bottomStart = if (isMe) 2.dp else 2.dp,
-                bottomEnd = if (isMe) 2.dp else 2.dp
+                size = 2.dp
+                //topStart = 2.dp,
+                //topEnd = 2.dp,
+                //bottomStart = if (isMe) 2.dp else 2.dp,
+                //bottomEnd = if (isMe) 2.dp else 2.dp
             )
         ) {
             Box(
@@ -4530,8 +5377,8 @@ fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) 
 
                 Text(
                     text = message, modifier = Modifier.padding(
-                        end = if (isMe && lineCount == 1 && seened) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
-                        bottom = if (isMe && lineCount > 1 && seened) 24.dp else 0.dp
+                        end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                        bottom = if (isMe && lineCount > 1 && seen) 24.dp else 0.dp
                     ), onTextLayout = {
                         if (lineCount == 0) {
                             lineCount = it.lineCount
@@ -4550,7 +5397,7 @@ fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) 
                             timeWidth = with(density) { it.size.width.toDp() }
                         }
                     )
-                    if (isMe and seened) {
+                    if (isMe && seen) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             painter = painterResource(R.drawable.double_check),
@@ -4560,192 +5407,30 @@ fun Message(isMe: Boolean, message: String, seened: Boolean, timestamp: String) 
                         )
                     }
                 }
-                //Row(
-                //    modifier = Modifier.align(Alignment.BottomEnd),
-                //    verticalAlignment = Alignment.CenterVertically
-                //) {
-                //    Text(
-                //        text = timestamp,
-                //        style = MaterialTheme.typography.labelSmall.copy(
-                //            fontStyle = FontStyle.Normal,
-                //            color = MaterialTheme.colorScheme.onSurfaceVariant
-                //        )
-                //    )
-                //
-                //    if (isMe && seened) {
-                //        Spacer(modifier = Modifier.width(2.dp))
-                //
-                //        Icon(
-                //            painter = painterResource(R.drawable.double_check),
-                //            contentDescription = null,
-                //            modifier = Modifier.size(15.dp),
-                //            tint = MaterialTheme.colorScheme.primary
-                //        )
-                //    }
-                //}
             }
         }
-//        Surface(
-//            color = if (isMe) Color(0xFFEFFEDD) else Color.White,
-//            shape = RoundedCornerShape(2.dp)
-//        ) {
-//
-//            SubcomposeLayout(
-//                modifier = Modifier.padding(8.dp)
-//            ) { constraints ->
-//
-//                var textLayout: TextLayoutResult? = null
-//
-//                // متن
-//                val textPlaceable = subcompose("text") {
-//                    Text(
-//                        text = message,
-//                        onTextLayout = { textLayout = it }
-//                    )
-//                }.first().measure(constraints)
-//
-//                // ساعت
-//                val statusPlaceable = subcompose("status") {
-//                    Row(
-//                        verticalAlignment = Alignment.CenterVertically
-//                    ) {
-//                        Text(
-//                            text = timestamp,
-//                            fontSize = 12.sp
-//                        )
-//
-//                        if (isMe && seened) {
-//                            Icon(
-//                                painter = painterResource(R.drawable.double_check),
-//                                contentDescription = null,
-//                                modifier = Modifier.size(16.dp)
-//                            )
-//                        }
-//                    }
-//                }.first().measure(constraints)
-//
-//                val gap = 6.dp.roundToPx()
-//
-//                val fits = textLayout?.let { layout ->
-//                    val last = layout.lineCount - 1
-//
-//                    val lastLineWidth =
-//                        layout.getLineRight(last) - layout.getLineLeft(last)
-//
-//                    val freeSpace =
-//                        textPlaceable.width - lastLineWidth
-//
-//                    freeSpace >= statusPlaceable.width + gap
-//                } ?: false
-//
-//                val width = maxOf(
-//                    textPlaceable.width,
-//                    statusPlaceable.width
-//                )
-//
-//                val height =
-//                    if (fits) {
-//                        textPlaceable.height
-//                    } else {
-//                        textPlaceable.height +
-//                                statusPlaceable.height +
-//                                gap
-//                    }
-//
-//                layout(width, height) {
-//
-//                    textPlaceable.place(0, 0)
-//
-//                    if (fits) {
-//                        statusPlaceable.place(
-//                            x = width - statusPlaceable.width,
-//                            y = textPlaceable.height - statusPlaceable.height
-//                        )
-//                    } else {
-//                        statusPlaceable.place(
-//                            x = width - statusPlaceable.width,
-//                            y = textPlaceable.height + gap
-//                        )
-//                    }
-//                }
-//            }
-//        }
     }
 }
 
-// تاریخ هجری شمسی و هجری قمری اضافه بشه
-fun formatMessageTime(timestamp: String): String {
-    val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
 
-    val today = LocalDate.now()
-    val date = dateTime.toLocalDate()
+fun convertDigits(text: String, digits: CharArray): String {
+    require(digits.size == 10) { "digits must contain exactly 10 characters." }
 
-    return when {
-        date == today -> {
-            dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-        }
+    val builder = StringBuilder(text.length)
 
-        date == today.minusDays(1) -> {
-            "Yesterday, ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
-
-        date.isAfter(today.minusDays(7)) -> {
-            val dayName = when (date.dayOfWeek.value) {
-                1 -> "Monday"
-                2 -> "Tuesday"
-                3 -> "Wednesday"
-                4 -> "Thursday"
-                5 -> "Friday"
-                6 -> "Saturday"
-                7 -> "Sunday"
-                else -> ""
-            }
-            "$dayName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
-
-        date.year == today.year -> {
-            val monthName = when (date.monthValue) {
-                1 -> "January"
-                2 -> "February"
-                3 -> "March"
-                4 -> "April"
-                5 -> "May"
-                6 -> "June"
-                7 -> "July"
-                8 -> "August"
-                9 -> "September"
-                10 -> "October"
-                11 -> "November"
-                12 -> "December"
-                else -> ""
-            }
-            "${date.dayOfMonth} $monthName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
-
-        else -> {
-            val monthName = when (date.monthValue) {
-                1 -> "January"
-                2 -> "February"
-                3 -> "March"
-                4 -> "April"
-                5 -> "May"
-                6 -> "June"
-                7 -> "July"
-                8 -> "August"
-                9 -> "September"
-                10 -> "October"
-                11 -> "November"
-                12 -> "December"
-                else -> ""
-            }
-            "${date.dayOfMonth} $monthName ${date.year}، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+    for (ch in text) {
+        if (ch in '0'..'9') {
+            builder.append(digits[ch - '0'])
+        } else {
+            builder.append(ch)
         }
     }
+
+    return builder.toString()
 }
 
 @Composable
-fun AdvancedDynamicLightEffectOptim(
+fun AdvancedDynamicLightEffectOptimized(
     modifier: Modifier = Modifier, renderValue: Int = 5
 ) {
     val targetAngle1 = renderValue * 36f
@@ -4812,171 +5497,5 @@ fun AdvancedDynamicLightEffectOptim(
                 ), radius = radius, center = center, blendMode = BlendMode.Screen
             )
         }
-    }
-}
-
-class SmsReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        // بررسی امنیتی برای Broadcast
-        if (!isValidBroadcast(intent)) {
-            return
-        }
-
-        // بررسی اینکه اپلیکیشن پیش‌فرض SMS هست
-        if (!isDefaultSmsApp(context)) {
-            return
-        }
-
-        // کد اصلی شما اینجا
-        handleSms(context, intent)
-    }
-
-    private fun isValidBroadcast(intent: Intent): Boolean {
-        // بررسی اینکه intent از سیستم هست نه از اپلیکیشن دیگه
-        return intent.action == "android.provider.Telephony.SMS_DELIVER"
-    }
-
-    private fun isDefaultSmsApp(context: Context): Boolean {
-        val packageName = context.packageName
-        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
-        return packageName == defaultSms
-    }
-
-    private fun handleSms(context: Context, intent: Intent) {
-        // منطق دریافت SMS
-    }
-}
-
-class MmsReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (!isValidBroadcast(intent)) {
-            return
-        }
-
-        if (!isDefaultSmsApp(context)) {
-            return
-        }
-
-        handleMms(context, intent)
-    }
-
-    private fun isValidBroadcast(intent: Intent): Boolean {
-        return intent.action == "android.provider.Telephony.WAP_PUSH_DELIVER"
-    }
-
-    private fun isDefaultSmsApp(context: Context): Boolean {
-        val packageName = context.packageName
-        val defaultSms = Telephony.Sms.getDefaultSmsPackage(context)
-        return packageName == defaultSms
-    }
-
-    private fun handleMms(context: Context, intent: Intent) {
-        // منطق دریافت MMS
-    }
-}
-
-class HeadlessSmsSendService : Service() {
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // بررسی اینکه اپلیکیشن پیش‌فرض SMS هست
-        if (!isDefaultSmsApp()) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
-
-        // بررسی مجوزها
-        if (!checkPhonePermission() || !checkSmsAppRole()) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
-
-        // پردازش intent
-        intent?.let {
-            handleSendSms(it)
-        }
-
-        stopSelf(startId)
-        return START_NOT_STICKY
-    }
-
-    private fun isDefaultSmsApp(): Boolean {
-        val packageName = packageName
-        val defaultSms = Telephony.Sms.getDefaultSmsPackage(this)
-        return packageName == defaultSms
-    }
-
-    private fun checkPhonePermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this, Manifest.permission.READ_PHONE_STATE
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun checkSmsAppRole(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = getSystemService(RoleManager::class.java)
-            roleManager.isRoleHeld(RoleManager.ROLE_SMS)
-        } else {
-            true
-        }
-    }
-
-    private fun handleSendSms(intent: Intent) {
-        // منطق ارسال SMS با محدودیت‌های امنیتی
-        // فقط به مخاطبین اجازه بدید یا شماره‌های خاص
-    }
-}
-
-fun getICCIDList(context: Context): List<String> {
-    if (ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_PHONE_STATE
-        ) != PackageManager.PERMISSION_GRANTED
-    ) {
-        return emptyList()
-    }
-
-    return try {
-        val subscriptionManager =
-            context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as SubscriptionManager
-        val subscriptionInfoList = subscriptionManager.activeSubscriptionInfoList
-
-        if (subscriptionInfoList.isNullOrEmpty()) {
-            return emptyList()
-        }
-
-        val maxSlotIndex = subscriptionInfoList.maxOfOrNull { it.simSlotIndex } ?: -1
-        if (maxSlotIndex < 0) return emptyList()
-
-        val iccids = MutableList(maxSlotIndex + 1) { "" }
-
-        for (subscriptionInfo in subscriptionInfoList) {
-            val iccid = subscriptionInfo.iccId ?: ""
-            val slotIndex = subscriptionInfo.simSlotIndex
-
-            if (slotIndex in iccids.indices) {
-                iccids[slotIndex] = iccid
-            }
-        }
-
-        iccids
-    } catch (_: SecurityException) {
-        emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
-}
-
-private fun checkPhonePermission(context: Context): Boolean {
-    return ContextCompat.checkSelfPermission(
-        context, Manifest.permission.READ_PHONE_STATE
-    ) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun checkSmsAppRole(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val roleManager = context.getSystemService(RoleManager::class.java)
-        roleManager.isRoleHeld(RoleManager.ROLE_SMS)
-    } else {
-        true
     }
 }
