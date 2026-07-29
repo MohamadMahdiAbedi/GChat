@@ -2,15 +2,18 @@ package ir.gchat
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 fun formatMessageTime(timestamp: String): String {
     if (timestamp.isBlank()) return ""
 
     val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
 
-    val today = LocalDate.now()
+    val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
+        .atZone(ZoneOffset.UTC)
+
+    val today = LocalDate.now(ZoneOffset.UTC)
     val date = dateTime.toLocalDate()
 
     return when {
@@ -113,7 +116,8 @@ fun formatMessageTimeJalali(timestamp: String): String {
 
     val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
-    val today = LocalDate.now()
+        .atZone(ZoneOffset.UTC)
+    val today = LocalDate.now(ZoneOffset.UTC)
     val yesterday = today.minusDays(1)
     val time = dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 
@@ -268,7 +272,8 @@ fun formatMessageTimeHijri(timestamp: String): String {
 
     val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
-    val today = LocalDate.now()
+        .atZone(ZoneOffset.UTC)
+    val today = LocalDate.now(ZoneOffset.UTC)
     val yesterday = today.minusDays(1)
     val time = dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
 

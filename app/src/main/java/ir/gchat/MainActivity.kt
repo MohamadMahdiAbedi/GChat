@@ -4,11 +4,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
-import android.app.Application
 import android.app.role.RoleManager
-import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -17,7 +16,6 @@ import android.view.SoundEffectConstants
 import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -44,6 +42,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -63,7 +62,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -115,6 +116,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -130,6 +133,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -161,688 +165,69 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import io.github.om252345.composemeshgradient.MeshGradient
+import io.github.om252345.composemeshgradient.rememberMeshGradientState
 import ir.gchat.ui.theme.GChatTheme
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.WebSocket
-import okhttp3.WebSocketListener
-import org.json.JSONObject
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.time.Duration.Companion.milliseconds
-
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
-
-val ICCID_KEY = stringPreferencesKey("iccid")
-val LOGGED_IN_STATUS_KEY = booleanPreferencesKey("loggedIn")
-val THEME_KEY = intPreferencesKey("theme")
-val SERVERIP_KEY = stringPreferencesKey("serverIP")
-val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
-val USERNAME_KEY = stringPreferencesKey("username")
-val PASSWORD_KEY = stringPreferencesKey("password")
-
-data class Contact(
-    val id: String = "",
-    val name: String = "",
-    val profilePicture: String = "",
-    val lastMessageText: String = "",
-    val lastMessageDate: String = "",
-    val unreadMessages: Int = 0,
-    val connectionStatus: Boolean = false,
-)
-
-data class SearchEntity(
-    val username: String, val isOnline: Boolean
-)
-
-data class MessageItem(
-    val text: String = "",
-    val id: Int = 0,
-    val date: String = "",
-    val myMessage: Boolean = false,
-    val seen: Boolean = false
-)
-
-class SocketViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val context = getApplication<Application>()
-
-    var webSocket: WebSocket? = null
-    private val client = OkHttpClient()
-
-    private val _loggedIn = MutableStateFlow(
-        //runBlocking { context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first() }
-        false
-    )
-    val loggedIn: StateFlow<Boolean> = _loggedIn.asStateFlow()
-
-    private val _oldLoggedIn = MutableStateFlow(
-        //false
-        runBlocking { context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first() })
-    val oldLoggedIn: StateFlow<Boolean> = _oldLoggedIn.asStateFlow()
-
-    var savedUsername = runBlocking {
-        context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
-    }
-    var savedPassword =
-        runBlocking { context.dataStore.data.map { it[PASSWORD_KEY] ?: "" }.first() }
-
-    private val _serverIP = MutableStateFlow(
-        //"127.0.0.1:8765"
-        runBlocking { context.dataStore.data.map { it[SERVERIP_KEY] ?: "127.0.0.1:8765" }.first() })
-    val serverIP: StateFlow<String> = _serverIP.asStateFlow()
-
-    //init {
-    //viewModelScope.launch {
-    //context.dataStore.data.collect { preferences ->
-    //_serverIP.value = preferences[SERVERIP_KEY] ?: "127.0.0.1:8765"
-    //_oldLoggedIn.value = preferences[LOGGED_IN_STATUS_KEY] ?: false
-    //}
-    //}
-    //}
-
-    //private val _device = MutableStateFlow(
-    //    runBlocking { context.dataStore.data.map { it[DEVICE_TYPE_KEY] ?: 2 }.first() })
-    //val device: StateFlow<Int> = _device.asStateFlow()
-
-    // 0 -> success
-    // 1 -> iccid already exist
-    // 2 -> username already exist
-    // 3 -> password is incorrect
-    // 4 -> untitled error
-    // 5 -> username not found
-    // 6 -> invalid input(limit error)
-    private val _loginError = MutableStateFlow(0)
-    val loginError: StateFlow<Int> = _loginError.asStateFlow()
-
-    private val _chatList = MutableStateFlow(emptyList<Contact>())
-    val chatList: StateFlow<List<Contact>> = _chatList.asStateFlow()
-
-    private val _contactSearchList = MutableStateFlow(emptyList<SearchEntity>())
-    val contactSearchList: StateFlow<List<SearchEntity>> = _contactSearchList.asStateFlow()
-
-    private val _messageList = MutableStateFlow(emptyList<MessageItem>())
-    val messageList: StateFlow<List<MessageItem>> = _messageList.asStateFlow()
-
-    private var openedChat = MutableStateFlow("")
-
-    fun connect() {
-
-        if (webSocket != null) {
-            return
-        }
-
-        val request = Request.Builder().url("ws://${_serverIP.value}").build()
-
-        webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
-                viewModelScope.launch {
-                    try {
-                        if (_oldLoggedIn.value/*context.dataStore.data.map { it[LOGGED_IN_STATUS_KEY] ?: false }.first()*/) {
-                            webSocket.send(
-                                """
-                                {
-                                    "type": "signin",
-                                    "username": "$savedUsername",
-                                    "password": "$savedPassword"
-                                }
-                            """.trimIndent()
-                            )
-                        }
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                viewModelScope.launch {
-                    try {
-                        val jsonObject = JSONObject(text)
-                        val type = jsonObject.getString("type")
-                        //val message = jsonObject.getString("message")
-
-                        when (type) {
-                            "signup_response" -> {
-                                val message = jsonObject.getString("status")
-                                when (message) {
-                                    "success" -> {
-                                        _loginError.value = 0
-                                        _oldLoggedIn.value = true
-                                        _loggedIn.value = true
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = true
-                                        }
-                                    }
-
-                                    "iccid_error" -> {
-                                        _loginError.value = 1
-                                        Toast.makeText(
-                                            context, "ICCID already exists", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "username_error" -> {
-                                        _loginError.value = 2
-                                        Toast.makeText(
-                                            context, "Username already exists", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "error" -> {
-                                        _loginError.value = 4
-                                        Toast.makeText(
-                                            context, "Untitled error", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "invalid_input" -> {
-                                        _loginError.value = 6
-                                        Toast.makeText(
-                                            context, "Invalid input size", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-                                }
-                            }
-
-                            "signin_response" -> {
-                                val message = jsonObject.getString("status")
-                                when (message) {
-                                    "success" -> {
-                                        _loginError.value = 0
-                                        _oldLoggedIn.value = true
-                                        _loggedIn.value = true
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = true
-                                        }
-                                    }
-
-                                    "password_error" -> {
-                                        _loginError.value = 3
-                                        Toast.makeText(
-                                            context, "Password is incorrect", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "error" -> {
-                                        _loginError.value = 4
-                                        Toast.makeText(
-                                            context, "Untitled error", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "username_error" -> {
-                                        _loginError.value = 5
-                                        Toast.makeText(
-                                            context, "Username not found", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-
-                                    "invalid_input" -> {
-                                        _loginError.value = 6
-                                        Toast.makeText(
-                                            context, "Invalid input size", Toast.LENGTH_SHORT
-                                        ).show()
-                                        _oldLoggedIn.value = false
-                                        _loggedIn.value = false
-                                        context.dataStore.edit { preferences ->
-                                            preferences[LOGGED_IN_STATUS_KEY] = false
-                                        }
-                                    }
-                                }
-                            }
-
-                            "search_user_response" -> {
-                                _contactSearchList.value = emptyList<SearchEntity>()
-                                if (jsonObject.getString("status") == "success") {
-                                    val results = jsonObject.getJSONArray("results")
-                                    for (i in 0 until results.length()) {
-                                        val item = results.getJSONObject(i)
-                                        //خودت رو نشون نده
-                                        if (item.getString("username") == savedUsername) {
-                                            continue
-                                        }
-                                        _contactSearchList.value += SearchEntity(
-                                            username = item.getString("username"),
-                                            isOnline = item.getBoolean("online"),
-                                        )
-                                    }
-                                } else {
-                                    Toast.makeText(context, "Search error", Toast.LENGTH_SHORT)
-                                        .show()
-                                }
-                            }
-
-                            "get_dms_response" -> {
-                                _messageList.value = emptyList<MessageItem>()
-                                if (jsonObject.getString("status") == "success") {
-                                    val results = jsonObject.getJSONArray("messages")
-                                    for (i in 0 until results.length()) {
-                                        val item = results.getJSONObject(i)
-
-                                        _messageList.value += MessageItem(
-                                            text = item.getString("content"),
-                                            id = item.getInt("id"),
-                                            myMessage = item.getString("sender") == savedUsername,
-                                            date = item.getString("timestamp"),
-                                            seen = item.getBoolean("read")
-                                        )
-                                    }
-                                } else {
-                                    Toast.makeText(
-                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-
-                            "get_conversations_response" -> {
-                                _chatList.value = emptyList<Contact>()
-                                if (jsonObject.getString("status") == "success") {
-                                    val results = jsonObject.getJSONArray("conversations")
-                                    for (i in 0 until results.length()) {
-                                        val item = results.getJSONObject(i)
-
-                                        _chatList.value += Contact(
-                                            id = item.getString("with"),
-                                            name = item.getString("with"),
-                                            lastMessageText = item.getString("last_message"),
-                                            lastMessageDate = item.getString("last_timestamp"),
-                                            unreadMessages = item.getInt("unread_count")
-                                        )
-                                    }
-                                } else {
-                                    Toast.makeText(
-                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-
-                            "new_dm" -> {
-                                getConversations()
-                                if (jsonObject.getString("sender") == openedChat.value) {
-                                    //هندل بدون رفرش کامل
-                                    //_messageList.value += MessageItem(
-                                    //    text = jsonObject.getString("content"),
-                                    //    myMessage = false,
-                                    //    date = jsonObject.getString("timestamp"),
-                                    //    seen = jsonObject.getBoolean("read")
-                                    //)
-                                    getMessagesList(openedChat.value)
-                                }
-                            }
-
-                            "mark_read_response" -> {
-                                // اگر سین نخورده بود یه بار دیگه سین بزن
-                                getConversations()
-                                getMessagesList(openedChat.value)
-                            }
-                        }
-                    } catch (_: Exception) {
-                    }
-                }
-            }
-
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                webSocket.cancel()
-                //webSocket.close(1000, "Normal Closure")
-                this@SocketViewModel.webSocket = null
-                _loggedIn.value = false
-                viewModelScope.launch {
-                    delay(1000.milliseconds)
-                    connect()
-                }
-            }
-
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.cancel()
-                //webSocket.close(1000, "Normal Closure")
-                this@SocketViewModel.webSocket = null
-                _loggedIn.value = false
-                viewModelScope.launch {
-                    delay(1000.milliseconds)
-                    connect()
-                }
-            }
-        })
-    }
-
-    fun signIn(username: String, password: String) {
-        viewModelScope.launch {
-            try {
-                savedUsername = username
-                context.dataStore.edit { preferences ->
-                    preferences[USERNAME_KEY] = username
-                }
-
-                savedPassword = password
-                context.dataStore.edit { preferences ->
-                    preferences[PASSWORD_KEY] = password
-                }
-
-                webSocket?.send(
-                    """
-                    {
-                        "type": "signin",
-                        "username": "$username",
-                        "password": "$password"
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    fun signUp(iccid: String, username: String, password: String) {
-        viewModelScope.launch {
-            try {
-                context.dataStore.edit { preferences ->
-                    preferences[ICCID_KEY] = iccid
-                }
-
-                savedUsername = username
-                context.dataStore.edit { preferences ->
-                    preferences[USERNAME_KEY] = username
-                }
-
-                savedPassword = password
-                context.dataStore.edit { preferences ->
-                    preferences[PASSWORD_KEY] = password
-                }
-
-                webSocket?.send(
-                    """
-                    {
-                        "type": "signup",
-                        "iccid": "$iccid",
-                        "username": "$username",
-                        "password": "$password"
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    fun setServerIP(serverIP: String) {
-        _serverIP.value = serverIP
-        webSocket?.cancel()
-        //webSocket.close(1000, "Normal Closure")
-        this@SocketViewModel.webSocket = null
-        _loggedIn.value = false
-        connect()
-
-        viewModelScope.launch {
-            try {
-                context.dataStore.edit { preferences ->
-                    preferences[SERVERIP_KEY] = serverIP
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    fun searchUsername(username: String) {
-        viewModelScope.launch {
-            try {
-                webSocket?.send(
-                    """
-                    {
-                        "type": "search_user",
-                        "username": "$username"
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-
-            }
-        }
-    }
-
-    fun clearSearchMemory() {
-        _contactSearchList.value = emptyList<SearchEntity>()
-    }
-
-    fun logout() {
-        webSocket?.cancel()
-        //webSocket.close(1000, "Normal Closure")
-        this@SocketViewModel.webSocket = null
-        viewModelScope.launch {
-            _oldLoggedIn.value = false
-            _loggedIn.value = false
-            context.dataStore.edit { preferences ->
-                preferences[LOGGED_IN_STATUS_KEY] = false
-            }
-            connect()
-        }
-    }
-
-    fun sendMessage(contact: String, message: String) {
-        _messageList.value += MessageItem(text = message, myMessage = true)
-        viewModelScope.launch {
-            try {
-                webSocket?.send(
-                    """
-                    {
-                        "type": "send_dm",
-                        "recipient": "$contact",
-                        "content": "$message"
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-
-            }
-        }
-        //getConversations()
-        getMessagesList(contact)
-    }
-
-    fun getConversations() {
-        viewModelScope.launch {
-            try {
-                webSocket?.send(
-                    """
-                        {
-                            "type": "get_conversations"
-                        }
-                        """.trimIndent()
-                )
-            } catch (_: Exception) {
-
-            }
-        }
-    }
-
-    fun getMessagesList(contact: String) {
-        //اینجا احتمالا یه باگ با شرف داریم
-        openedChat.value = contact
-        getConversations()
-        viewModelScope.launch {
-            try {
-                webSocket?.send(
-                    """
-                    {
-                        "type": "get_dms",
-                        "with": "$contact",
-                        "limit": 50
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-
-            }
-        }
-    }
-
-    fun seenMessage(contact: String, id: Int) {
-        viewModelScope.launch {
-            try {
-                webSocket?.send(
-                    """
-                    {
-                        "type": "mark_read",
-                        "with": "$contact",
-                        "id": $id
-                    }
-                    """.trimIndent()
-                )
-            } catch (_: Exception) {
-
-            }
-        }
-    }
-}
-
-class MainViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val context = getApplication<Application>()
-
-//    private val _theme = MutableStateFlow(runBlocking {
-//        context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
-//    }) // 0: System, 1: Dark, 2: Light
-//    val theme: StateFlow<Int> = _theme.asStateFlow()
-
-    private val _theme = MutableStateFlow(0)
-    val theme: StateFlow<Int> = _theme.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            _theme.value = context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
-        }
-    }
-
-    fun setTheme() {
-        _theme.value = when (_theme.value) {
-            0 -> 1 // System -> Dark
-            1 -> 2 // Dark -> Light
-            2 -> 0 // Light -> System
-            else -> 0
-        }
-
-        //_theme.value = _theme.value
-
-        viewModelScope.launch {
-            context.dataStore.edit { preferences ->
-                preferences[THEME_KEY] = _theme.value
-            }
-        }
-    }
-
-    suspend fun getDevice(): Int {
-        return context.dataStore.data.map { it[DEVICE_TYPE_KEY] ?: 2 }.first()
-    }
-
-    fun setDevice(deviceType: Int) {
-        viewModelScope.launch {
-            context.dataStore.edit {
-                it[DEVICE_TYPE_KEY] = deviceType
-            }
-        }
-    }
-
-    fun getRules(): String {
-        return context.resources.openRawResource(R.raw.rules).bufferedReader().use { it.readText() }
-    }
-}
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
     val socketViewModel: SocketViewModel by viewModels()
+    val smsViewModel: SmsChatViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        //val splashScreen = installSplashScreen()
-
-        // لودینگ اولیه بره بعدا
-        //splashScreen.setKeepOnScreenCondition {
-        //    loading
-        //}
 
         super.onCreate(savedInstanceState)
         socketViewModel.connect()
 
         enableEdgeToEdge()
         setContent {
+            // theme
             val theme by viewModel.theme.collectAsState()
-            val loggedIn by socketViewModel.loggedIn.collectAsState()
-            val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
             val darkTheme = when (theme) {
                 0 -> isSystemInDarkTheme()
                 1 -> true
                 2 -> false
                 else -> isSystemInDarkTheme()
             }
+            // login status
+            val loggedIn by socketViewModel.loggedIn.collectAsState()
+            val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
+            // chat list
             val chatList by socketViewModel.chatList.collectAsState()
             val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
+            // sms setup
+            val context = LocalContext.current
+            if (checkSmsAppRole(context)) {
+                DisposableEffect(Unit) {
+                    smsViewModel.init(context)
+                    smsViewModel.refreshChatList()
+
+                    onDispose {
+
+                    }
+                }
+            }
             GChatTheme(
                 dynamicColor = false, darkTheme = darkTheme
             ) {
-                //SetUPNavigationViewTitleBar()
-                //SetUPNotificationBar(darkTheme)
-                //SetUPNavigationBar(darkTheme)
                 MainNavigation(
                     setTheme = { viewModel.setTheme() },
                     theme = theme,
@@ -877,101 +262,24 @@ class MainActivity : ComponentActivity() {
                     messageList = socketViewModel.messageList.collectAsState().value,
                     getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
                     getConversations = { socketViewModel.getConversations() },
-                    seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) })
+                    seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
+                    smsViewModel = smsViewModel,
+                    viewModel = viewModel,
+                    username = socketViewModel.usernameState.collectAsState().value
+                )
                 SetUpSystemBars(darkTheme)
             }
         }
 
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-//            splashScreen.setOnExitAnimationListener { splashView ->
-//                splashView.view.animate()
-//                    .alpha(0f)
-//                    .setDuration(400)
-//                    .withEndAction {
-//                        splashView.remove()
-//                    }
-//                    .start()
-//            }
-//        }
-        window.setBackgroundDrawableResource(android.R.color.transparent)
+        //window.setBackgroundDrawableResource(android.R.color.transparent)
     }
 
-//    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
-//        super.onMultiWindowModeChanged(isInMultiWindowMode)
-//
-//        Log.d("Activity", "MultiWindow = $isInMultiWindowMode")
-//    }
-//
-//    override fun onWindowFocusChanged(hasFocus: Boolean) {
-//        super.onWindowFocusChanged(hasFocus)
-//
-//        Log.d("Activity", "Focus = $hasFocus")
-//    }
-//
-//    override fun onResume() {
-//        super.onResume()
-//
-//        Log.d("Activity", "Resume")
-//    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        viewModel.setPendingIntent(intent)
+    }
 }
-
-//@Composable
-//fun SetUPNavigationViewTitleBar() {
-//    val context = LocalContext.current
-//    val activity = context as? Activity
-//
-//    val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
-//
-//    SideEffect {
-//        activity?.let { act ->
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-//                val taskDescription =
-//                    ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
-//                act.setTaskDescription(taskDescription)
-//            } else {
-//                val taskDescription = ActivityManager.TaskDescription(null, null, primaryColor)
-//                act.setTaskDescription(taskDescription)
-//            }
-//        }
-//    }
-//}
-//
-//@Composable
-//fun SetUPNotificationBar(darkIcons: Boolean) {
-//    val view = LocalView.current
-//    val window = (view.context as ComponentActivity).window
-//
-//    WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkIcons
-//
-//    window.statusBarColor = Color(0x33000000).toArgb()
-//}
-//
-//@Composable
-//fun SetUPNavigationBar(darkTheme: Boolean) {
-//    val view = LocalView.current
-//    val window = (view.context as ComponentActivity).window
-//
-//    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-//        DisposableEffect(Unit) {
-//            window.navigationBarColor = Color.Black.toArgb()
-//            onDispose { }
-//        }
-//    } else {
-//        DisposableEffect(Unit) {
-//            window.navigationBarColor = Color.Transparent.toArgb()
-//            onDispose { }
-//        }
-//
-//        //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-//        //    window.decorView.setOnApplyWindowInsetsListener { _, insets ->
-//        //        insets
-//        //    }
-//        //}
-//
-//        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars =
-//            !darkTheme
-//    }
-//}
 
 @Composable
 fun SetUpSystemBars(
@@ -1015,7 +323,6 @@ fun SetUpSystemBars(
             window.navigationBarColor = navigationBarColor.toArgb()
         }
 
-        //Log.d("SystemBars", "Applied")
     }
 
     SideEffect {
@@ -1069,45 +376,83 @@ fun MainNavigation(
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
-    seenMessage: (String, Int) -> Unit
+    seenMessage: (String, Int) -> Unit,
+    smsViewModel: SmsChatViewModel,
+    viewModel: MainViewModel,
+    username: String
 ) {
     val navController = rememberNavController()
+    val pendingIntent by viewModel.pendingIntent.collectAsState()
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val context = LocalContext.current
+    val initialIntent = (context as? Activity)?.intent
 
-    LaunchedEffect(loggedIn) {
-        //if (oldLoggedIn) {
-        //    if (loggedIn) {
-        //        navController.navigate("mainScreen") {
-        //            popUpTo(0) {
-        //                inclusive = true
-        //            }
-        //        }
-        //    } else {
-        //        navController.navigate("wait") {
-        //            popUpTo(0) {
-        //                inclusive = true
-        //            }
-        //        }
-        //    }
-        //} else {
-        //    navController.navigate("greeting") {
-        //        popUpTo(0) {
-        //            inclusive = true
-        //        }
-        //    }
-        //}
+    LaunchedEffect(Unit) {
+        val intent = initialIntent ?: return@LaunchedEffect
+        if (intent.getBooleanExtra("open_sms_chat", false)) {
+            delay(500.milliseconds)
+            val id = intent.getStringExtra("id").orEmpty()
+            val displayName = intent.getStringExtra("displayName").orEmpty()
+            if (id.isNotBlank()) {
+                navController.navigate(
+                    "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+                ) {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(pendingIntent) {
+        val intent = pendingIntent ?: return@LaunchedEffect
+        if (intent.getBooleanExtra("open_sms_chat", false)) {
+            delay(300.milliseconds)
+            val id = intent.getStringExtra("id").orEmpty()
+            val displayName = intent.getStringExtra("displayName").orEmpty()
+
+            viewModel.setPendingIntent(null)
+
+            if (id.isNotBlank()) {
+                val currentRoute = navController.currentBackStackEntry?.destination?.route
+
+                if (currentRoute?.contains("mainScreen") == true ||
+                    currentRoute?.contains("smsMainScreen") == true
+                ) {
+                    navController.navigate(
+                        "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+                    ) {
+                        launchSingleTop = true
+                    }
+                } else {
+                    navController.navigate(
+                        "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+                    ) {
+                        popUpTo("mainScreen") { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            }
+        }
+    }
+
+    val isSmsScreen = currentRoute?.startsWith("sms") == true
+
+    LaunchedEffect(loggedIn, oldLoggedIn) {
+        if (isSmsScreen) return@LaunchedEffect
 
         if (oldLoggedIn) {
             if (loggedIn) {
-                if (navController.currentBackStackEntry?.destination?.route?.contains("mainScreen") != true &&
-                    navController.currentBackStackEntry?.destination?.route?.contains("chatScreen") != true
+                if (currentRoute != "mainScreen" && currentRoute != "chatScreen" && !currentRoute?.startsWith(
+                        "sms"
+                    )!!
                 ) {
                     navController.navigate("mainScreen") {
-                        popUpTo("greeting") { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             } else {
                 navController.navigate("wait") {
-                    popUpTo("greeting") { inclusive = true }
+                    popUpTo(0) { inclusive = true }
                 }
             }
         } else {
@@ -1116,30 +461,63 @@ fun MainNavigation(
             }
         }
     }
+    //LaunchedEffect(loggedIn) {
+    //    if (oldLoggedIn) {
+    //        if (loggedIn) {
+    //            if (navController.currentBackStackEntry?.destination?.route?.contains("mainScreen") != true && navController.currentBackStackEntry?.destination?.route?.contains(
+    //                    "chatScreen"
+    //                ) != true
+    //            ) {
+    //                navController.navigate("mainScreen") {
+    //                    popUpTo(0) { inclusive = true }
+    //                }
+    //            }
+    //        } else {
+    //            navController.navigate("wait") {
+    //                popUpTo(0) { inclusive = true }
+    //            }
+    //        }
+    //    } else {
+    //        navController.navigate("greeting") {
+    //            popUpTo(0) { inclusive = true }
+    //        }
+    //    }
+    //}
     NavHost(
-        modifier = Modifier.fillMaxSize()/*.imePadding()*/,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         navController = navController,
         startDestination = "greeting",
 
         enterTransition = {
             slideInVertically(
-                initialOffsetY = { it }, animationSpec = tween(300)
+                initialOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
+                    durationMillis = 320, easing = FastOutSlowInEasing
+                )
             )
         },
         exitTransition = {
             slideOutVertically(
-                targetOffsetY = { -it }, animationSpec = tween(300)
+                targetOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
+                animationSpec = tween(
+                    durationMillis = 320, easing = FastOutSlowInEasing
+                )
             )
         },
-
         popEnterTransition = {
             slideInVertically(
-                initialOffsetY = { -it }, animationSpec = tween(300)
+                initialOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
+                animationSpec = tween(
+                    durationMillis = 320, easing = FastOutSlowInEasing
+                )
             )
         },
         popExitTransition = {
             slideOutVertically(
-                targetOffsetY = { it }, animationSpec = tween(300)
+                targetOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
+                    durationMillis = 320, easing = FastOutSlowInEasing
+                )
             )
         }) {
         composable(route = "greeting") {
@@ -1175,32 +553,69 @@ fun MainNavigation(
                 messageList = messageList,
                 getMessagesList = getMessagesList,
                 getConversations = getConversations,
-                seenMessage = seenMessage
+                seenMessage = seenMessage,
+                smsViewModel = smsViewModel,
+                username = username
             )
         }
         composable(
-            route = "chatScreen?id={id}", arguments = listOf(
-                navArgument("id") { type = NavType.StringType })
+            //route = "chatScreen?id={id}&type={type}&displayName={displayName}",
+            route = "chatScreen?id={id}&displayName={displayName}", arguments = listOf(
+                navArgument("id") {
+                    type = NavType.StringType
+                },
+                //navArgument("type") {
+                //    type = NavType.StringType
+                //},
+                navArgument("displayName") {
+                    type = NavType.StringType
+                })
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
+            val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
             ChatScreen(
                 back = { navController.popBackStack() },
                 id = id,
+                //type = type,
                 sendMessage = sendMessage,
                 messageList = messageList,
                 seenMessage = seenMessage,
-                getMessagesList = getMessagesList
-                //whatIsMyBackgroundFilterColor = { color, show -> }
+                getMessagesList = getMessagesList,
+                displayName = displayName
+            )
+        }
+        composable(route = "smsMainScreen") {
+            SMSMainScreen(
+                navHostController = navController, smsViewModel = smsViewModel
+            )
+        }
+        composable(
+            route = "smsChatScreen?id={id}&displayName={displayName}",
+            arguments = listOf(navArgument("id") {
+                type = NavType.StringType
+            }, navArgument("displayName") {
+                type = NavType.StringType
+            })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id") ?: ""
+            val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
+            SMSChatScreen(
+                back = { navController.popBackStack() },
+                id = id,
+                displayName = displayName,
+                smsViewModel = smsViewModel
             )
         }
         composable(route = "wait") {
             val view = LocalView.current
             Scaffold(
-                modifier = Modifier.fillMaxSize(), topBar = {
+                containerColor = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
                     TopAppBar(
                         title = {
                             Text("Connecting...")
-                        }, /*expandedHeight = 56.dp,*/ colors = TopAppBarDefaults.topAppBarColors(
+                        }, colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
                             subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -1235,14 +650,12 @@ fun MainNavigation(
                         val progressColor = MaterialTheme.colorScheme.primary.toArgb()
 
                         AndroidView(
-                            modifier = Modifier.size(48.dp),
-                            factory = { context ->
+                            modifier = Modifier.size(48.dp), factory = { context ->
                                 ProgressBar(context).apply {
                                     isIndeterminate = true
                                     indeterminateTintList = ColorStateList.valueOf(progressColor)
                                 }
-                            }
-                        )
+                            })
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "After connecting, you will be taken to the home page.",
@@ -1285,8 +698,6 @@ fun IpConfig(
     var networkProtocol by remember { mutableStateOf(networkProtocols[0]) }
     var expanded by remember { mutableStateOf(false) }
     val devices = listOf("Android Studio Emulator (AVD)", "Genymotion", "Other Devices")
-    //var selectedDevice by remember { mutableStateOf(devices[device()]) }
-    //var automaticMode by remember { mutableStateOf(device() != 2) }
     var selectedDevice by remember { mutableStateOf(devices[2]) }
     var automaticMode by remember { mutableStateOf(false) }
 
@@ -1308,8 +719,7 @@ fun IpConfig(
 
         "IPv6" -> {
             !host.isBlank() && Regex(
-                "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,7}:$|" + "^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" + "^[0-9a-fA-F]{1,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,5}:([0-9a-fA-F]{1,4}:){1,5}$|" +  // پوشش بهتر compressed
-                        "^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$"
+                "^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,7}:$|" + "^::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|" + "^[0-9a-fA-F]{1,4}::([0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$|" + "^([0-9a-fA-F]{1,4}:){1,5}:([0-9a-fA-F]{1,4}:){1,5}$|" + "^([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$"
             ).matches(host.removeSurrounding("[", "]"))
         }
 
@@ -1335,7 +745,11 @@ fun IpConfig(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(), topBar = {
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding(),
+        topBar = {
             TopAppBar(
                 title = {
                     Text("Set server IP config")
@@ -1479,7 +893,9 @@ fun IpConfig(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     keyboardActions = KeyboardActions(
-                        onNext = { focusManager.moveFocus(FocusDirection.Down) })
+                        onNext = {
+                            focusManager.moveFocus(FocusDirection.Next)
+                        })
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 TextField(
@@ -1504,7 +920,10 @@ fun IpConfig(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             keyboardController?.hide()
-                            focusManager.moveFocus(FocusDirection.Down)
+                            if (!portError && !hostError) {
+                                setServerIP("$host:$port")
+                                back()
+                            }
                         })
                 )
             }
@@ -1518,8 +937,7 @@ fun IpConfig(
                 expanded = expanded,
                 onExpandedChange = {
                     if (enabled) expanded = !expanded
-                }
-            ) {
+                }) {
                 TextField(
                     value = networkProtocol,
                     onValueChange = {},
@@ -1546,13 +964,10 @@ fun IpConfig(
                     shape = RoundedCornerShape(2.dp)
                 ) {
                     networkProtocols.forEach { protocol ->
-                        DropdownMenuItem(
-                            text = { Text(protocol) },
-                            onClick = {
-                                networkProtocol = protocol
-                                expanded = false
-                            }
-                        )
+                        DropdownMenuItem(text = { Text(protocol) }, onClick = {
+                            networkProtocol = protocol
+                            expanded = false
+                        })
                     }
                 }
             }
@@ -1567,8 +982,8 @@ fun IpConfig(
             Button(
                 onClick = {
                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                    back()
                     setServerIP("$host:$port")
+                    back()
                 },
                 enabled = !portError && !hostError,
                 modifier = Modifier
@@ -1617,8 +1032,6 @@ fun Greeting(
 
     var showSupportDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
-    //var showSignUpDialog by remember { mutableStateOf(false) }
-    //var showSignInDialog by remember { mutableStateOf(false) }
 
     val navController = rememberNavController()
 
@@ -1659,7 +1072,7 @@ fun Greeting(
         )
 
         withLink(link) {
-            append("term of use&&privacy.")
+            append("term of use and privacy.")
         }
     }
 
@@ -1682,82 +1095,6 @@ fun Greeting(
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    var hasPhonePermission by remember {
-        mutableStateOf(false)
-    }
-
-    var hasSmsAppRole by remember {
-        mutableStateOf(false)
-    }
-
-    fun refreshPermissions() {
-        hasPhonePermission = checkPhonePermission(context)
-
-        hasSmsAppRole = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            checkSmsAppRole(context)
-        } else {
-            true
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refreshPermissions()
-    }
-
-    DisposableEffect(lifecycleOwner) {
-
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                refreshPermissions()
-            }
-        }
-
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    val phonePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) {
-        refreshPermissions()
-    }
-
-    val smsRoleLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        refreshPermissions()
-    }
-
-    LaunchedEffect(hasPhonePermission, hasSmsAppRole) {
-
-        if (!hasPhonePermission) {
-            phonePermissionLauncher.launch(
-                Manifest.permission.READ_PHONE_STATE
-            )
-            return@LaunchedEffect
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasSmsAppRole) {
-
-            val roleManager = context.getSystemService(RoleManager::class.java)
-
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
-                    RoleManager.ROLE_SMS
-                )
-            ) {
-                smsRoleLauncher.launch(
-                    roleManager.createRequestRoleIntent(
-                        RoleManager.ROLE_SMS
-                    )
-                )
-            }
-        }
-    }
     var selectedIccid by remember { mutableStateOf<String?>(null) }
 
     var isLoading by remember { mutableStateOf(false) }
@@ -1786,15 +1123,16 @@ fun Greeting(
     val usernameFocusRequester = remember { FocusRequester() }
     val passwordFocusRequester = remember { FocusRequester() }
 
-    val isUsernameError =
-        (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
+    val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
     val usernameSizeError = username.length !in 1..50
 
     val isPasswordError = password.length !in 6..128
 
     var firstClick by remember { mutableStateOf(false) }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()
+    ) { innerPadding ->
 
         Box(modifier = Modifier.fillMaxSize()) {
             Image(
@@ -1835,42 +1173,6 @@ fun Greeting(
                                 tint = MaterialTheme.colorScheme.onPrimary,
                             )
                         }
-
-//                        Box(
-//                            modifier = Modifier
-//                                .padding(16.dp)
-//                                .align(Alignment.TopEnd)
-//                        ) {
-//                            DropdownMenu(
-//                                modifier = Modifier.width(200.dp),
-//                                expanded = expanded,
-//                                onDismissRequest = { expanded = false }) {
-//                                DropdownMenuItem(text = {
-//                                    Text(
-//                                        text = dropdownThemeText
-//                                    )
-//                                }, leadingIcon = {
-//                                    Icon(
-//                                        painter = painterResource(
-//                                            id = dropdownThemeIcon
-//                                        ), contentDescription = "Theme"
-//                                    )
-//                                }, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    setTheme()
-//                                })
-//                                DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-//                                    Icon(
-//                                        painter = painterResource(id = R.drawable.support),
-//                                        contentDescription = "Support"
-//                                    )
-//                                }, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    expanded = false
-//                                    showSupportDialog = true
-//                                })
-//                            }
-//                        }
                     }
                     Row(
                         modifier = Modifier
@@ -1927,7 +1229,7 @@ fun Greeting(
                                     .padding(8.dp)
                             ) {
                                 Text(
-                                    text = "GChat is secure&&optimized for some tasks.",
+                                    text = "GChat is secure and optimized for some tasks.",
                                     textAlign = TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
@@ -1948,17 +1250,16 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,
+                                            elevation = 6.dp,
                                             shape = CircleShape,
                                             clip = false
                                         ),
                                     shape = CircleShape,
-                                    contentPadding = PaddingValues(16.dp),
-                                    enabled = hasPhonePermission
+                                    contentPadding = PaddingValues(16.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.arrow_forward),
-                                        contentDescription = "Accept&&Sign-In",
+                                        contentDescription = "Accept and Sign-In",
                                         modifier = Modifier.fillMaxSize(),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
@@ -2040,8 +1341,6 @@ fun Greeting(
                                 Button(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        //isLoading = true
-                                        //showSignUpDialog = true
                                         navController.navigate("signUp")
                                     },
                                     enabled = !isLoading && !selectedIccid.isNullOrBlank(),
@@ -2083,10 +1382,7 @@ fun Greeting(
                                     )
                                     .background(color = MaterialTheme.colorScheme.surface)
                             ) {
-                                //if it is not loading
-                                BackHandler(enabled = isLoading) {
-                                    //back
-                                }
+                                BackHandler(enabled = isLoading) { }
 
                                 Column(
                                     modifier = Modifier
@@ -2095,7 +1391,7 @@ fun Greeting(
                                         .padding(24.dp)
                                 ) {
                                     Text(
-                                        text = "To sign-in to your account, enter your username&&password.",
+                                        text = "To sign-in to your account, enter your username and password.",
                                         textAlign = TextAlign.Center
                                     )
 
@@ -2104,7 +1400,7 @@ fun Greeting(
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                            .focusRequester(usernameFocusRequester),
                                         value = username,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -2114,7 +1410,7 @@ fun Greeting(
                                         supportingText = {
                                             Column {
                                                 if (isUsernameError && firstClick) {
-                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                                 }
                                                 if (usernameSizeError && firstClick) {
                                                     Text("Username must be less than 50 characters.")
@@ -2133,14 +1429,14 @@ fun Greeting(
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                         keyboardActions = KeyboardActions(
                                             onNext = {
-                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                                passwordFocusRequester.requestFocus()
                                             })
                                     )
 
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                            .focusRequester(passwordFocusRequester),
                                         value = password,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -2159,7 +1455,7 @@ fun Greeting(
                                         isError = isPasswordError && firstClick,
                                         supportingText = {
                                             if (isPasswordError && firstClick) {
-                                                Text("Password must be between 6&&128 characters.")
+                                                Text("Password must be between 6 and 128 characters.")
                                             }
                                         },
                                         visualTransformation = if (passwordVisible.value) VisualTransformation.None
@@ -2195,8 +1491,6 @@ fun Greeting(
                                             })
                                     )
                                 }
-
-                                //Text("Sign-In")
 
                                 Button(
                                     onClick = {
@@ -2234,8 +1528,7 @@ fun Greeting(
                                     )
                                 }
 
-                                val progressColor =
-                                    MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -2255,8 +1548,7 @@ fun Greeting(
                                                 indeterminateTintList =
                                                     ColorStateList.valueOf(progressColor)
                                             }
-                                        }
-                                    )
+                                        })
                                 }
                             }
                         }
@@ -2276,10 +1568,7 @@ fun Greeting(
                                     )
                                     .background(color = MaterialTheme.colorScheme.surface)
                             ) {
-                                //if it is not loading
-                                BackHandler(enabled = isLoading) {
-                                    //back
-                                }
+                                BackHandler(enabled = isLoading) { }
 
                                 Column(
                                     modifier = Modifier
@@ -2288,7 +1577,7 @@ fun Greeting(
                                         .padding(24.dp)
                                 ) {
                                     Text(
-                                        text = "To sign-up for an account, set up a username&&password.",
+                                        text = "To sign-up for an account, set up a username and password.",
                                         textAlign = TextAlign.Center
                                     )
 
@@ -2297,7 +1586,7 @@ fun Greeting(
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                            .focusRequester(usernameFocusRequester),
                                         value = username,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -2307,7 +1596,7 @@ fun Greeting(
                                         supportingText = {
                                             Column {
                                                 if (isUsernameError && firstClick) {
-                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                                 }
                                                 if (usernameSizeError && firstClick) {
                                                     Text("Username must be less than 50 characters.")
@@ -2342,7 +1631,7 @@ fun Greeting(
                                         isError = isPasswordError && firstClick,
                                         supportingText = {
                                             if (isPasswordError && firstClick) {
-                                                Text("Password must be between 6&&128 characters.")
+                                                Text("Password must be between 6 and 128 characters.")
                                             }
                                         },
                                         enabled = !isLoading,
@@ -2382,9 +1671,7 @@ fun Greeting(
                                                 keyboardController?.hide()
                                                 coroutineScope.launch {
                                                     signUp(
-                                                        selectedIccid.toString(),
-                                                        username,
-                                                        password
+                                                        selectedIccid.toString(), username, password
                                                     )
                                                     isLoading = true
                                                 }
@@ -2392,8 +1679,6 @@ fun Greeting(
                                             })
                                     )
                                 }
-
-                                //Text("Sign-In")
 
                                 Button(
                                     onClick = {
@@ -2431,8 +1716,7 @@ fun Greeting(
                                     )
                                 }
 
-                                val progressColor =
-                                    MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -2452,8 +1736,7 @@ fun Greeting(
                                                 indeterminateTintList =
                                                     ColorStateList.valueOf(progressColor)
                                             }
-                                        }
-                                    )
+                                        })
                                 }
                             }
                         }
@@ -2507,7 +1790,6 @@ fun Greeting(
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             expanded = false
                             ipConfig()
-                            //navController.navigate("ipConfig")
                         })
                     }
                 }
@@ -2571,44 +1853,8 @@ fun Greeting(
                                     )
                                 }
 
-//                                Box(
-//                                    modifier = Modifier
-//                                        .padding(16.dp)
-//                                        .align(Alignment.TopEnd)
-//                                ) {
-//                                    DropdownMenu(
-//                                        modifier = Modifier.width(200.dp),
-//                                        expanded = expanded,
-//                                        onDismissRequest = { expanded = false }) {
-//                                        DropdownMenuItem(text = {
-//                                            Text(
-//                                                text = dropdownThemeText
-//                                            )
-//                                        }, leadingIcon = {
-//                                            Icon(
-//                                                painter = painterResource(
-//                                                    id = dropdownThemeIcon
-//                                                ), contentDescription = "Theme"
-//                                            )
-//                                        }, onClick = {
-//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                            setTheme()
-//                                        })
-//                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-//                                            Icon(
-//                                                painter = painterResource(id = R.drawable.support),
-//                                                contentDescription = "Support"
-//                                            )
-//                                        }, onClick = {
-//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                            expanded = false
-//                                            showSupportDialog = true
-//                                        })
-//                                    }
-//                                }
-
                                 Text(
-                                    text = "GChat is secure&&optimized for some tasks.",
+                                    text = "GChat is secure and optimized for some tasks.",
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -2628,17 +1874,16 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (hasPhonePermission) 6.dp else 0.dp,          // سایه مطابق MD1
+                                            elevation = 6.dp,
                                             shape = CircleShape,
-                                            clip = false               // اجازه خروج سایه از محدوده
+                                            clip = false
                                         ),
                                     shape = CircleShape,
-                                    contentPadding = PaddingValues(16.dp),
-                                    enabled = hasPhonePermission
+                                    contentPadding = PaddingValues(16.dp)
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.arrow_forward),
-                                        contentDescription = "Accept&&Sign-In",
+                                        contentDescription = "Accept and Sign-In",
                                         modifier = Modifier.fillMaxSize(),
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
@@ -2711,7 +1956,6 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                                //navController.navigate("ipConfig")
                                             })
                                     }
                                 }
@@ -2737,7 +1981,6 @@ fun Greeting(
                                         color = MaterialTheme.colorScheme.surface,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
                                     )
-//                                    .padding(8.dp)
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -2770,8 +2013,6 @@ fun Greeting(
                                 Button(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        //isLoading = true
-                                        //showSignUpDialog = true
                                         navController.navigate("signUp")
                                     },
                                     enabled = !isLoading && !selectedIccid.isNullOrBlank(),
@@ -2781,9 +2022,9 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = if (!isLoading && !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,          // سایه مطابق MD1
+                                            elevation = if (!isLoading && !selectedIccid.isNullOrBlank()) 6.dp else 0.dp,
                                             shape = CircleShape,
-                                            clip = false               // اجازه خروج سایه از محدوده
+                                            clip = false
                                         ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
@@ -2795,43 +2036,6 @@ fun Greeting(
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
-
-//                                Box(
-//                                    modifier = Modifier
-//                                        .padding(16.dp)
-//                                        .padding(8.dp)
-//                                        .align(Alignment.TopEnd)
-//                                ) {
-//                                    DropdownMenu(
-//                                        modifier = Modifier.width(200.dp),
-//                                        expanded = expanded,
-//                                        onDismissRequest = { expanded = false }) {
-//                                        DropdownMenuItem(text = {
-//                                            Text(
-//                                                text = dropdownThemeText
-//                                            )
-//                                        }, leadingIcon = {
-//                                            Icon(
-//                                                painter = painterResource(
-//                                                    id = dropdownThemeIcon
-//                                                ), contentDescription = "Theme"
-//                                            )
-//                                        }, onClick = {
-//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                            setTheme()
-//                                        })
-//                                        DropdownMenuItem(text = { Text("Support") }, leadingIcon = {
-//                                            Icon(
-//                                                painter = painterResource(id = R.drawable.support),
-//                                                contentDescription = "Support"
-//                                            )
-//                                        }, onClick = {
-//                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                            expanded = false
-//                                            showSupportDialog = true
-//                                        })
-//                                    }
-//                                }
 
                                 Row(
                                     modifier = Modifier
@@ -2901,7 +2105,6 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                                //navController.navigate("ipConfig")
                                             })
                                     }
                                 }
@@ -2933,7 +2136,7 @@ fun Greeting(
                                 }
 
                                 Text(
-                                    text = "To sign-in to your account, enter your username&&password.",
+                                    text = "To sign-in to your account, enter your username and password.",
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -2949,7 +2152,7 @@ fun Greeting(
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                            .focusRequester(usernameFocusRequester),
                                         value = username,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -2959,7 +2162,7 @@ fun Greeting(
                                         supportingText = {
                                             Column {
                                                 if (isUsernameError && firstClick) {
-                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                                 }
                                                 if (usernameSizeError && firstClick) {
                                                     Text("Username must be less than 50 characters.")
@@ -2978,14 +2181,14 @@ fun Greeting(
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                         keyboardActions = KeyboardActions(
                                             onNext = {
-                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                                passwordFocusRequester.requestFocus()
                                             })
                                     )
 
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                            .focusRequester(passwordFocusRequester),
                                         value = password,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -3004,7 +2207,7 @@ fun Greeting(
                                         isError = isPasswordError && firstClick,
                                         supportingText = {
                                             if (isPasswordError && firstClick) {
-                                                Text("Password must be between 6&&128 characters.")
+                                                Text("Password must be between 6 and 128 characters.")
                                             }
                                         },
                                         visualTransformation = if (passwordVisible.value) VisualTransformation.None
@@ -3040,8 +2243,6 @@ fun Greeting(
                                             })
                                     )
                                 }
-
-                                //Text("Sign-In")
 
                                 Button(
                                     onClick = {
@@ -3080,8 +2281,7 @@ fun Greeting(
                                     )
                                 }
 
-                                val progressColor =
-                                    MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -3101,8 +2301,7 @@ fun Greeting(
                                                 indeterminateTintList =
                                                     ColorStateList.valueOf(progressColor)
                                             }
-                                        }
-                                    )
+                                        })
                                 }
 
                                 IconButton(
@@ -3170,7 +2369,6 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                                //navController.navigate("ipConfig")
                                             })
                                     }
                                 }
@@ -3202,7 +2400,7 @@ fun Greeting(
                                 }
 
                                 Text(
-                                    text = "To sign-up for an account, set up a username&&password.",
+                                    text = "To sign-up for an account, set up a username and password.",
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -3218,7 +2416,7 @@ fun Greeting(
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(usernameFocusRequester), // ← اضافه شد
+                                            .focusRequester(usernameFocusRequester),
                                         value = username,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -3228,7 +2426,7 @@ fun Greeting(
                                         supportingText = {
                                             Column {
                                                 if (isUsernameError && firstClick) {
-                                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
+                                                    Text("Only the \"a-z\", \"0-9\" and \"_\" characters are allowed.")
                                                 }
                                                 if (usernameSizeError && firstClick) {
                                                     Text("Username must be less than 50 characters.")
@@ -3247,14 +2445,14 @@ fun Greeting(
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                         keyboardActions = KeyboardActions(
                                             onNext = {
-                                                passwordFocusRequester.requestFocus() // ← تغییر کرد
+                                                passwordFocusRequester.requestFocus()
                                             })
                                     )
 
                                     TextField(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .focusRequester(passwordFocusRequester), // ← اضافه شد
+                                            .focusRequester(passwordFocusRequester),
                                         value = password,
                                         onValueChange = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -3273,7 +2471,7 @@ fun Greeting(
                                         isError = isPasswordError && firstClick,
                                         supportingText = {
                                             if (isPasswordError && firstClick) {
-                                                Text("Password must be between 6&&128 characters.")
+                                                Text("Password must be between 6 and 128 characters.")
                                             }
                                         },
                                         visualTransformation = if (passwordVisible.value) VisualTransformation.None
@@ -3346,8 +2544,7 @@ fun Greeting(
                                     )
                                 }
 
-                                val progressColor =
-                                    MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -3367,8 +2564,7 @@ fun Greeting(
                                                 indeterminateTintList =
                                                     ColorStateList.valueOf(progressColor)
                                             }
-                                        }
-                                    )
+                                        })
                                 }
 
                                 IconButton(
@@ -3436,7 +2632,6 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                                //navController.navigate("ipConfig")
                                             })
                                     }
                                 }
@@ -3516,7 +2711,7 @@ fun Greeting(
                 )
                 .fillMaxHeight(0.8f),
             onDismissRequest = { showTermsDialog = false },
-            title = { Text("Term of use&&privacy") },
+            title = { Text("Term of use and privacy") },
             text = {
                 Column(
                     modifier = Modifier
@@ -3537,370 +2732,33 @@ fun Greeting(
                 }
             })
     }
-
-//    if (showSignUpDialog) {
-//        var username by remember { mutableStateOf("") }
-//        var password by remember { mutableStateOf("") }
-//
-//        val focusManager = LocalFocusManager.current
-//        val passwordVisible = remember { mutableStateOf(false) }
-//        val keyboardController = LocalSoftwareKeyboardController.current
-//        val coroutineScope = rememberCoroutineScope()
-//
-//        val usernameFocusRequester = remember { FocusRequester() }
-//        val passwordFocusRequester = remember { FocusRequester() }
-//
-//        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
-//        val usernameSizeError = username.length !in 1..50
-//
-//        val isPasswordError = password.length !in 6..128
-//
-//        var firstClick by remember { mutableStateOf(false) }
-//
-//        AlertDialog(
-//            onDismissRequest = {
-//                if (!isLoading) showSignUpDialog = false
-//            }, title = { Text("Sign-Up") }, text = {
-//                Column(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .verticalScroll(rememberScrollState())
-//                ) {
-//                    Text(text = "Setup your username&&password.")
-//
-//                    Spacer(modifier = Modifier.height(8.dp))
-//
-//                    TextField(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .focusRequester(usernameFocusRequester), // ← اضافه شد
-//                        value = username,
-//                        onValueChange = {
-//                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                            username = it
-//                        },
-//                        isError = isUsernameError or usernameSizeError&&firstClick,
-//                        supportingText = {
-//                            Column {
-//                                if (isUsernameError&&firstClick) {
-//                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
-//                                }
-//                                if (usernameSizeError&&firstClick) {
-//                                    Text("Username must be less than 50 characters.")
-//                                }
-//                            }
-//                        },
-//                        enabled = !isLoading,
-//                        colors = TextFieldDefaults.colors(
-//                            focusedContainerColor = Color.Transparent,
-//                            unfocusedContainerColor = Color.Transparent,
-//                            disabledContainerColor = Color.Transparent,
-//                            errorContainerColor = Color.Transparent
-//                        ),
-//                        label = { Text("Username") },
-//                        singleLine = true,
-//                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-//                        keyboardActions = KeyboardActions(
-//                            onNext = {
-//                                passwordFocusRequester.requestFocus()
-//                            })
-//                    )
-//
-//                    TextField(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .focusRequester(passwordFocusRequester),
-//                        value = password,
-//                        onValueChange = {
-//                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                            password = it
-//                        },
-//                        isError = isPasswordError&&firstClick,
-//                        supportingText = {
-//                            if (isPasswordError&&firstClick) {
-//                                Text("Password must be between 6&&128 characters.")
-//                            }
-//                        },
-//                        enabled = !isLoading,
-//                        colors = TextFieldDefaults.colors(
-//                            focusedContainerColor = Color.Transparent,
-//                            unfocusedContainerColor = Color.Transparent,
-//                            disabledContainerColor = Color.Transparent,
-//                            errorContainerColor = Color.Transparent
-//                        ),
-//                        label = {
-//                            Text(text = "Password")
-//                        },
-//                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
-//                        else PasswordVisualTransformation(),
-//                        singleLine = true,
-//                        trailingIcon = {
-//                            IconButton(
-//                                enabled = !isLoading, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    passwordVisible.value = !passwordVisible.value
-//                                }) {
-//                                Icon(
-//                                    painter = painterResource(
-//                                        if (passwordVisible.value) R.drawable.visibility_off
-//                                        else R.drawable.visibility
-//                                    ), contentDescription = null
-//                                )
-//                            }
-//                        },
-//                        textStyle = TextStyle(textDirection = TextDirection.Content),
-//                        keyboardOptions = KeyboardOptions(
-//                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
-//                        ),
-//                        keyboardActions = KeyboardActions(
-//                            onDone = {
-//                                keyboardController?.hide()
-//                                coroutineScope.launch {
-//                                    signUp(selectedIccid.toString(), username, password)
-//                                    isLoading = true
-//                                }
-//                                focusManager.moveFocus(FocusDirection.Down)
-//                            })
-//                    )
-//                }
-//            }, shape = RoundedCornerShape(2.dp), confirmButton = {
-//                Button(
-//                    enabled = (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) or !firstClick,
-//                    onClick = {
-//                        view.playSoundEffect(SoundEffectConstants.CLICK)
-//                        if (firstClick) {
-//                            signUp(selectedIccid.toString(), username, password)
-//                            isLoading = true
-//                        } else {
-//                            firstClick = true
-//                            if (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) {
-//                                signUp(selectedIccid.toString(), username, password)
-//                                isLoading = true
-//                            }
-//                        }
-//                    },
-//                    shape = RoundedCornerShape(2.dp),
-//                ) {
-//                    if (isLoading) {
-//                        //CircularProgressIndicator(modifier = Modifier.size(24.dp))
-//                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
-//
-//                        AndroidView(
-//                            modifier = Modifier.size(24.dp),
-//                            factory = { context ->
-//                                ProgressBar(context).apply {
-//                                    isIndeterminate = true
-//                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
-//                                }
-//                            }
-//                        )
-//                    } else {
-//                        Icon(
-//                            painter = painterResource(id = R.drawable.login),
-//                            contentDescription = null
-//                        )
-//                    }
-//                    Spacer(modifier = Modifier.width(8.dp))
-//                    Text("Sign-Up")
-//                }
-//            }, dismissButton = {
-//                TextButton(
-//                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
-//                        view.playSoundEffect(SoundEffectConstants.CLICK)
-//                        isLoading = false
-//                        showSignUpDialog = false
-//                    }) {
-//                    Text("Cancel")
-//                }
-//            }, modifier = Modifier
-//                .padding(vertical = 16.dp)
-//                .shadow(
-//                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
-//                )
-//        )
-//    }
-//
-//    if (showSignInDialog) {
-//        var username by remember { mutableStateOf("") }
-//        var password by remember { mutableStateOf("") }
-//
-//        val focusManager = LocalFocusManager.current
-//        val passwordVisible = remember { mutableStateOf(false) }
-//        val keyboardController = LocalSoftwareKeyboardController.current
-//        val coroutineScope = rememberCoroutineScope()
-//
-//        val usernameFocusRequester = remember { FocusRequester() }
-//        val passwordFocusRequester = remember { FocusRequester() }
-//
-//        val isUsernameError = (!Regex("^[a-z0-9_]+$").matches(username)) && username.isNotEmpty()
-//        val usernameSizeError = username.length !in 1..50
-//
-//        val isPasswordError = password.length !in 6..128
-//
-//        var firstClick by remember { mutableStateOf(false) }
-//
-//        AlertDialog(
-//            onDismissRequest = {
-//                if (!isLoading) showSignInDialog = false
-//            }, title = { Text("Sign-In") }, text = {
-//                Column(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .verticalScroll(rememberScrollState())
-//                ) {
-//                    Text(text = "Enter your username&&password.")
-//
-//                    Spacer(modifier = Modifier.height(8.dp))
-//
-//                    TextField(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .focusRequester(usernameFocusRequester), // ← اضافه شد
-//                        value = username,
-//                        onValueChange = {
-//                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                            username = it
-//                        },
-//                        isError = isUsernameError or usernameSizeError&&firstClick,
-//                        supportingText = {
-//                            Column {
-//                                if (isUsernameError&&firstClick) {
-//                                    Text("Only the \"a-z\", \"0-9\"&&\"_\" characters are allowed.")
-//                                }
-//                                if (usernameSizeError&&firstClick) {
-//                                    Text("Username must be less than 50 characters.")
-//                                }
-//                            }
-//                        },
-//                        enabled = !isLoading,
-//                        colors = TextFieldDefaults.colors(
-//                            focusedContainerColor = Color.Transparent,
-//                            unfocusedContainerColor = Color.Transparent,
-//                            disabledContainerColor = Color.Transparent,
-//                            errorContainerColor = Color.Transparent
-//                        ),
-//                        label = { Text("Username") },
-//                        singleLine = true,
-//                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-//                        keyboardActions = KeyboardActions(
-//                            onNext = {
-//                                passwordFocusRequester.requestFocus() // ← تغییر کرد
-//                            })
-//                    )
-//
-//                    TextField(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .focusRequester(passwordFocusRequester), // ← اضافه شد
-//                        value = password,
-//                        onValueChange = {
-//                            view.playSoundEffect(SoundEffectConstants.CLICK)
-//                            password = it
-//                        },
-//                        enabled = !isLoading,
-//                        colors = TextFieldDefaults.colors(
-//                            focusedContainerColor = Color.Transparent,
-//                            unfocusedContainerColor = Color.Transparent,
-//                            disabledContainerColor = Color.Transparent
-//                        ),
-//                        label = {
-//                            Text(text = "Password")
-//                        },
-//                        isError = isPasswordError&&firstClick,
-//                        supportingText = {
-//                            if (isPasswordError&&firstClick) {
-//                                Text("Password must be between 6&&128 characters.")
-//                            }
-//                        },
-//                        visualTransformation = if (passwordVisible.value) VisualTransformation.None
-//                        else PasswordVisualTransformation(),
-//                        singleLine = true,
-//                        trailingIcon = {
-//                            IconButton(
-//                                enabled = !isLoading, onClick = {
-//                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-//                                    passwordVisible.value = !passwordVisible.value
-//                                }) {
-//                                Icon(
-//                                    painter = painterResource(
-//                                        if (passwordVisible.value) R.drawable.visibility_off
-//                                        else R.drawable.visibility
-//                                    ), contentDescription = null
-//                                )
-//                            }
-//                        },
-//                        textStyle = TextStyle(textDirection = TextDirection.Content),
-//                        keyboardOptions = KeyboardOptions(
-//                            keyboardType = KeyboardType.Password, imeAction = ImeAction.Done
-//                        ),
-//                        keyboardActions = KeyboardActions(
-//                            onDone = {
-//                                keyboardController?.hide()
-//                                coroutineScope.launch {
-//                                    signIn(username, password)
-//                                    isLoading = true
-//                                }
-//                                focusManager.moveFocus(FocusDirection.Down)
-//                            })
-//                    )
-//                }
-//            }, shape = RoundedCornerShape(2.dp), confirmButton = {
-//                Button(
-//                    enabled = (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) or !firstClick,
-//                    onClick = {
-//                        view.playSoundEffect(SoundEffectConstants.CLICK)
-//                        if (firstClick) {
-//                            signIn(username, password)
-//                            isLoading = true
-//                        } else {
-//                            firstClick = true
-//                            if (!isLoading&&!(isUsernameError or usernameSizeError)&&username.isNotBlank()&&!isPasswordError) {
-//                                signIn(username, password)
-//                                isLoading = true
-//                            }
-//                        }
-//                    },
-//                    shape = RoundedCornerShape(2.dp),
-//                ) {
-//                    if (isLoading) {
-//                        //CircularProgressIndicator(modifier = Modifier.size(24.dp))
-//                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
-//
-//                        AndroidView(
-//                            modifier = Modifier.size(24.dp),
-//                            factory = { context ->
-//                                ProgressBar(context).apply {
-//                                    isIndeterminate = true
-//                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
-//                                }
-//                            }
-//                        )
-//                    } else {
-//                        Icon(
-//                            painter = painterResource(id = R.drawable.login),
-//                            contentDescription = null
-//                        )
-//                    }
-//                    Spacer(modifier = Modifier.width(8.dp))
-//                    Text("Sign-In")
-//                }
-//            }, dismissButton = {
-//                TextButton(
-//                    enabled = !isLoading, shape = RoundedCornerShape(2.dp), onClick = {
-//                        view.playSoundEffect(SoundEffectConstants.CLICK)
-//                        isLoading = false
-//                        showSignInDialog = false
-//                    }) {
-//                    Text("Cancel")
-//                }
-//            }, modifier = Modifier
-//                .padding(vertical = 16.dp)
-//                .shadow(
-//                    elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
-//                )
-//        )
-//    }
 }
+
+//@Composable
+//@OptIn(ExperimentalMaterial3Api::class)
+//fun SmsRollInOldAndroid() {
+//    val context = LocalContext.current
+//
+//    var hasSmsAppRole by remember { mutableStateOf(false) }
+//
+//    fun refreshPermissions() {
+//        hasSmsAppRole = checkSmsAppRole(context)
+//    }
+//
+//    val smsRoleLauncher = rememberLauncherForActivityResult(
+//        ActivityResultContracts.StartActivityForResult()
+//    ) {
+//        refreshPermissions()
+//    }
+//
+//    val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
+//        putExtra(
+//            Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, context.packageName
+//        )
+//    }
+//
+//    smsRoleLauncher.launch(intent)
+//}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -3909,21 +2767,69 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
     val context = LocalContext.current
     val view = LocalView.current
 
-    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-        //val iccidCollector = remember(context) { IccidCollector(context) }
-        val iccids =
-            remember { mutableStateOf(getIccidsFromSubscriptionManager(context = context)) }
+    var iccidList by remember { mutableStateOf(emptyList<String>()) }
 
-        Column(
-            modifier = Modifier.fillMaxSize()
+    var hasPhonePermission by remember { mutableStateOf(false) }
+
+    var hasSmsAppRole by remember { mutableStateOf(false) }
+
+    LaunchedEffect(context, hasPhonePermission, hasSmsAppRole) {
+        iccidList = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            getIccidsFromSubscriptionManager(context)
+        } else {
+            getICCIDList(context)
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    fun refreshPermissions() {
+        hasPhonePermission = checkPhonePermission(context)
+
+        hasSmsAppRole = checkSmsAppRole(context)
+    }
+
+    LaunchedEffect(Unit) {
+        refreshPermissions()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshPermissions()
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val phonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        refreshPermissions()
+    }
+
+    val smsRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshPermissions()
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiary
+            ), elevation = CardDefaults.cardElevation(
+                defaultElevation = 4.dp
+            ), shape = RectangleShape
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                ), elevation = CardDefaults.cardElevation(
-                    defaultElevation = 4.dp
-                ), shape = RectangleShape
-            ) {
+            Column {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3944,133 +2850,161 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                         modifier = Modifier.padding(end = endPadding)
                     )
                 }
-            }
-
-            iccids.value.forEachIndexed { index, iccid ->
-                Card(
-                    modifier = Modifier
-                        .padding(
-                            start = 8.dp,
-                            top = if (index != 0) 0.dp else 8.dp,
-                            end = 8.dp,
-                            bottom = 8.dp
-                        )
-                        .fillMaxWidth(), colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ), elevation = CardDefaults.cardElevation(
-                        defaultElevation = 4.dp
-                    ), shape = RoundedCornerShape(2.dp), onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        setSelectedIccid(iccid)
-                    }) {
-                    Row(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasSmsAppRole) {
+                    Card(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedIccid == iccid,
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                setSelectedIccid(iccid)
-                            },
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                        Column {
-                            Text(
-                                text = "Slot ${index + 1}",
-                                color = MaterialTheme.colorScheme.onSurface
+                            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
+                            .fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(2.dp),
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            val roleManager = context.getSystemService(RoleManager::class.java)
+
+                            if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
+                                    RoleManager.ROLE_SMS
+                                )
+                            ) {
+                                smsRoleLauncher.launch(
+                                    roleManager.createRequestRoleIntent(
+                                        RoleManager.ROLE_SMS
+                                    )
+                                )
+                            }
+                        }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.warning_shield),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .padding(end = 12.dp)
                             )
                             Text(
-                                text = "ICCID: $iccid",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                style = MaterialTheme.typography.bodySmall
+                                text = "Reading the ICCID requires this app to be the default SMS app. You can switch back to your previous default SMS app at any time.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
                             )
+                            IconButton(
+                                modifier = Modifier.size(48.dp), onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    val roleManager =
+                                        context.getSystemService(RoleManager::class.java)
+
+                                    if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
+                                            RoleManager.ROLE_SMS
+                                        )
+                                    ) {
+                                        smsRoleLauncher.launch(
+                                            roleManager.createRequestRoleIntent(
+                                                RoleManager.ROLE_SMS
+                                            )
+                                        )
+                                    }
+                                }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.security),
+                                    contentDescription = "Set default SMS app",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                } else if (!hasPhonePermission) {
+                    Card(
+                        modifier = Modifier
+                            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
+                            .fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(2.dp),
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+                        }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.warning_shield),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .padding(end = 12.dp)
+                            )
+                            Text(
+                                text = "Phone permission is required to read the ICCID.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                modifier = Modifier.size(48.dp), onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+                                }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.security),
+                                    contentDescription = "Grant Phone permission",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-    } else {
-        var iccidList by remember { mutableStateOf(listOf<String>()) }
 
-        iccidList = getICCIDList(context)
-
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
+        iccidList.forEachIndexed { index, iccid ->
             Card(
-                modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
+                modifier = Modifier
+                    .padding(
+                        start = 8.dp,
+                        top = if (index != 0) 0.dp else 8.dp,
+                        end = 8.dp,
+                        bottom = 8.dp
+                    )
+                    .fillMaxWidth(), colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 ), elevation = CardDefaults.cardElevation(
                     defaultElevation = 4.dp
-                ), shape = RectangleShape
-            ) {
+                ), shape = RoundedCornerShape(2.dp), onClick = {
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    setSelectedIccid(iccid)
+                }) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
+                        .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.sim_toolkit),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .padding(end = 12.dp)
+                    RadioButton(
+                        selected = selectedIccid == iccid,
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            setSelectedIccid(iccid)
+                        },
+                        modifier = Modifier.padding(end = 8.dp),
                     )
-                    Text(
-                        text = "The ICCID is the unique identifier of your SIM card. Use it to verify your identity.",
-                        color = MaterialTheme.colorScheme.onTertiary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(end = endPadding)
-                    )
-                }
-            }
-
-            iccidList.forEachIndexed { index, iccid ->
-                Card(
-                    modifier = Modifier
-                        .padding(
-                            start = 8.dp,
-                            top = if (index != 0) 0.dp else 8.dp,
-                            end = 8.dp,
-                            bottom = 8.dp
+                    Column {
+                        Text(
+                            text = "Slot ${index + 1}", color = MaterialTheme.colorScheme.onSurface
                         )
-                        .fillMaxWidth(), colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ), elevation = CardDefaults.cardElevation(
-                        defaultElevation = 4.dp
-                    ), shape = RoundedCornerShape(2.dp), onClick = {
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        setSelectedIccid(iccid)
-                    }) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedIccid == iccid,
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                setSelectedIccid(iccid)
-                            },
-                            modifier = Modifier.padding(end = 8.dp),
+                        Text(
+                            text = "ICCID: $iccid",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodySmall
                         )
-                        Column {
-                            Text(
-                                text = "Slot ${index + 1}",
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "ICCID: $iccid",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
                     }
                 }
             }
@@ -4096,7 +3030,9 @@ fun MainScreen(
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
-    seenMessage: (String, Int) -> Unit
+    seenMessage: (String, Int) -> Unit,
+    smsViewModel: SmsChatViewModel,
+    username: String
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -4112,8 +3048,38 @@ fun MainScreen(
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
     var selectedChat by rememberSaveable { mutableStateOf("") }
+    var selectedChatDisplayName by rememberSaveable { mutableStateOf("") }
 
     val view = LocalView.current
+
+    val materialColors = listOf(
+        Color(0xFF607D8B),
+        Color(0xFF9E9E9E),
+        Color(0xFFFFEB3B),
+        Color(0xFFCDDC39),
+        Color(0xFF03A9F4),
+        Color(0xFF673AB7),
+        Color(0xFFFF5722),
+        Color(0xFFFF9800),
+        Color(0xFF4CAF50),
+        Color(0xFF009688),
+        Color(0xFF2196F3),
+        Color(0xFF9C27B0),
+        Color(0xFFF44336),
+        Color(0xFF795548),
+        Color(0xFFFFC107),
+        Color(0xFF8BC34A),
+        Color(0xFF00BCD4),
+        Color(0xFF3F51B5),
+        Color(0xFFE91E63)
+    )
+
+    val backgroundColor = materialColors[hash20(username)]
+    val iconColor = if (backgroundColor.luminance() >= 0.5f) {
+        Color.Black
+    } else {
+        Color.White
+    }
 
     getConversations()
 
@@ -4161,16 +3127,13 @@ fun MainScreen(
                     )
 
                     Column(
-                        modifier = Modifier
-                            //.systemBarsPadding()
-                            .padding(
-                                top = WindowInsets.statusBars.asPaddingValues()
-                                    .calculateTopPadding()
-                            )
+                        modifier = Modifier.padding(
+                            top = WindowInsets.statusBars.asPaddingValues()
+                                .calculateTopPadding()
+                        )
                     ) {
                         Row(
                             modifier = Modifier.weight(1f),
-                            //verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
                                 modifier = Modifier
@@ -4178,13 +3141,15 @@ fun MainScreen(
                                     .fillMaxHeight()
                                     .aspectRatio(1f)
                                     .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape), shape = CircleShape
+                                    .clip(CircleShape),
+                                shape = CircleShape,
+                                color = backgroundColor
                             ) {
-                                Image(
-                                    painter = painterResource(R.drawable.profile),
+                                Icon(
+                                    painter = painterResource(R.drawable.profile_black_content),
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                    tint = iconColor.copy(alpha = 0.5f)
                                 )
                             }
                             //Surface(
@@ -4233,12 +3198,9 @@ fun MainScreen(
                                 }
                                 .padding(start = 16.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            // runBlocking نباشه به خدا نزدیک تره
                             Text(
                                 modifier = Modifier.weight(1f),
-                                text = runBlocking {
-                                    context.dataStore.data.map { it[USERNAME_KEY] ?: "" }.first()
-                                }, // (account name)
+                                text = username,
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                             //Spacer(modifier = Modifier.width(16.dp))
@@ -4278,9 +3240,7 @@ fun MainScreen(
                 //        .background(MaterialTheme.colorScheme.surfaceContainer)
                 //        .drawWithContent {
                 //            drawContent()
-//
                 //            val gradientHeight = 8.dp.value //size.height * 0.15f
-//
                 //            drawRect(
                 //                brush = Brush.verticalGradient(
                 //                    colors = listOf(
@@ -4325,12 +3285,44 @@ fun MainScreen(
                     DropdownMenuItem(text = { Text("Logout") }, leadingIcon = {
                         Icon(
                             painter = painterResource(id = R.drawable.door_open),
-                            contentDescription = "Logout"
+                            contentDescription = null
                         )
                     }, onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         logout()
                     })
+                    val isSmsApp by remember{ mutableStateOf(checkSmsAppRole(context))}
+                    if (!isSmsApp) {
+                        DropdownMenuItem(
+                            text = { Text("Set GChat as default Sms") },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.sms),
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                requestSmsDefaultRole(context)
+                            })
+                    }
+                    LaunchedEffect(Unit) {
+                        if (isSmsApp) {
+                            smsViewModel.init(context)
+                            smsViewModel.refreshChatList()
+                        }
+                    }
+                    if (isSmsApp) {
+                        DropdownMenuItem(text = { Text("SMS Chat List") }, leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.sms),
+                                contentDescription = null
+                            )
+                        }, onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            navHostController.navigate("smsMainScreen")
+                        })
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -4348,8 +3340,9 @@ fun MainScreen(
                     )
                     .zIndex(1f)
             ) {
-
+                // Main Screen
                 Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
                     modifier = Modifier.fillMaxSize(),
                     //.shadow(
                     //    elevation = 16.dp,
@@ -4404,7 +3397,6 @@ fun MainScreen(
                         ) {
                             items(
                                 items = chatList, key = { it.id }) { contact ->
-
                                 Surface(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -4414,15 +3406,21 @@ fun MainScreen(
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         val id = contact.id
                                         selectedChat = id
+                                        selectedChatDisplayName = contact.name
                                         if (!expandedScreen) {
-                                            navHostController.navigate("chatScreen?id=$id")
+                                            navHostController.navigate(
+                                                //&type=$selectedType
+                                                "chatScreen?id=$id&displayName=${
+                                                    Uri.encode(
+                                                        selectedChatDisplayName
+                                                    )
+                                                }"
+                                            )
                                         }
                                     }) {
-
                                     Box(
                                         modifier = Modifier.fillMaxSize()
                                     ) {
-
                                         Spacer(
                                             modifier = Modifier
                                                 .align(Alignment.BottomStart)
@@ -4433,7 +3431,6 @@ fun MainScreen(
                                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                                                 )
                                         )
-
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxSize()
@@ -4441,14 +3438,35 @@ fun MainScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
 
+                                            //Surface(
+                                            //    modifier = Modifier.size(40.dp), shape = CircleShape
+                                            //) {
+                                            //    Image(
+                                            //        painter = painterResource(R.drawable.profile),
+                                            //        contentDescription = null,
+                                            //        modifier = Modifier.fillMaxSize(),
+                                            //        contentScale = ContentScale.Crop
+                                            //    )
+                                            //}
+
+                                            val backgroundColor = materialColors[hash20(contact.id)]
+                                            val iconColor =
+                                                if (backgroundColor.luminance() >= 0.5f) {
+                                                    Color.Black
+                                                } else {
+                                                    Color.White
+                                                }
+
                                             Surface(
-                                                modifier = Modifier.size(40.dp), shape = CircleShape
+                                                modifier = Modifier.size(40.dp),
+                                                shape = CircleShape,
+                                                color = backgroundColor
                                             ) {
-                                                Image(
-                                                    painter = painterResource(R.drawable.profile),
+                                                Icon(
+                                                    painter = painterResource(R.drawable.profile_black_content),
                                                     contentDescription = null,
                                                     modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.Crop
+                                                    tint = iconColor.copy(alpha = 0.5f)
                                                 )
                                             }
 
@@ -4689,7 +3707,8 @@ fun MainScreen(
                                     selectedChat = id
                                     getMessagesList(selectedChat)
                                     if (!expandedScreen) {
-                                        navHostController.navigate("chatScreen?id=$id")
+                                        //&type=$selectedType
+                                        navHostController.navigate("chatScreen?id=$id&displayName=$id")
                                     }
                                 }) {
 
@@ -4803,11 +3822,11 @@ fun MainScreen(
                                 }
                             }
                         }
-
                     }
                 }
             }
 
+            // Expanded Screen
             if (expandedScreen) {
                 Box(
                     modifier = Modifier
@@ -4829,7 +3848,9 @@ fun MainScreen(
                         sendMessage = sendMessage,
                         messageList = messageList,
                         seenMessage = seenMessage,
-                        getMessagesList = getMessagesList
+                        getMessagesList = getMessagesList,
+                        //type = selectedType,
+                        displayName = selectedChatDisplayName
                     )
                 }
             }
@@ -4987,19 +4008,33 @@ fun ChatScreen(
     sendMessage: (String, String) -> Unit,
     messageList: List<MessageItem>,
     seenMessage: (String, Int) -> Unit,
-    getMessagesList: (String) -> Unit
-    //whatIsMyBackgroundFilterColor: (Color, Boolean) -> Unit
+    getMessagesList: (String) -> Unit,
+    draft: String? = "",
+    //type: String,
+    displayName: String
 ) {
+    //val context = LocalContext.current
+    //var localSms by remember { mutableStateOf(emptyList<MessageItem>()) }
+    //LaunchedEffect(id, type) {
+    //    if (id.isNotBlank()) {
+    //        if (type == "phone_sms_contact") {
+    //            localSms = getMessagesForNumber(context, id)
+    //        } else {
+    //            getMessagesList(id)
+    //        }
+    //    }
+    //}
+
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
             getMessagesList(id)
         }
     }
 
-    var renderValue by remember { mutableIntStateOf(5) }
+    var renderValue by remember { mutableIntStateOf(3) }
     //var isExpandedAttachment by remember { mutableStateOf(false) }
     //var isExpandedEmoji by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
+    var message by rememberSaveable { mutableStateOf(draft.toString()) }
 
     //var coverColor by remember { mutableStateOf(Color.Transparent) }
     //val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
@@ -5010,22 +4045,43 @@ fun ChatScreen(
 
     val view = LocalView.current
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column {
-            AdvancedDynamicLightEffectOptimized(
-                modifier = Modifier.fillMaxSize(), renderValue = renderValue
-            )
-        }
+    val materialColors = listOf(
+        Color(0xFF607D8B),
+        Color(0xFF9E9E9E),
+        Color(0xFFFFEB3B),
+        Color(0xFFCDDC39),
+        Color(0xFF03A9F4),
+        Color(0xFF673AB7),
+        Color(0xFFFF5722),
+        Color(0xFFFF9800),
+        Color(0xFF4CAF50),
+        Color(0xFF009688),
+        Color(0xFF2196F3),
+        Color(0xFF9C27B0),
+        Color(0xFFF44336),
+        Color(0xFF795548),
+        Color(0xFFFFC107),
+        Color(0xFF8BC34A),
+        Color(0xFF00BCD4),
+        Color(0xFF3F51B5),
+        Color(0xFFE91E63)
+    )
 
+    val backgroundColor = materialColors[hash20(id)]
+    val iconColor = if (backgroundColor.luminance() >= 0.5f) {
+        Color.Black
+    } else {
+        Color.White
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
-                .background(Color.Transparent),
-            containerColor = Color.Transparent,
+                .background(MaterialTheme.colorScheme.background),
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (id != "") {
-
                     TopAppBar(
                         title = {
                             Row(
@@ -5042,22 +4098,21 @@ fun ChatScreen(
                             ) {
                                 Surface(
                                     modifier = Modifier
-                                        //.padding(16.dp)
-                                        //.fillMaxHeight()
                                         .height(48.dp)
                                         .aspectRatio(1f)
-                                        //.shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                        .clip(CircleShape), shape = CircleShape
+                                        .clip(CircleShape),
+                                    shape = CircleShape,
+                                    color = backgroundColor
                                 ) {
-                                    Image(
-                                        painter = painterResource(R.drawable.profile),
+                                    Icon(
+                                        painter = painterResource(R.drawable.profile_black_content),
                                         contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        contentScale = ContentScale.Crop
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = iconColor.copy(alpha = 0.5f)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = id, modifier = Modifier.weight(1f))
+                                Text(text = displayName, modifier = Modifier.weight(1f))
                             }
                         }, /*expandedHeight = 56.dp,*/ navigationIcon = {
                             IconButton(
@@ -5070,17 +4125,22 @@ fun ChatScreen(
                                     contentDescription = "Menu"
                                 )
                             }
-                        }, actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.menu_dots),
-                                    contentDescription = "Search"
-                                )
-                            }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
+                        },
+                        //actions = {
+                        //    if (type == "phone_sms_contact") {
+                        //        IconButton(
+                        //            onClick = {
+                        //                view.playSoundEffect(SoundEffectConstants.CLICK)
+                        //                localSms = getMessagesForNumber(context, id)
+                        //            }) {
+                        //            Icon(
+                        //                painter = painterResource(R.drawable.refresh),
+                        //                contentDescription = "Refresh Chat"
+                        //            )
+                        //        }
+                        //    }
+                        //},
+                        colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -5091,17 +4151,73 @@ fun ChatScreen(
                         )
                     )
                 }
-            },
-
-            ) { innerPadding ->
-
+            }) { innerPadding ->
+            Spacer(modifier = Modifier.padding(innerPadding))
+            AdvancedDynamicMeshLightEffect(
+                modifier = Modifier.fillMaxSize(), renderValue = renderValue
+            )
             if (id != "") {
                 Column(
                     modifier = Modifier
-                        .padding(innerPadding)
+                        .padding(top = 64.dp)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding()
                         .fillMaxSize()
                 ) {
+
                     val listState = rememberLazyListState()
+                    var initialScrollDone by rememberSaveable { mutableStateOf(false) }
+
+                    LaunchedEffect(messageList) {
+                        if (initialScrollDone || messageList.isEmpty()) return@LaunchedEffect
+
+                        snapshotFlow { listState.layoutInfo.totalItemsCount }.first { it > 0 }
+
+                        val lastSeen = messageList.indexOfLast {
+                            it.seen || it.myMessage
+                        }
+
+                        if (lastSeen != -1) {
+                            listState.scrollToItem(
+                                index = lastSeen + 1, scrollOffset = Int.MAX_VALUE
+                            )
+                        } else {
+                            listState.scrollToItem(1)
+                        }
+
+                        initialScrollDone = true
+                    }
+
+                    //if (type == "phone_sms_contact") {
+                    //    LazyColumn(
+                    //        modifier = Modifier.weight(1f), state = listState
+                    //    ) {
+                    //        item {
+                    //            Spacer(modifier = Modifier.height(8.dp))
+                    //        }
+
+                    //        items(items = localSms, key = { it.id }) { item ->
+                    //            LaunchedEffect(Unit) {
+                    //                if (!item.seen && !item.myMessage) {
+                    //                    seenMessage(id, item.id)
+                    //                }
+                    //            }
+
+                    //            AnimatedVisibility(
+                    //                visible = true,
+                    //                enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
+                    //            ) {
+                    //                Message(
+                    //                    isMe = item.myMessage,
+                    //                    message = item.text,
+                    //                    seen = item.seen,
+                    //                    timestamp = item.date
+                    //                )
+                    //            }
+                    //        }
+                    //    }
+                    //} else {
                     LazyColumn(
                         modifier = Modifier.weight(1f), state = listState
                     ) {
@@ -5129,6 +4245,8 @@ fun ChatScreen(
                             }
                         }
                     }
+                    //}
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -5175,6 +4293,7 @@ fun ChatScreen(
                                 //    )
                                 //}
 
+                                val onSurface = MaterialTheme.colorScheme.onSurface
                                 AndroidView(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -5182,7 +4301,11 @@ fun ChatScreen(
                                     factory = { context ->
                                         EditText(context).apply {
 
+                                            background = null
+
                                             maxLines = 5
+
+                                            setTextColor(onSurface.toArgb())
 
                                             addTextChangedListener(object : TextWatcher {
 
@@ -5352,66 +4475,64 @@ fun ChatScreen(
 @Composable
 fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .padding(bottom = 8.dp),
-        contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+        modifier = Modifier.fillMaxWidth()
     ) {
         var lineCount by remember(message) { mutableIntStateOf(0) }
-        val formatMessageTime = formatMessageTime(timestamp)
+        val formatMessageTime = timestamp//formatMessageTime(timestamp)
         var timeWidth by remember { mutableStateOf(0.dp) }
         val density = LocalDensity.current
-        Surface(
-            color = if (isMe) Color(0xFFEFFEDD) else Color.White, shape = RoundedCornerShape(
-                size = 2.dp
-                //topStart = 2.dp,
-                //topEnd = 2.dp,
-                //bottomStart = if (isMe) 2.dp else 2.dp,
-                //bottomEnd = if (isMe) 2.dp else 2.dp
-            )
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .padding(bottom = 8.dp),
+            contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
         ) {
-            Box(
-                modifier = Modifier.padding(8.dp)
+            val maxMessageWidth = minOf(maxWidth * 0.7f, 400.dp)
+            Surface(
+                color = if (isMe) Color(0xFFEFFEDD) else Color.White,
+                shape = RoundedCornerShape(size = 2.dp),
+                modifier = Modifier.widthIn(max = maxMessageWidth)
             ) {
-
-                Text(
-                    text = message, modifier = Modifier.padding(
-                        end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
-                        bottom = if (isMe && lineCount > 1 && seen) 24.dp else 0.dp
-                    ), onTextLayout = {
-                        if (lineCount == 0) {
-                            lineCount = it.lineCount
-                        }
-                    })
-                Row(
-                    modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.padding(8.dp)
                 ) {
+
                     Text(
-                        text = formatMessageTime, style = MaterialTheme.typography.labelSmall.copy(
-                            fontStyle = FontStyle.Normal,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        onTextLayout = {
-                            timeWidth = with(density) { it.size.width.toDp() }
+                        text = message, modifier = Modifier.padding(
+                            end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                            bottom = if (lineCount > 1) 24.dp else 0.dp
+                        ), onTextLayout = {
+                            if (lineCount == 0) {
+                                lineCount = it.lineCount
+                            }
+                        })
+                    Row(
+                        modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatMessageTime, style = MaterialTheme.typography.labelSmall.copy(
+                                fontStyle = FontStyle.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            ), onTextLayout = {
+                                timeWidth = with(density) { it.size.width.toDp() }
+                            })
+                        if (isMe && seen) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.double_check),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
-                    )
-                    if (isMe && seen) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            painter = painterResource(R.drawable.double_check),
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
                     }
                 }
             }
         }
     }
 }
-
 
 fun convertDigits(text: String, digits: CharArray): String {
     require(digits.size == 10) { "digits must contain exactly 10 characters." }
@@ -5431,7 +4552,7 @@ fun convertDigits(text: String, digits: CharArray): String {
 
 @Composable
 fun AdvancedDynamicLightEffectOptimized(
-    modifier: Modifier = Modifier, renderValue: Int = 5
+    modifier: Modifier = Modifier, renderValue: Int = 3
 ) {
     val targetAngle1 = renderValue * 36f
     val angle1 by animateFloatAsState(
@@ -5458,13 +4579,18 @@ fun AdvancedDynamicLightEffectOptimized(
         val center = Offset(size.width / 2f, size.height / 2f)
         val orbitRadius = minOf(size.width, size.height) * 0.7f
 
+        val rad = Math.toRadians((angle1 + 90f).toDouble())
+
+        val dx = cos(rad).toFloat() * radius
+        val dy = sin(rad).toFloat() * radius
+
         drawRect(
             brush = Brush.linearGradient(
                 colors = listOf(
-                    Color(0xFF6DA687), Color(0xFF89B885)
+                    Color(0xFF6BA587), Color(0xFF88B884)
                 ),
-                start = Offset(center.x - radius, center.y),
-                end = Offset(center.x + radius, center.y)
+                start = Offset(center.x - dx, center.y - dy),
+                end = Offset(center.x + dx, center.y + dy)
             )
         )
 
@@ -5484,7 +4610,7 @@ fun AdvancedDynamicLightEffectOptimized(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFFD1D68C), Color.Transparent
+                        Color(0xFFd5d88d), Color.Transparent
                     ), center = pointOnCircle(angle1), radius = lightRadius
                 ), radius = radius, center = center, blendMode = BlendMode.Screen
             )
@@ -5492,10 +4618,643 @@ fun AdvancedDynamicLightEffectOptimized(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFFD5DAB8), Color.Transparent
+                        Color(0xFFdbddbb), Color.Transparent
                     ), center = pointOnCircle(angle2), radius = lightRadius * 0.85f
                 ), radius = radius, center = center, blendMode = BlendMode.Screen
             )
+        }
+    }
+}
+
+@Composable
+fun AdvancedDynamicMeshLightEffect(
+    modifier: Modifier = Modifier, renderValue: Int = 3
+) {
+    val width = 3
+    val height = 3
+
+    val baseColors = remember {
+        arrayOf(
+            Color(0xFF6BA587),
+            Color(0xFF74AA87),
+            Color(0xFF7DB08A),
+            Color(0xFF72A988),
+            Color(0xFF7BB08A),
+            Color(0xFF84B58B),
+            Color(0xFF79AD89),
+            Color(0xFF81B38B),
+            Color(0xFF88B884)
+        )
+    }
+
+    val lightColor1 = Color(0xFFd5d88d)
+    val lightColor2 = Color(0xFFdbddbb)
+
+    val initialPoints = remember {
+        Array(width * height) { i ->
+            val col = i % width
+            val row = i / width
+            Offset(
+                x = col / (width - 1f), y = row / (height - 1f)
+            )
+        }
+    }
+
+    val meshState = rememberMeshGradientState(
+        points = initialPoints, colors = baseColors
+    )
+
+    // زاویه‌ها نرم دنبال renderValue می‌رن (دقیقاً مثل کد Canvas)
+    val targetAngle1 = renderValue * 36f
+    val angle1 by animateFloatAsState(
+        targetValue = targetAngle1,
+        animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+        label = "angle1"
+    )
+    val angle2 = angle1 + 180f
+
+    LaunchedEffect(angle1) {
+        while (true) {
+            withFrameNanos {
+                val center = 0.5f
+                val orbit = 0.38f
+
+                val rad1 = Math.toRadians(angle1.toDouble())
+                val rad2 = Math.toRadians(angle2.toDouble())
+
+                val light1 = Offset(
+                    x = center + orbit * cos(rad1).toFloat(),
+                    y = center + orbit * sin(rad1).toFloat()
+                )
+                val light2 = Offset(
+                    x = center + orbit * cos(rad2).toFloat(),
+                    y = center + orbit * sin(rad2).toFloat()
+                )
+
+                // برای هر نقطه مش، رنگ رو بر اساس فاصله تا دو لکه نور محاسبه کن
+                for (i in 0 until width * height) {
+                    val col = i % width
+                    val row = i / width
+                    val px = col / (width - 1f)
+                    val py = row / (height - 1f)
+                    val point = Offset(px, py)
+
+                    val dist1 = (point - light1).getDistance()
+                    val dist2 = (point - light2).getDistance()
+
+                    val intensity1 = (1f - (dist1 / 0.75f).coerceIn(0f, 1f)).pow(1.5f)
+                    val intensity2 = (1f - (dist2 / 0.75f).coerceIn(0f, 1f)).pow(1.5f)
+
+                    val base = baseColors[i]
+                    val mixed = noise(
+                        noise(base, lightColor1, intensity1), lightColor2, intensity2 * 0.85f
+                    )
+
+                    meshState.setColor(i, mixed)
+                }
+            }
+        }
+    }
+
+    MeshGradient(
+        modifier = modifier, width = width, height = height, state = meshState
+    )
+}
+
+private fun noise(c1: Color, c2: Color, t: Float): Color {
+    val tt = t.coerceIn(0f, 1f)
+    return Color(
+        red = c1.red + (c2.red - c1.red) * tt,
+        green = c1.green + (c2.green - c1.green) * tt,
+        blue = c1.blue + (c2.blue - c1.blue) * tt,
+        alpha = c1.alpha + (c2.alpha - c1.alpha) * tt
+    )
+}
+
+// بهینه تر میشه نوشت؟؟؟
+fun hash20(text: String): Int {
+    return (text.hashCode() and Int.MAX_VALUE) % 19
+}
+
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun SMSMainScreen(
+    navHostController: NavHostController, smsViewModel: SmsChatViewModel
+) {
+    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
+
+    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
+    var selectedChat by rememberSaveable { mutableStateOf("") }
+    var selectedChatDisplayName by rememberSaveable { mutableStateOf("") }
+
+    val view = LocalView.current
+
+    val materialColors = listOf(
+        Color(0xFF607D8B),
+        Color(0xFF9E9E9E),
+        Color(0xFFFFEB3B),
+        Color(0xFFCDDC39),
+        Color(0xFF03A9F4),
+        Color(0xFF673AB7),
+        Color(0xFFFF5722),
+        Color(0xFFFF9800),
+        Color(0xFF4CAF50),
+        Color(0xFF009688),
+        Color(0xFF2196F3),
+        Color(0xFF9C27B0),
+        Color(0xFFF44336),
+        Color(0xFF795548),
+        Color(0xFFFFC107),
+        Color(0xFF8BC34A),
+        Color(0xFF00BCD4),
+        Color(0xFF3F51B5),
+        Color(0xFFE91E63)
+    )
+
+    val smsList by smsViewModel.chatList.collectAsState()
+
+    Row(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(
+                    if (expandedScreen) 0.3f else 1f
+                )
+                .zIndex(1f)
+        ) {
+            // Main Screen
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxSize(),
+                //.shadow(
+                //    elevation = 16.dp,
+                //    clip = false
+                //),
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("SMS")
+                        }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    navHostController.popBackStack()
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
+                    )
+                }) { innerPadding ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        items(
+                            items = smsList, key = { it.id }) { chat ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    val id = chat.id
+                                    selectedChat = id
+                                    selectedChatDisplayName = chat.name
+                                    if (!expandedScreen) {
+                                        navHostController.navigate(
+                                            "smsChatScreen?id=$id&displayName=${
+                                                Uri.encode(
+                                                    selectedChatDisplayName
+                                                )
+                                            }"
+                                        )
+                                    }
+                                }) {
+
+                                Box(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+
+                                    Spacer(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(start = 72.dp)
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                            )
+                                    )
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+
+                                        val backgroundColor = materialColors[hash20(chat.id)]
+                                        val iconColor = if (backgroundColor.luminance() >= 0.5f) {
+                                            Color.Black
+                                        } else {
+                                            Color.White
+                                        }
+
+                                        Surface(
+                                            modifier = Modifier.size(40.dp),
+                                            shape = CircleShape,
+                                            color = backgroundColor
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.profile_black_content),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                tint = iconColor.copy(alpha = 0.5f)
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(16.dp))
+
+                                        Column(
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+
+                                            Text(
+                                                text = chat.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            Text(
+                                                text = chat.lastMessageText,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(
+                                                    alpha = 0.6f
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        Spacer(Modifier.width(16.dp))
+
+                                        Column(
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+
+                                            Text(
+                                                text = chat.lastMessageDate,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+
+                                            Spacer(Modifier.height(4.dp))
+
+                                            if (chat.unreadMessages > 0) {
+
+                                                Box(
+                                                    modifier = Modifier
+                                                        .defaultMinSize(minWidth = 20.dp)
+                                                        .height(20.dp)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.primary,
+                                                            RoundedCornerShape(10.dp)
+                                                        )
+                                                        .padding(horizontal = 4.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+
+                                                    Text(
+                                                        text = chat.unreadMessages.toString(),
+                                                        color = MaterialTheme.colorScheme.onPrimary,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        maxLines = 1
+                                                    )
+                                                }
+
+                                            } else {
+
+                                                Icon(
+                                                    painter = painterResource(R.drawable.double_check),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                        },
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .padding(innerPadding)
+                            .size(56.dp)
+                            .align(Alignment.BottomEnd)
+                            .shadow(
+                                elevation = 6.dp, shape = CircleShape, clip = false
+                            ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(16.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.edit),
+                            contentDescription = "Send SMS",
+                            modifier = Modifier.fillMaxSize(),
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+            }
+        }
+
+        // Expanded Screen
+        if (expandedScreen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(0f)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.1f), Color.Transparent
+                                ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
+                            ), blendMode = BlendMode.Multiply
+                        )
+                    }) {
+                SMSChatScreen(
+                    back = { navHostController.popBackStack() },
+                    id = selectedChat,
+                    displayName = selectedChatDisplayName,
+                    smsViewModel = smsViewModel
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SMSChatScreen(
+    back: () -> Boolean,
+    id: String,
+    draft: String? = "",
+    displayName: String,
+    smsViewModel: SmsChatViewModel
+) {
+    val context = LocalContext.current
+    LaunchedEffect(id) {
+        if (id.isNotBlank()) {
+            smsViewModel.loadMessages(id)
+            smsViewModel.markMessageAsRead(context, id)
+        }
+    }
+    val messages = smsViewModel.messages.collectAsState().value
+    var renderValue by remember { mutableIntStateOf(3) }
+    var message by rememberSaveable { mutableStateOf(draft.toString()) }
+    val view = LocalView.current
+    val materialColors = listOf(
+        Color(0xFF607D8B),
+        Color(0xFF9E9E9E),
+        Color(0xFFFFEB3B),
+        Color(0xFFCDDC39),
+        Color(0xFF03A9F4),
+        Color(0xFF673AB7),
+        Color(0xFFFF5722),
+        Color(0xFFFF9800),
+        Color(0xFF4CAF50),
+        Color(0xFF009688),
+        Color(0xFF2196F3),
+        Color(0xFF9C27B0),
+        Color(0xFFF44336),
+        Color(0xFF795548),
+        Color(0xFFFFC107),
+        Color(0xFF8BC34A),
+        Color(0xFF00BCD4),
+        Color(0xFF3F51B5),
+        Color(0xFFE91E63)
+    )
+    val backgroundColor = materialColors[hash20(id)]
+    val iconColor = if (backgroundColor.luminance() >= 0.5f) {
+        Color.Black
+    } else {
+        Color.White
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                if (id != "") {
+                    TopAppBar(
+                        title = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    //.clip(HalfCutCircleShape())
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false)
+                                    ) {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        openContact(context, id)
+                                    }, verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .aspectRatio(1f)
+                                        .clip(CircleShape),
+                                    shape = CircleShape,
+                                    color = backgroundColor
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.profile_black_content),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = iconColor.copy(alpha = 0.5f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = displayName, modifier = Modifier.weight(1f))
+                            }
+                        }, navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    back()
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
+                    )
+                }
+            }) { innerPadding ->
+            Spacer(modifier = Modifier.padding(innerPadding))
+            AdvancedDynamicMeshLightEffect(
+                modifier = Modifier.fillMaxSize(), renderValue = renderValue
+            )
+            if (id != "") {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 64.dp)
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .fillMaxSize()
+                ) {
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        items(items = messages, key = { it.id }) { item ->
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
+                            ) {
+                                Message(
+                                    isMe = item.myMessage,
+                                    message = item.text,
+                                    seen = item.seen,
+                                    timestamp = item.date
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp/*, max = 256.dp*/)
+                            .background(MaterialTheme.colorScheme.primary)/*.imePadding()*/,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 8.dp, start = 8.dp, bottom = 10.dp)
+                                .shadow(
+                                    elevation = 4.dp, shape = RectangleShape, clip = false
+                                )
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        ) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+
+                                val onSurface = MaterialTheme.colorScheme.onSurface
+                                AndroidView(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp),
+                                    factory = { context ->
+                                        EditText(context).apply {
+
+                                            background = null
+
+                                            maxLines = 5
+
+                                            setTextColor(onSurface.toArgb())
+
+                                            addTextChangedListener(object : TextWatcher {
+
+                                                override fun beforeTextChanged(
+                                                    s: CharSequence?,
+                                                    start: Int,
+                                                    count: Int,
+                                                    after: Int
+                                                ) {
+                                                }
+
+                                                override fun onTextChanged(
+                                                    s: CharSequence?,
+                                                    start: Int,
+                                                    before: Int,
+                                                    count: Int
+                                                ) {
+                                                    message = s?.toString() ?: ""
+                                                }
+
+                                                override fun afterTextChanged(s: Editable?) {}
+                                            })
+                                        }
+                                    },
+                                    update = { editText ->
+                                        if (editText.text.toString() != message) {
+                                            editText.setText(message)
+                                            editText.setSelection(message.length)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                if (message.isNotBlank()) {
+                                    message = message.replace(Regex("\\n+$"), "").trim()
+                                    renderValue = (1..10).random()
+                                    smsViewModel.sendMessage(context, id, message)
+                                    message = ""
+                                }
+                            }, modifier = Modifier
+                                .padding(8.dp)
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.send),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

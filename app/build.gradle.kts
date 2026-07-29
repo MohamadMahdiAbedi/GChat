@@ -53,6 +53,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
-
+    implementation("io.github.om252345:composemeshgradient:0.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
