@@ -25,13 +25,20 @@ import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -380,7 +387,7 @@ private fun formatSmsDate(millis: Long): String {
         .format(Date(millis))
 }
 
-private fun getContactName(context: Context, phoneNumber: String): String? {
+fun getContactName(context: Context, phoneNumber: String): String? {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
         != PackageManager.PERMISSION_GRANTED
     ) return null
@@ -1187,3 +1194,29 @@ fun openContact(context: Context, phoneNumber: String) {
         context.startActivity(intent)
     }
 }
+
+//@Composable
+//@OptIn(ExperimentalMaterial3Api::class)
+//fun SmsRollInOldAndroid() {
+//    val context = LocalContext.current
+//
+//    var hasSmsAppRole by remember { mutableStateOf(false) }
+//
+//    fun refreshPermissions() {
+//        hasSmsAppRole = checkSmsAppRole(context)
+//    }
+//
+//    val smsRoleLauncher = rememberLauncherForActivityResult(
+//        ActivityResultContracts.StartActivityForResult()
+//    ) {
+//        refreshPermissions()
+//    }
+//
+//    val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
+//        putExtra(
+//            Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, context.packageName
+//        )
+//    }
+//
+//    smsRoleLauncher.launch(intent)
+//}

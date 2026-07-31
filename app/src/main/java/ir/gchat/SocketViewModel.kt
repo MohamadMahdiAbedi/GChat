@@ -59,6 +59,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     private var openedChat = MutableStateFlow("")
 
+    private var _shouldScrollToBottom = MutableStateFlow(false)
+    val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
+
     init {
         viewModelScope.launch {
             // Load saved values from DataStore
@@ -434,6 +437,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun sendMessage(contact: String, message: String) {
         _messageList.value += MessageItem(text = message, myMessage = true)
+        _shouldScrollToBottom.value = true
         viewModelScope.launch {
             try {
                 val json = JSONObject().apply {
@@ -492,5 +496,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             } catch (_: Exception) {
             }
         }
+    }
+
+    fun onScrolledToBottom() {
+        _shouldScrollToBottom.value = false
     }
 }

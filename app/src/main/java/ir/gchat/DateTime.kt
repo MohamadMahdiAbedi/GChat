@@ -6,82 +6,84 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 fun formatMessageTime(timestamp: String): String {
-    if (timestamp.isBlank()) return ""
+    try {
+        val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
-    val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
+            .atZone(ZoneOffset.UTC)
 
-    val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
-        .atZone(ZoneOffset.UTC)
+        val today = LocalDate.now(ZoneOffset.UTC)
+        val date = dateTime.toLocalDate()
 
-    val today = LocalDate.now(ZoneOffset.UTC)
-    val date = dateTime.toLocalDate()
-
-    return when {
-        date == today -> {
-            dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-        }
-
-        date == today.minusDays(1) -> {
-            "Yesterday, ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
-
-        date.isAfter(today.minusDays(7)) -> {
-            val dayName = when (date.dayOfWeek.value) {
-                1 -> "Monday"
-                2 -> "Tuesday"
-                3 -> "Wednesday"
-                4 -> "Thursday"
-                5 -> "Friday"
-                6 -> "Saturday"
-                7 -> "Sunday"
-                else -> ""
+        return when {
+            date == today -> {
+                dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
             }
-            "$dayName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
 
-        date.year == today.year -> {
-            val monthName = when (date.monthValue) {
-                1 -> "January"
-                2 -> "February"
-                3 -> "March"
-                4 -> "April"
-                5 -> "May"
-                6 -> "June"
-                7 -> "July"
-                8 -> "August"
-                9 -> "September"
-                10 -> "October"
-                11 -> "November"
-                12 -> "December"
-                else -> ""
+            date == today.minusDays(1) -> {
+                "Yesterday, ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
             }
-            "${date.dayOfMonth} $monthName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-        }
 
-        else -> {
-            val monthName = when (date.monthValue) {
-                1 -> "January"
-                2 -> "February"
-                3 -> "March"
-                4 -> "April"
-                5 -> "May"
-                6 -> "June"
-                7 -> "July"
-                8 -> "August"
-                9 -> "September"
-                10 -> "October"
-                11 -> "November"
-                12 -> "December"
-                else -> ""
+            date.isAfter(today.minusDays(7)) -> {
+                val dayName = when (date.dayOfWeek.value) {
+                    1 -> "Monday"
+                    2 -> "Tuesday"
+                    3 -> "Wednesday"
+                    4 -> "Thursday"
+                    5 -> "Friday"
+                    6 -> "Saturday"
+                    7 -> "Sunday"
+                    else -> ""
+                }
+                "$dayName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
             }
-            "${date.dayOfMonth} $monthName ${date.year}، ${
-                dateTime.format(
-                    DateTimeFormatter.ofPattern(
-                        "HH:mm"
+
+            date.year == today.year -> {
+                val monthName = when (date.monthValue) {
+                    1 -> "January"
+                    2 -> "February"
+                    3 -> "March"
+                    4 -> "April"
+                    5 -> "May"
+                    6 -> "June"
+                    7 -> "July"
+                    8 -> "August"
+                    9 -> "September"
+                    10 -> "October"
+                    11 -> "November"
+                    12 -> "December"
+                    else -> ""
+                }
+                "${date.dayOfMonth} $monthName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+            }
+
+            else -> {
+                val monthName = when (date.monthValue) {
+                    1 -> "January"
+                    2 -> "February"
+                    3 -> "March"
+                    4 -> "April"
+                    5 -> "May"
+                    6 -> "June"
+                    7 -> "July"
+                    8 -> "August"
+                    9 -> "September"
+                    10 -> "October"
+                    11 -> "November"
+                    12 -> "December"
+                    else -> ""
+                }
+                "${date.dayOfMonth} $monthName ${date.year}, ${
+                    dateTime.format(
+                        DateTimeFormatter.ofPattern(
+                            "HH:mm"
+                        )
                     )
-                )
-            }"
+                }"
+            }
         }
+    }  catch (_: Exception) {
+         return ""
     }
 }
 
