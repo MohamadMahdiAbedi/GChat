@@ -780,6 +780,7 @@ class SendSmsActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val theme by viewModel.theme.collectAsState()
+            val palette by viewModel.palette.collectAsState()
             val darkTheme = when (theme) {
                 0 -> isSystemInDarkTheme()
                 1 -> true
@@ -798,7 +799,7 @@ class SendSmsActivity : ComponentActivity() {
                     }
                 }
             }
-            GChatTheme(dynamicColor = false, darkTheme = darkTheme) {
+            GChatTheme(dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette) {
                 val context = LocalContext.current
                 SMSChatScreen(
                     back = {

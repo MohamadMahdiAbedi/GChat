@@ -169,6 +169,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // theme
             val theme by viewModel.theme.collectAsState()
+            val palette by viewModel.palette.collectAsState()
             val darkTheme = when (theme) {
                 0 -> isSystemInDarkTheme()
                 1 -> true
@@ -193,10 +194,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            primary = materialPalette[viewModel.palette.collectAsState().value].primary
-            onPrimary = materialPalette[viewModel.palette.collectAsState().value].onPrimary
             GChatTheme(
-                dynamicColor = false, darkTheme = darkTheme
+                dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
             ) {
                 MainNavigation(
                     setTheme = { viewModel.setTheme() },
@@ -237,7 +236,9 @@ class MainActivity : ComponentActivity() {
                     viewModel = viewModel,
                     username = socketViewModel.usernameState.collectAsState().value,
                     shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
-                    onScrolledToBottom = { socketViewModel.onScrolledToBottom() }
+                    onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
+                    setColor = { theme -> viewModel.setColor(theme) },
+                    paletteIndex = palette
                 )
                 SetUpSystemBars(darkTheme)
             }
@@ -353,7 +354,9 @@ fun MainNavigation(
     viewModel: MainViewModel,
     username: String,
     shouldScrollToBottom: Boolean,
-    onScrolledToBottom: () -> Unit
+    onScrolledToBottom: () -> Unit,
+    setColor: (Int) -> Unit,
+    paletteIndex: Int
 ) {
     val navController = rememberNavController()
     val pendingIntent by viewModel.pendingIntent.collectAsState()
@@ -515,7 +518,9 @@ fun MainNavigation(
             AppearanceSettingsScreen(
                 setTheme = setTheme,
                 theme = theme,
-                navHostController = navController
+                navHostController = navController,
+                setColor = setColor,
+                paletteIndex = paletteIndex
             )
         }
         composable(route = "settings") {

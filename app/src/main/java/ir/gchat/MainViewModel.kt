@@ -2,6 +2,7 @@ package ir.gchat
 
 import android.app.Application
 import android.content.Intent
+import androidx.compose.ui.graphics.Color
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -65,5 +66,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPendingIntent(intent: Intent?) {
         _pendingIntent.value = intent
+    }
+
+    fun setColor(index: Int) {
+        _palette.value = index
+
+        viewModelScope.launch {
+            context.dataStore.edit {
+                it[PALETTE_KEY] = index
+            }
+        }
     }
 }

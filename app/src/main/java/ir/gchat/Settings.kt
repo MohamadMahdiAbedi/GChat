@@ -1,6 +1,9 @@
 package ir.gchat
 
 import android.view.SoundEffectConstants
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
@@ -60,10 +64,17 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.layout.FlowRow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController: NavHostController) {
+fun AppearanceSettingsScreen(
+    setTheme: () -> Unit,
+    theme: Int,
+    navHostController: NavHostController,
+    setColor: (Int) -> Unit,
+    paletteIndex: Int
+) {
     val view = LocalView.current
     var dropdownThemeText by remember { mutableStateOf("System") }
     var dropdownThemeIcon by remember { mutableIntStateOf(R.drawable.auto) }
@@ -131,42 +142,52 @@ fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
+
                     Text(
                         text = "Theme",
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
+
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp),
                         color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             setTheme()
                         }
                     ) {
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+
                             Icon(
                                 painter = painterResource(dropdownThemeIcon),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .size(24.dp)
                             )
 
                             Column(
                                 modifier = Modifier.weight(1f)
                             ) {
+
                                 Text(
                                     text = dropdownThemeText,
                                     style = MaterialTheme.typography.bodyLarge
@@ -182,58 +203,93 @@ fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController
                     }
                 }
             }
+
+
             Spacer(modifier = Modifier.height(8.dp))
+
+
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+
+                Column {
+
                     Text(
                         text = "Colors",
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            setTheme()
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                painter = painterResource(dropdownThemeIcon),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
-                            )
 
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    text = dropdownThemeText,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-
-                                Text(
-                                    text = "Tap to next",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
+                    var selectedColor by remember {
+                        mutableStateOf(materialColors[paletteIndex])
                     }
+
+                    ColorPaletteSelector(
+                        materialPalette = materialPalette,
+                        selectedColor = selectedColor,
+                        onColorSelected = { theme ->
+                            selectedColor = materialColors[theme]
+                            setColor(theme)
+                        }
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+fun ColorPaletteSelector(
+    materialPalette: List<Palette>,
+    selectedColor: Color,
+    onColorSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val view = LocalView.current
+
+    FlowRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        materialPalette.forEachIndexed { index, paletteItem ->
+            val isSelected = selectedColor == paletteItem.primary
+
+            val animatedSize by animateDpAsState(
+                targetValue = if (isSelected) 64.dp else 48.dp,
+                animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing),
+                label = "colorSize"
+            )
+
+            val animatedPadding by animateDpAsState(
+                targetValue = if (isSelected) 0.dp else 8.dp,
+                animationSpec = tween(durationMillis = 100, easing = FastOutSlowInEasing),
+                label = "colorPadding"
+            )
+
+            Box(
+                modifier = Modifier
+                    .padding(animatedPadding)
+                    .size(animatedSize)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = CircleShape,
+                        clip = false
+                    )
+                    .clip(CircleShape)
+                    .background(paletteItem.primary)
+                    .clickable {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onColorSelected(index)
+                    }
+            )
         }
     }
 }
@@ -298,7 +354,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                         color = MaterialTheme.colorScheme.primary
                     )
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp),
                         color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -313,7 +371,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 painter = painterResource(R.drawable.imagesearch_roller),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .size(24.dp)
                             )
 
                             Column(
@@ -333,7 +393,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                         }
                     }
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp),
                         color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -347,7 +409,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 painter = painterResource(R.drawable.tabs),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .size(24.dp)
                             )
 
                             Column(
@@ -368,7 +432,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                         }
                     }
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp),
                         color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -382,7 +448,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 painter = painterResource(R.drawable.translate),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .size(24.dp)
                             )
 
                             Column(
@@ -402,7 +470,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                         }
                     }
                     Surface(
-                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp),
                         color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -416,7 +486,9 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 painter = painterResource(R.drawable.notification),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(16.dp).size(24.dp)
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .size(24.dp)
                             )
 
                             Column(
