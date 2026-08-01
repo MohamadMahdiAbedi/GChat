@@ -5,6 +5,11 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
+fun getCurrentUtcTimestamp(): String {
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    return LocalDateTime.now(ZoneOffset.UTC).format(formatter)
+}
+
 fun formatMessageTime(timestamp: String): String {
     try {
         val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")

@@ -2,15 +2,7 @@
 <resources>
     <style name="Theme.GChat" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <style name="Theme.GChat.Splash" parent="Theme.GChat">
-        <item name="android:windowBackground">@drawable/splash_bg</item>
-    </style>
-
-<!--    <style name="Theme.GChat.Splash" parent="Theme.SplashScreen">-->
-<!--        <item name="windowSplashScreenBackground">?android:colorBackground</item>-->
-
-<!--        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>-->
-
-<!--        <item name="postSplashScreenTheme">@style/Theme.GChat</item>-->
-<!--    </style>-->
+    <!--<style name="Theme.GChat.Splash" parent="Theme.GChat">-->
+    <!--    <item name="android:windowBackground">@drawable/splash_bg</item>-->
+    <!--</style>-->
 </resources>

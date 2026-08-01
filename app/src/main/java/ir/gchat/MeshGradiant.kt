@@ -143,16 +143,12 @@ fun generateGradientBitmap(
     return androidBitmap.asImageBitmap()
 }
 
-// ─────────────────────────────────────────────
-// کامپوزبل اصلی
-// ─────────────────────────────────────────────
-
 @Composable
 fun TWallpaper(
     modifier: Modifier = Modifier,
     colors: List<String> = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
     fps: Int = 24,
-    tails: Int = 90,
+    tails: Int = 6,
     animate: Boolean = true
 ) {
     val rgbColors = remember(colors) { colors.take(4).map { hexToRgb(it) } }
@@ -186,6 +182,6 @@ fun TWallpaper(
         contentDescription = null,
         modifier = modifier.fillMaxSize(),
         contentScale = ContentScale.Crop,
-        filterQuality = FilterQuality.Low   // حیاتی برای پرفورمنس
+        filterQuality = FilterQuality.Low
     )
 }

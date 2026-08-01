@@ -129,12 +129,13 @@ fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -146,7 +147,7 @@ fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController
                     )
                     Surface(
                         modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             setTheme()
@@ -174,7 +175,58 @@ fun AppearanceSettingsScreen(setTheme: () -> Unit, theme: Int, navHostController
                                 Text(
                                     text = "Tap to next",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 4.dp
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Colors",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        onClick = {
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            setTheme()
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                painter = painterResource(dropdownThemeIcon),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(16.dp).size(24.dp)
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = dropdownThemeText,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+
+                                Text(
+                                    text = "Tap to next",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -229,12 +281,13 @@ fun SettingsScreen(navHostController: NavHostController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
                 modifier = Modifier
                     .fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 4.dp
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -246,7 +299,7 @@ fun SettingsScreen(navHostController: NavHostController) {
                     )
                     Surface(
                         modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             navHostController.navigate("appearanceSettings")
@@ -274,14 +327,14 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 Text(
                                     text = "Theme, colors and fonts",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                         }
@@ -309,14 +362,14 @@ fun SettingsScreen(navHostController: NavHostController) {
                                     // اینجا اسم چند تا پوشه رو بگیره بنویسه
                                     text = "Categorize and organize conversations",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                         }
@@ -343,14 +396,14 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 Text(
                                     text = "English, فارسی, عربی",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth().height(72.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        color = MaterialTheme.colorScheme.surface,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                         }
@@ -377,7 +430,7 @@ fun SettingsScreen(navHostController: NavHostController) {
                                 Text(
                                     text = "Sound, vibration and alerts",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -497,7 +550,7 @@ fun IpConfig(
                     .fillMaxWidth()
                     .padding(8.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(2.dp)
                     )
                     .shadow(

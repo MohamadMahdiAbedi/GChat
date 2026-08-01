@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.compose.ui.graphics.Color
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
 
@@ -17,25 +18,27 @@ val SERVERIP_KEY = stringPreferencesKey("serverIP")
 val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
 val USERNAME_KEY = stringPreferencesKey("username")
 val PASSWORD_KEY = stringPreferencesKey("password")
+val PALETTE_KEY = intPreferencesKey("palette")
 
 data class Contact(
-    val id: String = "",
-    val name: String = "",
+    val id: String,
+    val name: String,
     val profilePicture: String = "",
-    val lastMessageText: String = "",
-    val lastMessageDate: String = "",
-    val unreadMessages: Int = 0,
-    val connectionStatus: Boolean = false,
-)
-
-data class SearchEntity(
-    val username: String, val isOnline: Boolean
+    val lastMessageText: String,
+    val lastMessageDate: String,
+    val unreadMessages: Int,
+    val isOnline: Boolean
 )
 
 data class MessageItem(
-    val text: String = "",
-    val id: Int = 0,
-    val date: String = "",
-    val myMessage: Boolean = false,
-    val seen: Boolean = false
+    val text: String,
+    val id: Int,
+    val date: String,
+    val myMessage: Boolean,
+    val seen: Boolean
+)
+
+data class Palette(
+    val primary: Color,
+    val onPrimary: Color
 )

@@ -3,6 +3,7 @@ package ir.gchat
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.role.RoleManager
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
@@ -30,7 +31,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -120,7 +120,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -148,11 +147,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import ir.gchat.ui.theme.GChatTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
@@ -192,6 +193,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            primary = materialPalette[viewModel.palette.collectAsState().value].primary
+            onPrimary = materialPalette[viewModel.palette.collectAsState().value].onPrimary
             GChatTheme(
                 dynamicColor = false, darkTheme = darkTheme
             ) {
@@ -337,7 +340,7 @@ fun MainNavigation(
     device: suspend () -> Int,
     loginError: Int,
     getRules: () -> String,
-    searchContactList: List<SearchEntity>,
+    searchContactList: List<Contact>,
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
@@ -361,7 +364,7 @@ fun MainNavigation(
     LaunchedEffect(Unit) {
         val intent = initialIntent ?: return@LaunchedEffect
         if (intent.getBooleanExtra("open_sms_chat", false)) {
-            delay(500.milliseconds)
+            //delay(500.milliseconds)
             val id = intent.getStringExtra("id").orEmpty()
             val displayName = intent.getStringExtra("displayName").orEmpty()
             if (id.isNotBlank()) {
@@ -377,7 +380,7 @@ fun MainNavigation(
     LaunchedEffect(pendingIntent) {
         val intent = pendingIntent ?: return@LaunchedEffect
         if (intent.getBooleanExtra("open_sms_chat", false)) {
-            delay(300.milliseconds)
+            //delay(300.milliseconds)
             val id = intent.getStringExtra("id").orEmpty()
             val displayName = intent.getStringExtra("displayName").orEmpty()
 
@@ -652,6 +655,267 @@ fun MainNavigation(
     }
 }
 
+//@Composable
+//fun ContactItem(contact: Contact, onClick: () -> Unit) {
+//    Surface(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .height(72.dp),
+//        color = MaterialTheme.colorScheme.surface,
+//        onClick = onClick
+//    ) {
+//        Box(
+//            modifier = Modifier.fillMaxSize()
+//        ) {
+//            Spacer(
+//                modifier = Modifier
+//                    .align(Alignment.BottomStart)
+//                    .padding(start = 72.dp)
+//                    .fillMaxWidth()
+//                    .height(1.dp)
+//                    .background(
+//                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+//                    )
+//            )
+//            Row(
+//                modifier = Modifier
+//                    .fillMaxSize()
+//                    .padding(horizontal = 16.dp),
+//                verticalAlignment = Alignment.CenterVertically
+//            ) {
+//                Box(Modifier.size(40.dp)) {
+//                    val backgroundColor = materialColors[hash20(contact.id)]
+//                    val iconColor =
+//                        if (backgroundColor.luminance() >= 0.5f) {
+//                            Color.Black
+//                        } else {
+//                            Color.White
+//                        }
+//
+//                    Surface(
+//                        modifier = Modifier.size(40.dp),
+//                        shape = CircleShape,
+//                        color = backgroundColor
+//                    ) {
+//                        Icon(
+//                            painter = painterResource(R.drawable.profile_black_content),
+//                            contentDescription = null,
+//                            modifier = Modifier.fillMaxSize(),
+//                            tint = iconColor.copy(alpha = 0.5f)
+//                        )
+//                    }
+//
+//                    if (contact.isOnline) {
+//                        Spacer(
+//                            Modifier
+//                                .align(Alignment.TopEnd)
+//                                .padding(2.dp)
+//                                .size(8.dp)
+//                                .background(Color(0xFF23A55A), CircleShape)
+//                        )
+//                    }
+//                }
+//
+//                Spacer(Modifier.width(16.dp))
+//
+//                Column(
+//                    modifier = Modifier.fillMaxSize()
+//                ) {
+//
+//                    Row(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.5f), verticalAlignment = Alignment.CenterVertically) {
+//                        Text(
+//                            text = contact.name,
+//                            maxLines = 1,
+//                            overflow = TextOverflow.Ellipsis,
+//                            modifier = Modifier.weight(1f)
+//                        )
+//
+//                        Spacer(Modifier.width(4.dp))
+//
+//                        Text(
+//                            text = formatMessageTime(contact.lastMessageDate),
+//                            style = MaterialTheme.typography.bodySmall,
+//                            maxLines = 1,
+//                            overflow = TextOverflow.Ellipsis
+//                        )
+//                    }
+//                    Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+//                        Text(
+//                            text = contact.lastMessageText,
+//                            style = MaterialTheme.typography.bodySmall,
+//                            color = MaterialTheme.colorScheme.onSurface.copy(
+//                                alpha = 0.6f
+//                            ),
+//                            maxLines = 1,
+//                            overflow = TextOverflow.Ellipsis,
+//                            modifier = Modifier.weight(1f)
+//                        )
+//
+//                        Spacer(Modifier.width(4.dp))
+//
+//                        if (contact.unreadMessages > 0) {
+//
+//                            Box(
+//                                modifier = Modifier
+//                                    .defaultMinSize(minWidth = 20.dp)
+//                                    .height(20.dp)
+//                                    .background(
+//                                        MaterialTheme.colorScheme.primary,
+//                                        RoundedCornerShape(10.dp)
+//                                    )
+//                                    .padding(horizontal = 4.dp),
+//                                contentAlignment = Alignment.Center
+//                            ) {
+//
+//                                Text(
+//                                    text = contact.unreadMessages.toString(),
+//                                    color = MaterialTheme.colorScheme.onPrimary,
+//                                    style = MaterialTheme.typography.labelSmall,
+//                                    maxLines = 1
+//                                )
+//                            }
+//
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
+
+@Composable
+fun ContactItem(
+    contact: Contact,
+    onClick: () -> Unit
+) {
+    val backgroundColor = remember(contact.id) {
+        materialColors[hash20(contact.id)]
+    }
+
+    val iconColor = if (backgroundColor.luminance() >= 0.5f)
+        Color.Black
+    else
+        Color.White
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        color = MaterialTheme.colorScheme.surface,
+        onClick = onClick
+    ) {
+        Box(modifier = Modifier
+            .fillMaxSize()) {
+            Spacer(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 72.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    )
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(backgroundColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                R.drawable.profile_black_content
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = iconColor.copy(alpha = .5f)
+                        )
+                    }
+                    if (contact.isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(1.dp)
+                                .size(9.dp)
+                                .background(
+                                    Color(0xFF23A55A),
+                                    CircleShape
+                                )
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = contact.name,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = formatMessageTime(contact.lastMessageDate),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = contact.lastMessageText,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                                .copy(alpha = .6f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (contact.unreadMessages > 0) {
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .height(20.dp)
+                                    .defaultMinSize(minWidth = 20.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary,
+                                        RoundedCornerShape(50)
+                                    )
+                                    .padding(horizontal = 5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = contact.unreadMessages.toString(),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @SuppressLint("ConfigurationScreenWidthHeight")
 @OptIn(
     ExperimentalMaterial3AdaptiveApi::class,
@@ -662,7 +926,7 @@ fun MainNavigation(
 fun MainScreen(
     chatList: List<Contact>,
     navHostController: NavHostController,
-    searchContactList: List<SearchEntity>,
+    searchContactList: List<Contact>,
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
@@ -695,28 +959,6 @@ fun MainScreen(
 
     val view = LocalView.current
 
-    val materialColors = listOf(
-        Color(0xFF607D8B),
-        Color(0xFF9E9E9E),
-        Color(0xFFFFEB3B),
-        Color(0xFFCDDC39),
-        Color(0xFF03A9F4),
-        Color(0xFF673AB7),
-        Color(0xFFFF5722),
-        Color(0xFFFF9800),
-        Color(0xFF4CAF50),
-        Color(0xFF009688),
-        Color(0xFF2196F3),
-        Color(0xFF9C27B0),
-        Color(0xFFF44336),
-        Color(0xFF795548),
-        Color(0xFFFFC107),
-        Color(0xFF8BC34A),
-        Color(0xFF00BCD4),
-        Color(0xFF3F51B5),
-        Color(0xFFE91E63)
-    )
-
     val backgroundColor = materialColors[hash20(username)]
     val iconColor = if (backgroundColor.luminance() >= 0.5f) {
         Color.Black
@@ -724,8 +966,21 @@ fun MainScreen(
         Color.White
     }
 
+    var hasSmsAppRole by remember { mutableStateOf(false) }
+
+    fun refreshPermissions() {
+        hasSmsAppRole = checkSmsAppRole(context)
+    }
+
+    val smsRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        refreshPermissions()
+    }
+
     LaunchedEffect(Unit) {
         getConversations()
+        refreshPermissions()
     }
 
     ModalNavigationDrawer(
@@ -765,11 +1020,16 @@ fun MainScreen(
                                 ), blendMode = BlendMode.Multiply
                             )
                         }) {
-                    Image(
-                        painter = painterResource(R.drawable.wallpaper_picture),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    //Image(
+                    //    painter = painterResource(R.drawable.wallpaper_picture),
+                    //    contentDescription = null,
+                    //    modifier = Modifier.fillMaxSize(),
+                    //    contentScale = ContentScale.Crop
+                    //)
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.primary)
                     )
 
                     Column(
@@ -965,7 +1225,23 @@ fun MainScreen(
                             },
                             onClick = {
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                requestSmsDefaultRole(context)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    val roleManager =
+                                        context.getSystemService(RoleManager::class.java)
+
+                                    if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
+                                            RoleManager.ROLE_SMS
+                                        )
+                                    ) {
+                                        smsRoleLauncher.launch(
+                                            roleManager.createRequestRoleIntent(
+                                                RoleManager.ROLE_SMS
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    requestSmsDefaultRole(context)
+                                }
                             }
                         )
                     }
@@ -1071,11 +1347,8 @@ fun MainScreen(
                         ) {
                             items(
                                 items = chatList, key = { it.id }) { contact ->
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(72.dp),
-                                    color = MaterialTheme.colorScheme.surface,
+                                ContactItem(
+                                    contact = contact,
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         val id = contact.id
@@ -1092,131 +1365,8 @@ fun MainScreen(
                                                 }&selectedChatUnreadCount=${selectedChatUnreadCount}"
                                             )
                                         }
-                                    }) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize()
-                                    ) {
-                                        Spacer(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomStart)
-                                                .padding(start = 72.dp)
-                                                .fillMaxWidth()
-                                                .height(1.dp)
-                                                .background(
-                                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                                )
-                                        )
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(horizontal = 16.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-
-                                            //Surface(
-                                            //    modifier = Modifier.size(40.dp), shape = CircleShape
-                                            //) {
-                                            //    Image(
-                                            //        painter = painterResource(R.drawable.profile),
-                                            //        contentDescription = null,
-                                            //        modifier = Modifier.fillMaxSize(),
-                                            //        contentScale = ContentScale.Crop
-                                            //    )
-                                            //}
-
-                                            val backgroundColor = materialColors[hash20(contact.id)]
-                                            val iconColor =
-                                                if (backgroundColor.luminance() >= 0.5f) {
-                                                    Color.Black
-                                                } else {
-                                                    Color.White
-                                                }
-
-                                            Surface(
-                                                modifier = Modifier.size(40.dp),
-                                                shape = CircleShape,
-                                                color = backgroundColor
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.profile_black_content),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    tint = iconColor.copy(alpha = 0.5f)
-                                                )
-                                            }
-
-                                            Spacer(Modifier.width(16.dp))
-
-                                            Column(
-                                                modifier = Modifier.weight(1f)
-                                            ) {
-
-                                                Text(
-                                                    text = contact.name,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-
-                                                Text(
-                                                    text = contact.lastMessageText,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(
-                                                        alpha = 0.6f
-                                                    ),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-
-                                            Spacer(Modifier.width(16.dp))
-
-                                            Column(
-                                                horizontalAlignment = Alignment.End
-                                            ) {
-
-                                                Text(
-                                                    text = formatMessageTime(contact.lastMessageDate),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-
-                                                Spacer(Modifier.height(4.dp))
-
-                                                if (contact.unreadMessages > 0) {
-
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .defaultMinSize(minWidth = 20.dp)
-                                                            .height(20.dp)
-                                                            .background(
-                                                                MaterialTheme.colorScheme.primary,
-                                                                RoundedCornerShape(10.dp)
-                                                            )
-                                                            .padding(horizontal = 4.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-
-                                                        Text(
-                                                            text = contact.unreadMessages.toString(),
-                                                            color = MaterialTheme.colorScheme.onPrimary,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            maxLines = 1
-                                                        )
-                                                    }
-
-                                                } else {
-                                                    //Icon(
-                                                    //    painter = painterResource(R.drawable.double_check),
-                                                    //    contentDescription = null,
-                                                    //    modifier = Modifier.size(20.dp),
-                                                    //    tint = MaterialTheme.colorScheme.primary
-                                                    //)
-                                                }
-                                            }
-                                        }
                                     }
-                                }
+                                )
                             }
                         }
 
@@ -1373,142 +1523,19 @@ fun MainScreen(
                             )
                     ) {
                         items(items = searchContactList) { item ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(72.dp),
-                                color = MaterialTheme.colorScheme.surface,
+                            ContactItem(
+                                contact = item,
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    val id = item.username
+                                    val id = item.id
                                     selectedChat = id
                                     getMessagesList(selectedChat)
                                     if (!expandedScreen) {
                                         //selectedChatUnreadCount این رو باید درست پاس بدی این یه باگ نیست در آیده هندل میشه
                                         navHostController.navigate("chatScreen?id=$id&displayName=$id&selectedChatUnreadCount=${selectedChatUnreadCount}")
                                     }
-                                }) {
-
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-
-                                    Spacer(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(start = 72.dp)
-                                            .fillMaxWidth()
-                                            .height(1.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                            )
-                                    )
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-
-                                        Box(Modifier.size(40.dp)) {
-                                            val backgroundColor =
-                                                materialColors[hash20(item.username)]
-                                            val iconColor =
-                                                if (backgroundColor.luminance() >= 0.5f) {
-                                                    Color.Black
-                                                } else {
-                                                    Color.White
-                                                }
-
-                                            Surface(
-                                                modifier = Modifier.size(40.dp),
-                                                shape = CircleShape,
-                                                color = backgroundColor
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.profile_black_content),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    tint = iconColor.copy(alpha = 0.5f)
-                                                )
-                                            }
-
-                                            if (item.isOnline) {
-                                                Spacer(
-                                                    Modifier
-                                                        .align(Alignment.TopEnd)
-                                                        .padding(2.dp)
-                                                        .size(8.dp)
-                                                        .background(Color(0xFF23A55A), CircleShape)
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(Modifier.width(16.dp))
-
-                                        Column(
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-
-                                            Text(
-                                                text = item.username,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-
-                                            Text(
-                                                text = "@${item.username}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(
-                                                    alpha = 0.6f
-                                                ),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        //Spacer(Modifier.width(16.dp))
-
-                                        //Column(
-                                        //    horizontalAlignment = Alignment.End
-                                        //) {
-
-                                        //    Text(
-                                        //        text = item.username,
-                                        //        style = MaterialTheme.typography.bodySmall,
-                                        //        maxLines = 1,
-                                        //        overflow = TextOverflow.Ellipsis
-                                        //    )
-
-                                        //    Spacer(Modifier.height(4.dp))
-
-                                        //    if (item.isOnline) {
-
-                                        //        Box(
-                                        //            modifier = Modifier
-                                        //                .defaultMinSize(minWidth = 20.dp)
-                                        //                .height(20.dp)
-                                        //                .background(
-                                        //                    MaterialTheme.colorScheme.primary,
-                                        //                    RoundedCornerShape(10.dp)
-                                        //                )
-                                        //                .padding(horizontal = 4.dp),
-                                        //            contentAlignment = Alignment.Center
-                                        //        ) {
-
-                                        //            Text(
-                                        //                text = "*",
-                                        //                color = MaterialTheme.colorScheme.onPrimary,
-                                        //                style = MaterialTheme.typography.labelSmall,
-                                        //                maxLines = 1
-                                        //            )
-                                        //        }
-                                        //    }
-                                        //}
-                                    }
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -1728,7 +1755,7 @@ fun ChatScreen(
         }
     }
 
-    var renderValue by remember { mutableIntStateOf(4) }
+    //var renderValue by remember { mutableIntStateOf(4) }
     //var isExpandedAttachment by remember { mutableStateOf(false) }
     //var isExpandedEmoji by remember { mutableStateOf(false) }
     var message by rememberSaveable { mutableStateOf(draft.toString()) }
@@ -1742,28 +1769,6 @@ fun ChatScreen(
 
     val view = LocalView.current
 
-    val materialColors = listOf(
-        Color(0xFF607D8B),
-        Color(0xFF9E9E9E),
-        Color(0xFFFFEB3B),
-        Color(0xFFCDDC39),
-        Color(0xFF03A9F4),
-        Color(0xFF673AB7),
-        Color(0xFFFF5722),
-        Color(0xFFFF9800),
-        Color(0xFF4CAF50),
-        Color(0xFF009688),
-        Color(0xFF2196F3),
-        Color(0xFF9C27B0),
-        Color(0xFFF44336),
-        Color(0xFF795548),
-        Color(0xFFFFC107),
-        Color(0xFF8BC34A),
-        Color(0xFF00BCD4),
-        Color(0xFF3F51B5),
-        Color(0xFFE91E63)
-    )
-
     val backgroundColor = materialColors[hash20(id)]
     val iconColor = if (backgroundColor.luminance() >= 0.5f) {
         Color.Black
@@ -1771,11 +1776,13 @@ fun ChatScreen(
         Color.White
     }
 
+    var animate by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize(),
-                //.background(MaterialTheme.colorScheme.background),
+            //.background(MaterialTheme.colorScheme.background),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (id != "") {
@@ -1853,9 +1860,9 @@ fun ChatScreen(
             TWallpaper(
                 modifier = Modifier.fillMaxSize(),
                 colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
-                fps = 24,
+                fps = 60,
                 tails = 90,
-                animate = true
+                animate = animate
             )
             if (id != "") {
                 Column(
@@ -2061,7 +2068,12 @@ fun ChatScreen(
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                 if (message.isNotBlank()) {
                                     message = message.replace(Regex("\\n+$"), "").trim()
-                                    renderValue = (1..10).random()
+                                    scope.launch {
+                                        animate = true
+                                        delay(1000.milliseconds)
+                                        animate = false
+                                    }
+                                    //renderValue = (1..10).random()
                                     sendMessage(id, message)
                                     message = ""
                                 }
@@ -2207,7 +2219,7 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
         ) {
             val maxMessageWidth = minOf(maxWidth * 0.8f, 480.dp)
             Surface(
-                color = if (isMe) Color(0xFFEFFEDD) else Color.White,
+                color = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(size = 2.dp),
                 modifier = Modifier.widthIn(max = maxMessageWidth)
             ) {
@@ -2232,7 +2244,7 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
                             text = formatMessageTime,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontStyle = FontStyle.Normal,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurface
                             ),
                             onTextLayout = {
                                 timeWidth = with(density) { it.size.width.toDp() }
@@ -2362,28 +2374,6 @@ fun SMSMainScreen(
     var selectedChatDisplayName by rememberSaveable { mutableStateOf("") }
 
     val view = LocalView.current
-
-    val materialColors = listOf(
-        Color(0xFF607D8B),
-        Color(0xFF9E9E9E),
-        Color(0xFFFFEB3B),
-        Color(0xFFCDDC39),
-        Color(0xFF03A9F4),
-        Color(0xFF673AB7),
-        Color(0xFFFF5722),
-        Color(0xFFFF9800),
-        Color(0xFF4CAF50),
-        Color(0xFF009688),
-        Color(0xFF2196F3),
-        Color(0xFF9C27B0),
-        Color(0xFFF44336),
-        Color(0xFF795548),
-        Color(0xFFFFC107),
-        Color(0xFF8BC34A),
-        Color(0xFF00BCD4),
-        Color(0xFF3F51B5),
-        Color(0xFFE91E63)
-    )
 
     val smsList by smsViewModel.chatList.collectAsState()
     var expanded by remember { mutableStateOf(false) }
@@ -2781,30 +2771,10 @@ fun SMSChatScreen(
         }
     }
     val messages = smsViewModel.messages.collectAsState().value
-    var renderValue by remember { mutableIntStateOf(4) }
+    //var renderValue by remember { mutableIntStateOf(4) }
     var message by rememberSaveable { mutableStateOf(draft.toString()) }
     val view = LocalView.current
-    val materialColors = listOf(
-        Color(0xFF607D8B),
-        Color(0xFF9E9E9E),
-        Color(0xFFFFEB3B),
-        Color(0xFFCDDC39),
-        Color(0xFF03A9F4),
-        Color(0xFF673AB7),
-        Color(0xFFFF5722),
-        Color(0xFFFF9800),
-        Color(0xFF4CAF50),
-        Color(0xFF009688),
-        Color(0xFF2196F3),
-        Color(0xFF9C27B0),
-        Color(0xFFF44336),
-        Color(0xFF795548),
-        Color(0xFFFFC107),
-        Color(0xFF8BC34A),
-        Color(0xFF00BCD4),
-        Color(0xFF3F51B5),
-        Color(0xFFE91E63)
-    )
+
     val backgroundColor = materialColors[hash20(id)]
     val iconColor = if (backgroundColor.luminance() >= 0.5f) {
         Color.Black
@@ -2812,11 +2782,13 @@ fun SMSChatScreen(
         Color.White
     }
 
+    var animate by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize(),
-                //.background(MaterialTheme.colorScheme.background),
+            //.background(MaterialTheme.colorScheme.background),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 if (id != "") {
@@ -2881,9 +2853,9 @@ fun SMSChatScreen(
             TWallpaper(
                 modifier = Modifier.fillMaxSize(),
                 colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
-                fps = 24,
+                fps = 60,
                 tails = 90,
-                animate = true
+                animate = animate
             )
             if (id != "") {
                 Column(
@@ -3026,7 +2998,12 @@ fun SMSChatScreen(
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                 if (message.isNotBlank()) {
                                     message = message.replace(Regex("\\n+$"), "").trim()
-                                    renderValue = (1..10).random()
+                                    scope.launch {
+                                        animate = true
+                                        delay(1000.milliseconds)
+                                        animate = false
+                                    }
+                                    //renderValue = (1..10).random()
                                     smsViewModel.sendMessage(context, id, message)
                                     message = ""
                                 }

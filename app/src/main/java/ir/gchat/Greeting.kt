@@ -1950,7 +1950,8 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                                     )
                                 )
                             }
-                        }) {
+                        }
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

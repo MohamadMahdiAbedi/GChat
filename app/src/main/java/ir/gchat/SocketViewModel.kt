@@ -1,6 +1,7 @@
 package ir.gchat
 
 import android.app.Application
+import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
@@ -51,8 +52,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private val _chatList = MutableStateFlow(emptyList<Contact>())
     val chatList: StateFlow<List<Contact>> = _chatList.asStateFlow()
 
-    private val _contactSearchList = MutableStateFlow(emptyList<SearchEntity>())
-    val contactSearchList: StateFlow<List<SearchEntity>> = _contactSearchList.asStateFlow()
+    private val _contactSearchList = MutableStateFlow(emptyList<Contact>())
+    val contactSearchList: StateFlow<List<Contact>> = _contactSearchList.asStateFlow()
 
     private val _messageList = MutableStateFlow(emptyList<MessageItem>())
     val messageList: StateFlow<List<MessageItem>> = _messageList.asStateFlow()
@@ -105,6 +106,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                 viewModelScope.launch {
                     try {
                         val jsonObject = JSONObject(text)
+                        Log.d("server", jsonObject.toString())
                         val type = jsonObject.getString("type")
                         when (type) {
                             "signup_response" -> {
@@ -222,7 +224,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                             }
                             "search_user_response" -> {
-                                _contactSearchList.value = emptyList<SearchEntity>()
+                                _contactSearchList.value = emptyList<Contact>()
                                 if (jsonObject.getString("status") == "success") {
                                     val results = jsonObject.getJSONArray("results")
                                     for (i in 0 until results.length()) {
@@ -231,9 +233,14 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         if (item.getString("username") == savedUsername) {
                                             continue
                                         }
-                                        _contactSearchList.value += SearchEntity(
-                                            username = item.getString("username"),
+                                        _contactSearchList.value += Contact(
                                             isOnline = item.getBoolean("online"),
+                                            id = item.getString("username"),
+                                            name = item.getString("username"),
+                                            profilePicture = "",
+                                            lastMessageText = "",
+                                            lastMessageDate = "",
+                                            unreadMessages = 0,
                                         )
                                     }
                                 } else {
@@ -272,7 +279,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             name = item.getString("with"),
                                             lastMessageText = item.getString("last_message"),
                                             lastMessageDate = item.getString("last_timestamp"),
-                                            unreadMessages = item.getInt("unread_count")
+                                            unreadMessages = item.getInt("unread_count"),
+                                            isOnline = item.getBoolean("online"),
                                         )
                                     }
                                 } else {
@@ -418,7 +426,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun clearSearchMemory() {
-        _contactSearchList.value = emptyList<SearchEntity>()
+        _contactSearchList.value = emptyList<Contact>()
     }
 
     fun logout() {
@@ -436,7 +444,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun sendMessage(contact: String, message: String) {
-        _messageList.value += MessageItem(text = message, myMessage = true)
+        // id رو باید درست هندل کنیم که با دوتا پیام بدون نت کرش نکنه
+        _messageList.value += MessageItem(text = message, myMessage = true, id = 0, date = getCurrentUtcTimestamp(), seen = false)
         _shouldScrollToBottom.value = true
         viewModelScope.launch {
             try {
