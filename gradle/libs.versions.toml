@@ -1,13 +1,23 @@
 [versions]
-agp = "9.2.1"
-coreKtx = "1.19.0"
-lifecycleRuntimeKtx = "2.10.0"
-activityCompose = "1.13.0"
-kotlin = "2.4.0"
-composeBom = "2026.02.01"
+#agp = "9.2.1"
+#coreKtx = "1.19.0"
+#lifecycleRuntimeKtx = "2.10.0"
+#activityCompose = "1.13.0"
+#kotlin = "2.4.10"
+#composeBom = "2026.02.01"
+#material3Adaptive = "1.0.0-alpha06"
+#material3WindowSizeClass = "1.4.0"
+
+#android 5 support
+agp = "8.13.2"
+kotlin = "2.1.21"
+coreKtx = "1.17.0"
+lifecycleRuntimeKtx = "2.9.4"
+activityCompose = "1.11.0"
+#composeBom = "2025.06.01"
+composeBom = "2025.08.00"
 material3Adaptive = "1.0.0-alpha06"
 material3WindowSizeClass = "1.4.0"
-
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -22,4 +32,4 @@ androidx-compose-material3-window-size-class1 = { group = "androidx.compose.mate
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

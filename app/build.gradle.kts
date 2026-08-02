@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -9,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "ir.gchat"
-        minSdk = 23
+        minSdk = 21
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -19,8 +20,10 @@ android {
 
     buildTypes {
         release {
+            isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -34,6 +37,17 @@ android {
         }
     buildFeatures {
         compose = true
+    }
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
@@ -55,4 +69,5 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.github.om252345:composemeshgradient:0.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.0")
 }

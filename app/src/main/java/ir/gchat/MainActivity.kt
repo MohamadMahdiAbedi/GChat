@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.SoundEffectConstants
+import android.view.Surface
 import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -68,8 +69,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -154,93 +153,108 @@ import kotlin.time.Duration.Companion.milliseconds
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.lifecycle.ViewModelProvider
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
     val socketViewModel: SocketViewModel by viewModels()
-    val smsViewModel: SmsChatViewModel by viewModels()
+    val smsViewModel: SmsChatViewModel by lazy {
+        ViewModelProvider(this)[SmsChatViewModel::class.java]
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
         super.onCreate(savedInstanceState)
-        socketViewModel.connect()
+        //socketViewModel.connect()
 
         enableEdgeToEdge()
         setContent {
-            // theme
-            val theme by viewModel.theme.collectAsState()
-            val palette by viewModel.palette.collectAsState()
-            val darkTheme = when (theme) {
-                0 -> isSystemInDarkTheme()
-                1 -> true
-                2 -> false
-                else -> isSystemInDarkTheme()
-            }
-            // login status
-            val loggedIn by socketViewModel.loggedIn.collectAsState()
-            val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
-            // chat list
-            val chatList by socketViewModel.chatList.collectAsState()
-            val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
-            // sms setup
-            val context = LocalContext.current
-            if (checkSmsAppRole(context)) {
-                DisposableEffect(Unit) {
-                    smsViewModel.init(context)
-                    smsViewModel.refreshChatList()
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                // theme
+                val theme by viewModel.theme.collectAsState()
+                val palette by viewModel.palette.collectAsState()
+                val darkTheme = when (theme) {
+                    0 -> isSystemInDarkTheme()
+                    1 -> true
+                    2 -> false
+                    else -> isSystemInDarkTheme()
+                }
+                // login status
+                val loggedIn by socketViewModel.loggedIn.collectAsState()
+                val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
+                // chat list
+                val chatList by socketViewModel.chatList.collectAsState()
+                val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
+                // sms setup
+                val context = LocalContext.current
+                if (checkSmsAppRole(context)) {
+                    DisposableEffect(Unit) {
+                        smsViewModel.init(context)
+                        //smsViewModel.refreshChatList()
 
-                    onDispose {
+                        onDispose {
 
+                        }
                     }
                 }
-            }
-            GChatTheme(
-                dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
-            ) {
-                MainNavigation(
-                    setTheme = { viewModel.setTheme() },
-                    theme = theme,
-                    signIn = { username, password ->
-                        socketViewModel.signIn(
-                            username = username, password = password
-                        )
-                    },
-                    signUp = { iccid, username, password ->
-                        socketViewModel.signUp(
-                            iccid = iccid, username = username, password = password
-                        )
-                    },
-                    loggedIn = loggedIn,
-                    oldLoggedIn = oldLoggedIn,
-                    chatList = chatList,
-                    setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
-                    serverIP = socketViewModel.serverIP.collectAsState().value,
-                    setDevice = { device -> viewModel.setDevice(deviceType = device) },
-                    device = { viewModel.getDevice() },
-                    loginError = socketViewModel.loginError.collectAsState().value,
-                    getRules = { viewModel.getRules() },
-                    searchContactList = contactsSearchList,
-                    searchContact = { username -> socketViewModel.searchUsername(username = username) },
-                    clearSearchList = { socketViewModel.clearSearchMemory() },
-                    logout = { socketViewModel.logout() },
-                    sendMessage = { contact, message ->
-                        socketViewModel.sendMessage(
-                            contact = contact, message = message
-                        )
-                    },
-                    messageList = socketViewModel.messageList.collectAsState().value,
-                    getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
-                    getConversations = { socketViewModel.getConversations() },
-                    seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
-                    smsViewModel = smsViewModel,
-                    viewModel = viewModel,
-                    username = socketViewModel.usernameState.collectAsState().value,
-                    shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
-                    onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
-                    setColor = { theme -> viewModel.setColor(theme) },
-                    paletteIndex = palette
-                )
-                SetUpSystemBars(darkTheme)
+                GChatTheme(
+                    dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
+                ) {
+                    MainNavigation(
+                        setTheme = { viewModel.setTheme() },
+                        theme = theme,
+                        signIn = { username, password ->
+                            socketViewModel.signIn(
+                                username = username, password = password
+                            )
+                        },
+                        signUp = { iccid, username, password ->
+                            socketViewModel.signUp(
+                                iccid = iccid, username = username, password = password
+                            )
+                        },
+                        loggedIn = loggedIn,
+                        oldLoggedIn = oldLoggedIn,
+                        chatList = chatList,
+                        setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
+                        serverIP = socketViewModel.serverIP.collectAsState().value,
+                        setDevice = { device -> viewModel.setDevice(deviceType = device) },
+                        device = { viewModel.getDevice() },
+                        loginError = socketViewModel.loginError.collectAsState().value,
+                        getRules = { viewModel.getRules() },
+                        searchContactList = contactsSearchList,
+                        searchContact = { username -> socketViewModel.searchUsername(username = username) },
+                        clearSearchList = { socketViewModel.clearSearchMemory() },
+                        logout = { socketViewModel.logout() },
+                        sendMessage = { contact, message ->
+                            socketViewModel.sendMessage(
+                                contact = contact, message = message
+                            )
+                        },
+                        messageList = socketViewModel.messageList.collectAsState().value,
+                        getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
+                        getConversations = { socketViewModel.getConversations() },
+                        seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
+                        smsViewModel = smsViewModel,
+                        viewModel = viewModel,
+                        username = socketViewModel.usernameState.collectAsState().value,
+                        shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
+                        onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
+                        setColor = { theme -> viewModel.setColor(theme) },
+                        paletteIndex = palette
+                    )
+                    SetUpSystemBars(
+                        darkTheme = if (materialColors[palette].luminance() >= 0.7f) {
+                            true
+                        } else {
+                            false
+                        },
+                        navigationBarColor = Color.Black
+                    )
+                }
             }
         }
 
@@ -495,6 +509,74 @@ fun MainNavigation(
                 )
             }
         }
+        composable(route = "wait") {
+            val view = LocalView.current
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text("Connecting...")
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        ), actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    navController.navigate("ipConfig")
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.tune),
+                                    contentDescription = "IP config"
+                                )
+                            }
+                        })
+                }) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        //CircularProgressIndicator()
+                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+
+                        AndroidView(
+                            modifier = Modifier.size(48.dp), factory = { context ->
+                                ProgressBar(context).apply {
+                                    isIndeterminate = true
+                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
+                                }
+                            })
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "After connecting, you will be taken to the home page.",
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        TextButton(
+                            shape = RoundedCornerShape(2.dp), onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                navController.navigate("smsMainScreen")
+                            }
+                        ) {
+                            Text("View SMS Chats")
+                        }
+                    }
+                }
+            }
+        }
         composable(route = "mainScreen") {
             MainScreen(
                 chatList = chatList,
@@ -580,73 +662,6 @@ fun MainNavigation(
                 displayName = displayName,
                 smsViewModel = smsViewModel
             )
-        }
-        composable(route = "wait") {
-            val view = LocalView.current
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("Connecting...")
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        ), actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    navController.navigate("ipConfig")
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.tune),
-                                    contentDescription = "IP config"
-                                )
-                            }
-                        })
-                }) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        //CircularProgressIndicator()
-                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
-
-                        AndroidView(
-                            modifier = Modifier.size(48.dp), factory = { context ->
-                                ProgressBar(context).apply {
-                                    isIndeterminate = true
-                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
-                                }
-                            })
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "After connecting, you will be taken to the home page.",
-                            textAlign = TextAlign.Center
-                        )
-                        TextButton(
-                            shape = RoundedCornerShape(2.dp), onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                navController.navigate("smsMainScreen")
-                            }
-                        ) {
-                            Text("View SMS Chats")
-                        }
-                    }
-                }
-            }
         }
         composable(route = "ipConfig") {
             IpConfig(
@@ -809,8 +824,10 @@ fun ContactItem(
         color = MaterialTheme.colorScheme.surface,
         onClick = onClick
     ) {
-        Box(modifier = Modifier
-            .fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
             Spacer(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -1343,7 +1360,8 @@ fun MainScreen(
                                 elevation = 4.dp, shape = RectangleShape, clip = false
                             )
                         )
-                    }) { innerPadding ->
+                    }
+                ) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
                             modifier = Modifier
@@ -1423,28 +1441,29 @@ fun MainScreen(
                     }
                 }
 
-                Scaffold(
+                Column(
                     modifier = Modifier
+                        .navigationBarsPadding()
+                        .statusBarsPadding()
+                        .imePadding()
                         .fillMaxWidth()
                         .fillMaxHeight(heightFraction)
+                        .background(MaterialTheme.colorScheme.primary)
                         .alpha(heightFraction),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) { innerPadding ->
-                    Card(
+                ) {
+                    Surface(
                         modifier = Modifier
-                            .padding(innerPadding)
                             .padding(8.dp)
                             .fillMaxWidth()
                             .height(48.dp),
-                        //colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        color = MaterialTheme.colorScheme.background,
                         shape = RoundedCornerShape(2.dp),
+                        shadowElevation = 4.dp,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             searching = !searching
-                        }) {
+                        }
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxSize(),
                             verticalAlignment = Alignment.CenterVertically
@@ -1470,18 +1489,17 @@ fun MainScreen(
                                 onValueChange = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     searchContent = it
-
-                                    if (it.isBlank()) {
-                                        clearSearchList()
-                                    } else {
-                                        searchContact(it)
-                                    }
                                 },
                                 colors = colors(
                                     focusedContainerColor = Color.Transparent,
                                     unfocusedContainerColor = Color.Transparent,
                                     disabledContainerColor = Color.Transparent,
-                                    errorContainerColor = Color.Transparent
+                                    errorContainerColor = Color.Transparent,
+
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                    disabledIndicatorColor = Color.Transparent,
+                                    errorIndicatorColor = Color.Transparent
                                 ),
                                 label = {
                                     Text(text = "Search here...")
@@ -1514,9 +1532,8 @@ fun MainScreen(
 
                     LazyColumn(
                         modifier = Modifier
-                            .padding(innerPadding)
-                            .padding(top = 56.dp)
-                            .padding(8.dp)
+                            .padding(horizontal = 8.dp)
+                            .padding(bottom = 8.dp)
                             .fillMaxSize()
                             .shadow(
                                 elevation = 4.dp, shape = RoundedCornerShape(2.dp), clip = false
@@ -1582,8 +1599,157 @@ fun MainScreen(
 
 }
 
+//@Composable
+//fun AnimatedMenu(
+//    modifier: Modifier,
+//    width: Dp,
+//    height: Dp,
+//    chord: Dp,
+//    isExpanded: Boolean,
+//    close: () -> Unit,
+//    ratioX: Float,
+//    offsetX: Dp = 0.dp,
+//    ratioY: Float,
+//    offsetY: Dp = 0.dp,
+//    position: Alignment,
+//    hasBackgroundCover: Boolean,
+//    tabletView: Boolean = false,
+//    whatIsMyBackgroundFilterColor: (Color, Boolean) -> Unit,
+//    content: @Composable () -> Unit
+//) {
+//    val sizeBtn by animateDpAsState(
+//        targetValue = if (isExpanded) (chord.value * 2).dp else 48.dp, animationSpec = tween(
+//            durationMillis = 200, easing = FastOutSlowInEasing
+//        ), label = "circle_size"
+//    )
+//
+//    //val surface = MaterialTheme.colorScheme.surface
+//    val surface = MenuDefaults.containerColor
+//
+//    whatIsMyBackgroundFilterColor(
+//        if (hasBackgroundCover) {
+//            Color(0xFF000000).copy(
+//                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+//                    0f, 0.25f
+//                )
+//            )
+//        } else {
+//            Color.Transparent
+//        }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
+//    )
+//
+//    BackHandler(enabled = isExpanded) {
+//        close()
+//    }
+//
+//    LaunchedEffect(
+//        key1 = hasBackgroundCover, key2 = sizeBtn, key3 = chord
+//    ) {
+//        whatIsMyBackgroundFilterColor(
+//            if (hasBackgroundCover) {
+//                Color(0xFF000000).copy(
+//                    alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+//                        0f, 0.25f
+//                    )
+//                )
+//            } else {
+//                Color.Transparent
+//            }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
+//        )
+//    }
+//
+//    Box(modifier = modifier.fillMaxSize()) {
+//        if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f)) {
+//            Spacer(
+//                modifier = Modifier
+//                    .fillMaxSize()
+//                    .clickable(
+//                        indication = null,
+//                        interactionSource = remember { MutableInteractionSource() }) {
+//                        close()
+//                    }
+//                    .background(
+//                        color = if (hasBackgroundCover) {
+//                            Color(0xFF000000).copy(
+//                                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+//                                    0f, 0.25f
+//                                )
+//                            )
+//                        } else {
+//                            Color.Transparent
+//                        }
+//                    ))
+//        }
+//
+//        Box(
+//            modifier = Modifier
+//                .padding(8.dp)
+//                .height(height)
+//                .width(width)
+//                .shadow(
+//                    elevation = if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)) > 0.99f && isExpanded) 8.dp else 0.dp,
+//                    shape = RoundedCornerShape(2.dp),
+//                    clip = false
+//                )
+//                .clip(RoundedCornerShape(2.dp))
+//                .align(position)
+//        ) {
+//            val canvasModifier =
+//                if (sizeBtn / 2 != 24.dp) Modifier
+//                    .fillMaxSize()
+//                    .align(Alignment.Center)
+//                    .clickable(
+//                        indication = null,
+//                        interactionSource = remember { MutableInteractionSource() }) { } else Modifier
+//                    .fillMaxSize()
+//                    .align(Alignment.Center)
+//
+//            Canvas(
+//                modifier = canvasModifier
+//            ) {
+//                val radius = sizeBtn.toPx() / 2
+//
+//                //Alignment.BottomStart -> bottomLeft Menu
+//                //Alignment.TopEnd -> dropdown Menu
+//
+//                // با آفست و نسبت دیگه این بساط هم جمع میشه
+//
+//                val centerX = when (position) {
+//                    Alignment.BottomStart -> size.width * ratioX + 24.dp.toPx() - offsetX.toPx()
+//                    Alignment.TopEnd -> if (tabletView) size.width * ratioX - 24.dp.toPx() - offsetY.toPx() else size.width * ratioX - 12.dp.toPx() - offsetX.toPx()
+//                    else -> size.width * ratioX - offsetX.toPx() // Default fallback
+//                }
+//
+//                val centerY = when (position) {
+//                    Alignment.BottomStart -> size.height * ratioY - 24.dp.toPx() - offsetY.toPx()
+//                    Alignment.TopEnd -> if (tabletView) size.height * ratioY + 24.dp.toPx() - offsetY.toPx() else size.height * ratioY + 12.dp.toPx() - offsetY.toPx()
+//                    else -> size.height * ratioY - offsetY.toPx() // Default fallback
+//                }
+//
+//                drawCircle(
+//                    color = if (radius != 24.dp.toPx()) surface else Color.Transparent,
+//                    radius = radius,
+//                    center = Offset(centerX, centerY)
+//                )
+//            }
+//
+//            if ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f) {
+//                Box(
+//                    modifier = Modifier.alpha(
+//                        ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
+//                            0f, 1f
+//                        )
+//                    )
+//                ) {
+//                    content()
+//                }
+//            }
+//        }
+//    }
+//}
+
 @Composable
-fun AnimatedDropMenu(
+fun AnimatedMenu(
     modifier: Modifier,
     width: Dp,
     height: Dp,
@@ -1601,124 +1767,151 @@ fun AnimatedDropMenu(
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
-        targetValue = if (isExpanded) (chord.value * 2).dp else 48.dp, animationSpec = tween(
-            durationMillis = 200, easing = FastOutSlowInEasing
-        ), label = "circle_size"
+        targetValue = if (isExpanded) chord * 2 else 48.dp,
+        animationSpec = tween(
+            durationMillis = 200,
+            easing = FastOutSlowInEasing
+        ),
+        label = "circle_size"
     )
 
-    //val surface = MaterialTheme.colorScheme.surface
     val surface = MenuDefaults.containerColor
 
-    whatIsMyBackgroundFilterColor(
+    val expandProgress = remember(sizeBtn, chord) {
+        if (chord == 24.dp) {
+            1f
+        } else {
+            ((sizeBtn - 48.dp).value / (chord.value * 2 - 48f))
+                .coerceIn(0f, 1f)
+        }
+    }
+
+    val showContent = expandProgress > 0.05f
+
+    val backgroundFilter = remember(hasBackgroundCover, expandProgress) {
         if (hasBackgroundCover) {
-            Color(0xFF000000).copy(
-                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
-                    0f, 0.25f
-                )
-            )
+            Color.Black.copy(alpha = expandProgress * 0.25f)
         } else {
             Color.Transparent
-        }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
-    )
+        }
+    }
 
-    LaunchedEffect(
-        key1 = hasBackgroundCover, key2 = sizeBtn, key3 = chord
-    ) {
+    LaunchedEffect(backgroundFilter, showContent) {
         whatIsMyBackgroundFilterColor(
-            if (hasBackgroundCover) {
-                Color(0xFF000000).copy(
-                    alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
-                        0f, 0.25f
-                    )
-                )
-            } else {
-                Color.Transparent
-            }, (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f))
+            backgroundFilter,
+            showContent
         )
     }
 
+    BackHandler(enabled = isExpanded) {
+        close()
+    }
+
+    val interactionSource = remember {
+        MutableInteractionSource()
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
-        if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f)) {
+
+        if (showContent) {
             Spacer(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable(
                         indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
+                        interactionSource = interactionSource
+                    ) {
                         close()
                     }
-                    .background(
-                        color = if (hasBackgroundCover) {
-                            Color(0xFF000000).copy(
-                                alpha = ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
-                                    0f, 0.25f
-                                )
-                            )
-                        } else {
-                            Color.Transparent
-                        }
-                    ))
+                    .background(backgroundFilter)
+            )
         }
 
         Box(
             modifier = Modifier
                 .padding(8.dp)
-                .height(height)
-                .width(width)
+                .size(width, height)
                 .shadow(
-                    elevation = if (((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)) > 0.99f && isExpanded) 8.dp else 0.dp,
+                    elevation = if (expandProgress > 0.99f && isExpanded) {
+                        8.dp
+                    } else {
+                        0.dp
+                    },
                     shape = RoundedCornerShape(2.dp),
                     clip = false
                 )
                 .clip(RoundedCornerShape(2.dp))
                 .align(position)
         ) {
-            val canvasModifier =
-                if (sizeBtn / 2 != 24.dp) Modifier
-                    .fillMaxSize()
-                    .align(Alignment.Center)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) { } else Modifier
-                    .fillMaxSize()
-                    .align(Alignment.Center)
 
             Canvas(
-                modifier = canvasModifier
+                modifier = Modifier
+                    .fillMaxSize()
+                    .align(Alignment.Center)
+                    .then(
+                        if (sizeBtn != 48.dp) {
+                            Modifier.clickable(
+                                indication = null,
+                                interactionSource = interactionSource
+                            ) {}
+                        } else Modifier
+                    )
             ) {
+
                 val radius = sizeBtn.toPx() / 2
 
-                //Alignment.BottomStart -> bottomLeft Menu
-                //Alignment.TopEnd -> dropdown Menu
+                val center = when (position) {
 
-                // با آفست و نسبت دیگه این بساط هم جمع میشه
+                    Alignment.BottomStart -> {
+                        Offset(
+                            x = size.width * ratioX +
+                                    24.dp.toPx() -
+                                    offsetX.toPx(),
 
-                val centerX = when (position) {
-                    Alignment.BottomStart -> size.width * ratioX + 24.dp.toPx() - offsetX.toPx()
-                    Alignment.TopEnd -> if (tabletView) size.width * ratioX - 24.dp.toPx() - offsetY.toPx() else size.width * ratioX - 12.dp.toPx() - offsetX.toPx()
-                    else -> size.width * ratioX - offsetX.toPx() // Default fallback
+                            y = size.height * ratioY -
+                                    24.dp.toPx() -
+                                    offsetY.toPx()
+                        )
+                    }
+
+                    Alignment.TopEnd -> {
+                        Offset(
+                            x = size.width * ratioX -
+                                    if (tabletView) 24.dp.toPx()
+                                    else 12.dp.toPx() -
+                                            offsetX.toPx(),
+
+                            y = size.height * ratioY +
+                                    if (tabletView) 24.dp.toPx()
+                                    else 12.dp.toPx() -
+                                            offsetY.toPx()
+                        )
+                    }
+
+                    else -> {
+                        Offset(
+                            x = size.width * ratioX - offsetX.toPx(),
+                            y = size.height * ratioY - offsetY.toPx()
+                        )
+                    }
                 }
 
-                val centerY = when (position) {
-                    Alignment.BottomStart -> size.height * ratioY - 24.dp.toPx() - offsetY.toPx()
-                    Alignment.TopEnd -> if (tabletView) size.height * ratioY + 24.dp.toPx() - offsetY.toPx() else size.height * ratioY + 12.dp.toPx() - offsetY.toPx()
-                    else -> size.height * ratioY - offsetY.toPx() // Default fallback
-                }
 
                 drawCircle(
-                    color = if (radius != 24.dp.toPx()) surface else Color.Transparent,
+                    color = if (sizeBtn != 48.dp) {
+                        surface
+                    } else {
+                        Color.Transparent
+                    },
                     radius = radius,
-                    center = Offset(centerX, centerY)
+                    center = center
                 )
             }
 
-            if ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value) > 0.05f) {
+
+            if (showContent) {
                 Box(
-                    modifier = Modifier.alpha(
-                        ((sizeBtn - 48.dp).value / (chord.value * 2 - 48.dp.value)).coerceIn(
-                            0f, 1f
-                        )
-                    )
+                    modifier = Modifier.alpha(expandProgress)
                 ) {
                     content()
                 }
@@ -1761,16 +1954,18 @@ fun ChatScreen(
     }
 
     //var renderValue by remember { mutableIntStateOf(4) }
-    //var isExpandedAttachment by remember { mutableStateOf(false) }
+    var isExpandedAttachment by remember { mutableStateOf(false) }
     //var isExpandedEmoji by remember { mutableStateOf(false) }
     var message by rememberSaveable { mutableStateOf(draft.toString()) }
 
     //var coverColor by remember { mutableStateOf(Color.Transparent) }
-    //val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
+    val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
 
-    //var coverColor by rememberSaveable(
-    //    stateSaver = colorSaver
-    //) { mutableStateOf(Color.Transparent) }
+    var coverColor by rememberSaveable(
+        stateSaver = colorSaver
+    ) { mutableStateOf(Color.Transparent) }
+
+    var covered by rememberSaveable { mutableStateOf(false) }
 
     val view = LocalView.current
 
@@ -1979,25 +2174,25 @@ fun ChatScreen(
                             .background(MaterialTheme.colorScheme.primary)/*.imePadding()*/,
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        //IconButton(
-                        //    onClick = {
-                        //        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        //        isExpandedAttachment = true
-                        //    }, modifier = Modifier
-                        //        .padding(8.dp)
-                        //        .size(48.dp)
-                        //) {
-                        //    Icon(
-                        //        painter = painterResource(R.drawable.attach),
-                        //        contentDescription = null,
-                        //        tint = MaterialTheme.colorScheme.onPrimary
-                        //    )
-                        //}
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                isExpandedAttachment = true
+                            }, modifier = Modifier
+                                .padding(8.dp)
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.attach),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
 
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(top = 8.dp, start = 8.dp, bottom = 10.dp)
+                                .padding(top = 8.dp, bottom = 10.dp)
                                 .shadow(
                                     elevation = 4.dp, shape = RectangleShape, clip = false
                                 )
@@ -2081,13 +2276,17 @@ fun ChatScreen(
                                     //renderValue = (1..10).random()
                                     sendMessage(id, message)
                                     message = ""
+                                } else {
+                                    // شروع ضبط صوت
                                 }
                             }, modifier = Modifier
                                 .padding(8.dp)
                                 .size(48.dp)
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.send),
+                                painter = if (message.isNotBlank()) painterResource(R.drawable.send) else painterResource(
+                                    R.drawable.mic
+                                ),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
@@ -2095,114 +2294,73 @@ fun ChatScreen(
                     }
                 }
 
-                //AnimatedDropMenu(
-                //    modifier = Modifier.padding(innerPadding),
-                //    width = 224.dp,
-                //    height = 112.dp,
-                //    chord = 250.dp,
-                //    isExpanded = isExpandedAttachment,
-                //    close = { isExpandedAttachment = false },
-                //    ratioX = 0f,
-                //    ratioY = 1f,
-                //    position = Alignment.BottomStart,
-                //    hasBackgroundCover = true,
-                //    whatIsMyBackgroundFilterColor = { color, show ->
-                //        covered = show
-                //        coverColor = color
-                //    }) {
-                //    Column {
-                //        Spacer(
-                //            modifier = Modifier
-                //                .fillMaxWidth()
-                //                .height(8.dp)
-                //        )
-                //        DropdownMenuItem(
-                //            text = { Text(text = "Photos&&videos") }, onClick = {
-                //                view.playSoundEffect(SoundEffectConstants.CLICK)
-                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                //                Icon(
-                //                    painterResource(R.drawable.photo), contentDescription = null
-                //                )
-                //            }, trailingIcon = { }, enabled = true
-                //        )
-                //        DropdownMenuItem(
-                //            text = { Text(text = "File") }, onClick = {
-                //                view.playSoundEffect(SoundEffectConstants.CLICK)
-                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                //                Icon(
-                //                    painterResource(R.drawable.folder), contentDescription = null
-                //                )
-                //            }, trailingIcon = { }, enabled = true
-                //        )
-                //    }
-                //}
-
-                //AnimatedDropMenu(
-                //    modifier = Modifier.padding(innerPadding),
-                //    width = 400.dp,
-                //    height = 420.dp,
-                //    chord = 580.dp,
-                //    isExpanded = isExpandedEmoji,
-                //    close = { isExpandedEmoji = false },
-                //    ratioX = 0.16f,
-                //    ratioY = 0.98f,
-                //    position = Alignment.BottomStart,
-                //    hasBackgroundCover = true,
-                //    whatIsMyBackgroundFilterColor = { color, show ->
-                //        covered = show
-                //        coverColor = color
-                //    }) {
-                //    Column {
-                //        Spacer(
-                //            modifier = Modifier
-                //                .fillMaxWidth()
-                //                .height(8.dp)
-                //        )
-                //        DropdownMenuItem(
-                //            text = { Text(text = "Photos&&videos") }, onClick = {
-                //                view.playSoundEffect(SoundEffectConstants.CLICK)
-                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                //                Icon(
-                //                    painterResource(R.drawable.photo), contentDescription = null
-                //                )
-                //            }, trailingIcon = { }, enabled = true
-                //        )
-                //        DropdownMenuItem(
-                //            text = { Text(text = "File") }, onClick = {
-                //                view.playSoundEffect(SoundEffectConstants.CLICK)
-                //            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                //                Icon(
-                //                    painterResource(R.drawable.folder), contentDescription = null
-                //                )
-                //            }, trailingIcon = { }, enabled = true
-                //        )
-                //    }
-                //}
+                AnimatedMenu(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                        .imePadding(),
+                    width = 224.dp,
+                    height = 112.dp,
+                    chord = 250.dp,
+                    isExpanded = isExpandedAttachment,
+                    close = { isExpandedAttachment = false },
+                    ratioX = 0f,
+                    ratioY = 1f,
+                    position = Alignment.BottomStart,
+                    hasBackgroundCover = true,
+                    whatIsMyBackgroundFilterColor = { color, show ->
+                        covered = show
+                        coverColor = color
+                    }) {
+                    Column {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Photos and videos") }, onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                isExpandedAttachment = false
+                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.photo), contentDescription = null
+                                )
+                            }, trailingIcon = { }, enabled = true
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "File") }, onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                isExpandedAttachment = false
+                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                                Icon(
+                                    painterResource(R.drawable.folder), contentDescription = null
+                                )
+                            }, trailingIcon = { }, enabled = true
+                        )
+                    }
+                }
             }
         }
 
-        //if (covered) {
-        //    Spacer(
-        //        modifier = Modifier
-        //            .fillMaxWidth()
-        //            .height(
-        //                64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        //            )
-        //            //top app bar size + notification bar size
-        //            //.requiredHeight(64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-        //            .background(coverColor)
-        //            .align(Alignment.TopCenter)
-        //            .clickable(
-        //                indication = null,
-        //                interactionSource = remember { MutableInteractionSource() }) {
-        //                if (isExpandedEmoji) {
-        //                    isExpandedEmoji = false
-        //                } else if (isExpandedAttachment) {
-        //                    isExpandedAttachment = false
-        //                }
-        //            }
-        //    )
-        //}
+        if (covered) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(
+                        64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                    )
+                    //top app bar size + notification bar size
+                    //.requiredHeight(64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                    .background(coverColor)
+                    .align(Alignment.TopCenter)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
+                        isExpandedAttachment = false
+                    }
+            )
+        }
     }
 }
 
@@ -2224,23 +2382,27 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
         ) {
             val maxMessageWidth = minOf(maxWidth * 0.8f, 480.dp)
             Surface(
-                color = if (isMe) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(size = 2.dp),
-                modifier = Modifier.widthIn(max = maxMessageWidth)
+                modifier = Modifier.widthIn(max = maxMessageWidth),
+                //shadowElevation = 2.dp
             ) {
                 Box(
                     modifier = Modifier.padding(8.dp)
                 ) {
 
                     Text(
-                        text = message, modifier = Modifier.padding(
+                        text = message,
+                        modifier = Modifier.padding(
                             end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
                             bottom = if (lineCount > 1) 24.dp else 0.dp
-                        ), onTextLayout = {
+                        ),
+                        onTextLayout = {
                             if (lineCount == 0) {
                                 lineCount = it.lineCount
                             }
-                        })
+                        }
+                    )
                     Row(
                         modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
                         verticalAlignment = Alignment.CenterVertically
@@ -2249,7 +2411,7 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
                             text = formatMessageTime,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontStyle = FontStyle.Normal,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             ),
                             onTextLayout = {
                                 timeWidth = with(density) { it.size.width.toDp() }
@@ -2260,7 +2422,7 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
                                 painter = painterResource(R.drawable.double_check),
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -2365,666 +2527,4 @@ fun convertDigits(text: String, digits: CharArray): String {
 // بهینه تر میشه نوشت؟؟؟
 fun hash20(text: String): Int {
     return (text.hashCode() and Int.MAX_VALUE) % 19
-}
-
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
-@Composable
-fun SMSMainScreen(
-    navHostController: NavHostController, smsViewModel: SmsChatViewModel
-) {
-    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
-
-    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
-    var selectedChat by rememberSaveable { mutableStateOf("") }
-    var selectedChatDisplayName by rememberSaveable { mutableStateOf("") }
-
-    val view = LocalView.current
-
-    val smsList by smsViewModel.chatList.collectAsState()
-    var expanded by remember { mutableStateOf(false) }
-    val colorSaver = Saver<MutableState<Color>, Int>(
-        save = { it.value.toArgb() },
-        restore = { mutableStateOf(Color(it)) }
-    )
-
-    var coverColor by rememberSaveable(
-        saver = colorSaver
-    ) {
-        mutableStateOf(Color.Transparent)
-    }
-
-    var newSmsTarget by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val context = LocalContext.current
-
-    Row(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(
-                    if (expandedScreen) 0.3f else 1f
-                )
-                .zIndex(1f)
-        ) {
-            // Main Screen
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxSize(),
-                //.shadow(
-                //    elevation = 16.dp,
-                //    clip = false
-                //),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("SMS")
-                        }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    navHostController.popBackStack()
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    contentDescription = "Menu"
-                                )
-                            }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
-                    )
-                }) { innerPadding ->
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        items(
-                            items = smsList, key = { it.id }) { chat ->
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(72.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    val id = chat.id
-                                    selectedChat = id
-                                    selectedChatDisplayName = chat.name
-                                    if (!expandedScreen) {
-                                        navHostController.navigate(
-                                            "smsChatScreen?id=$id&displayName=${
-                                                Uri.encode(
-                                                    selectedChatDisplayName
-                                                )
-                                            }"
-                                        )
-                                    }
-                                }) {
-
-                                Box(
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-
-                                    Spacer(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(start = 72.dp)
-                                            .fillMaxWidth()
-                                            .height(1.dp)
-                                            .background(
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                                            )
-                                    )
-
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-
-                                        val backgroundColor = materialColors[hash20(chat.id)]
-                                        val iconColor = if (backgroundColor.luminance() >= 0.5f) {
-                                            Color.Black
-                                        } else {
-                                            Color.White
-                                        }
-
-                                        Surface(
-                                            modifier = Modifier.size(40.dp),
-                                            shape = CircleShape,
-                                            color = backgroundColor
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.profile_black_content),
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize(),
-                                                tint = iconColor.copy(alpha = 0.5f)
-                                            )
-                                        }
-
-                                        Spacer(Modifier.width(16.dp))
-
-                                        Column(
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-
-                                            Text(
-                                                text = chat.name,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-
-                                            Text(
-                                                text = chat.lastMessageText,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(
-                                                    alpha = 0.6f
-                                                ),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        Spacer(Modifier.width(16.dp))
-
-                                        Column(
-                                            horizontalAlignment = Alignment.End
-                                        ) {
-
-                                            Text(
-                                                text = formatMessageTime(chat.lastMessageDate),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-
-                                            Spacer(Modifier.height(4.dp))
-
-                                            if (chat.unreadMessages > 0) {
-
-                                                Box(
-                                                    modifier = Modifier
-                                                        .defaultMinSize(minWidth = 20.dp)
-                                                        .height(20.dp)
-                                                        .background(
-                                                            MaterialTheme.colorScheme.primary,
-                                                            RoundedCornerShape(10.dp)
-                                                        )
-                                                        .padding(horizontal = 4.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-
-                                                    Text(
-                                                        text = chat.unreadMessages.toString(),
-                                                        color = MaterialTheme.colorScheme.onPrimary,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        maxLines = 1
-                                                    )
-                                                }
-
-                                            } else {
-                                                //Icon(
-                                                //    painter = painterResource(R.drawable.double_check),
-                                                //    contentDescription = null,
-                                                //    modifier = Modifier.size(20.dp),
-                                                //    tint = MaterialTheme.colorScheme.primary
-                                                //)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            expanded = true
-                        },
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .padding(innerPadding)
-                            .size(56.dp)
-                            .align(Alignment.BottomEnd)
-                            .shadow(
-                                elevation = 6.dp, shape = CircleShape, clip = false
-                            ),
-                        shape = CircleShape,
-                        contentPadding = PaddingValues(16.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.edit),
-                            contentDescription = "Send SMS",
-                            modifier = Modifier.fillMaxSize(),
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .navigationBarsPadding()
-                    .imePadding()
-            ) {
-                val width = maxWidth
-                //val height = maxHeight
-
-                AnimatedDropMenu(
-                    modifier = Modifier.fillMaxSize(),
-                    width = width,
-                    height = 64.dp,
-                    // 64^2=4096
-                    chord = sqrt(width.value * width.value + 4096f).dp,
-                    isExpanded = expanded,
-                    close = { expanded = false },
-                    ratioX = 1f,
-                    offsetX = 28.dp,
-                    ratioY = 1f,
-                    offsetY = 28.dp,
-                    position = Alignment.BottomCenter,
-                    hasBackgroundCover = true,
-                    whatIsMyBackgroundFilterColor = { color, _ ->
-                        coverColor = color
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextField(
-                            modifier = Modifier.weight(1f),
-                            value = newSmsTarget,
-                            onValueChange = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                newSmsTarget = it
-                            },
-                            colors = colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                                errorContainerColor = Color.Transparent
-                            ),
-                            label = {
-                                Text(text = "Send new SMS for...")
-                            },
-                            singleLine = true,
-                            textStyle = TextStyle(textDirection = TextDirection.Content),
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Go
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onGo = {
-                                    keyboardController?.hide()
-                                    val id = newSmsTarget
-                                    selectedChat = id
-                                    selectedChatDisplayName =
-                                        getContactName(context, newSmsTarget) ?: newSmsTarget
-                                    if (!expandedScreen) {
-                                        navHostController.navigate(
-                                            "smsChatScreen?id=$id&displayName=${
-                                                Uri.encode(
-                                                    selectedChatDisplayName
-                                                )
-                                            }"
-                                        )
-                                    }
-                                }
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                val id = newSmsTarget
-                                selectedChat = id
-                                selectedChatDisplayName =
-                                    getContactName(context, newSmsTarget) ?: newSmsTarget
-                                if (!expandedScreen) {
-                                    navHostController.navigate(
-                                        "smsChatScreen?id=$id&displayName=${
-                                            Uri.encode(
-                                                selectedChatDisplayName
-                                            )
-                                        }"
-                                    )
-                                }
-                            },
-                            shape = CircleShape,
-                            modifier = Modifier.size(48.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_forward),
-                                contentDescription = "Next",
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Expanded Screen
-        if (expandedScreen) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(0f)
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.1f), Color.Transparent
-                                ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
-                            ), blendMode = BlendMode.Multiply
-                        )
-                    }) {
-                SMSChatScreen(
-                    back = { navHostController.popBackStack() },
-                    id = selectedChat,
-                    displayName = selectedChatDisplayName,
-                    smsViewModel = smsViewModel
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SMSChatScreen(
-    back: () -> Boolean,
-    id: String,
-    draft: String? = "",
-    displayName: String,
-    smsViewModel: SmsChatViewModel
-) {
-    val context = LocalContext.current
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    val showButton by remember {
-        derivedStateOf {
-            listState.canScrollForward
-        }
-    }
-    LaunchedEffect(id) {
-        if (id.isNotBlank()) {
-            smsViewModel.loadMessages(id)
-            smsViewModel.markMessageAsRead(context, id)
-        }
-    }
-    LaunchedEffect(Unit) {
-        scope.launch {
-            val last = listState.layoutInfo.totalItemsCount - 1
-            listState.animateScrollToItem(last)
-        }
-    }
-    val messages = smsViewModel.messages.collectAsState().value
-    //var renderValue by remember { mutableIntStateOf(4) }
-    var message by rememberSaveable { mutableStateOf(draft.toString()) }
-    val view = LocalView.current
-
-    val backgroundColor = materialColors[hash20(id)]
-    val iconColor = if (backgroundColor.luminance() >= 0.5f) {
-        Color.Black
-    } else {
-        Color.White
-    }
-
-    var animate by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            modifier = Modifier
-                .fillMaxSize(),
-            //.background(MaterialTheme.colorScheme.background),
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
-                if (id != "") {
-                    TopAppBar(
-                        title = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    //.clip(HalfCutCircleShape())
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(bounded = false)
-                                    ) {
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        openContact(context, id)
-                                    }, verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .aspectRatio(1f)
-                                        .clip(CircleShape),
-                                    shape = CircleShape,
-                                    color = backgroundColor
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.profile_black_content),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        tint = iconColor.copy(alpha = 0.5f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = displayName, modifier = Modifier.weight(1f))
-                            }
-                        }, navigationIcon = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    back()
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    contentDescription = "Menu"
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
-                    )
-                }
-            }) { innerPadding ->
-            Spacer(modifier = Modifier.padding(innerPadding))
-            TWallpaper(
-                modifier = Modifier.fillMaxSize(),
-                colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
-                fps = 60,
-                tails = 90,
-                animate = animate
-            )
-            if (id != "") {
-                Column(
-                    modifier = Modifier
-                        .padding(top = 64.dp)
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .fillMaxSize()
-                ) {
-
-                    Box(modifier = Modifier.weight(1f)) {
-                        LazyColumn(
-                            state = listState
-                        ) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-
-                            items(items = messages, key = { it.id }) { item ->
-                                Message(
-                                    isMe = item.myMessage,
-                                    message = item.text,
-                                    seen = item.seen,
-                                    timestamp = item.date
-                                )
-
-                            }
-                        }
-                        this@Column.AnimatedVisibility(
-                            visible = showButton,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(8.dp),
-                            enter = slideInVertically { it / 2 } + fadeIn(),// + scaleIn(initialScale = 0.8f),
-                            exit = slideOutVertically { it / 2 } + fadeOut()// + scaleOut(targetScale = 0.8f)
-                        ) {
-                            Button(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    scope.launch {
-                                        val last = listState.layoutInfo.totalItemsCount - 1
-
-                                        listState.animateScrollToItem(last)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .size(48.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .shadow(
-                                        elevation = 6.dp, shape = CircleShape, clip = false
-                                    ),
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.keyboard_arrow_down),
-                                    contentDescription = "Navigate to end",
-                                    modifier = Modifier.size(24.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 64.dp/*, max = 256.dp*/)
-                            .background(MaterialTheme.colorScheme.primary)/*.imePadding()*/,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(top = 8.dp, start = 8.dp, bottom = 10.dp)
-                                .shadow(
-                                    elevation = 4.dp, shape = RectangleShape, clip = false
-                                )
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = RoundedCornerShape(2.dp)
-                                )
-                        ) {
-                            Row(verticalAlignment = Alignment.Bottom) {
-
-                                val onSurface = MaterialTheme.colorScheme.onSurface
-                                AndroidView(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp),
-                                    factory = { context ->
-                                        EditText(context).apply {
-
-                                            background = null
-
-                                            maxLines = 5
-
-                                            hint = "Message..."
-                                            setHintTextColor(Color.Gray.toArgb())
-
-                                            setTextColor(onSurface.toArgb())
-
-                                            addTextChangedListener(object : TextWatcher {
-
-                                                override fun beforeTextChanged(
-                                                    s: CharSequence?,
-                                                    start: Int,
-                                                    count: Int,
-                                                    after: Int
-                                                ) {
-                                                }
-
-                                                override fun onTextChanged(
-                                                    s: CharSequence?,
-                                                    start: Int,
-                                                    before: Int,
-                                                    count: Int
-                                                ) {
-                                                    message = s?.toString() ?: ""
-                                                }
-
-                                                override fun afterTextChanged(s: Editable?) {}
-                                            })
-                                        }
-                                    },
-                                    update = { editText ->
-                                        if (editText.text.toString() != message) {
-                                            editText.setText(message)
-                                            editText.setSelection(message.length)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                if (message.isNotBlank()) {
-                                    message = message.replace(Regex("\\n+$"), "").trim()
-                                    scope.launch {
-                                        animate = true
-                                        delay(1000.milliseconds)
-                                        animate = false
-                                    }
-                                    //renderValue = (1..10).random()
-                                    smsViewModel.sendMessage(context, id, message)
-                                    message = ""
-                                }
-                            }, modifier = Modifier
-                                .padding(8.dp)
-                                .size(48.dp)
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.send),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

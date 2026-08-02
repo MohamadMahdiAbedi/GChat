@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,11 +19,17 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
+import java.util.concurrent.TimeUnit
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     var webSocket: WebSocket? = null
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(3, TimeUnit.SECONDS)
+        //.readTimeout(3, TimeUnit.SECONDS)
+        //.writeTimeout(3, TimeUnit.SECONDS)
+        //.retryOnConnectionFailure(true)
+        .build()
 
     private val _loggedIn = MutableStateFlow(false)
     val loggedIn: StateFlow<Boolean> = _loggedIn.asStateFlow()
@@ -63,19 +70,21 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _shouldScrollToBottom = MutableStateFlow(false)
     val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
 
+    private suspend fun loadSavedData() {
+        val prefs = context.dataStore.data.first()
+        savedUsername = prefs[USERNAME_KEY] ?: ""
+        _usernameState.value = savedUsername
+        savedPassword = prefs[PASSWORD_KEY] ?: ""
+        _oldLoggedIn.value = prefs[LOGGED_IN_STATUS_KEY] ?: false
+        _serverIP.value = prefs[SERVERIP_KEY] ?: "127.0.0.1:8765"
+    }
+
     init {
         viewModelScope.launch {
-            // Load saved values from DataStore
-            context.dataStore.data.collect { prefs ->
-                savedUsername = prefs[USERNAME_KEY] ?: ""
-                _usernameState.value = savedUsername
-
-                savedPassword = prefs[PASSWORD_KEY] ?: ""
-
-                _oldLoggedIn.value = prefs[LOGGED_IN_STATUS_KEY] ?: false
-
-                _serverIP.value = prefs[SERVERIP_KEY] ?: "127.0.0.1:8765"
-            }
+            loadSavedData()
+            //if (_oldLoggedIn.value) {
+            connect()
+            //}
         }
     }
 

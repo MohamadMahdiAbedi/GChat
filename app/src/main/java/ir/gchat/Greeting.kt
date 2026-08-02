@@ -41,8 +41,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -205,7 +204,7 @@ fun Greeting(
 
     LaunchedEffect(isLoading) {
         if (isLoading) {
-            delay(10000.milliseconds)
+            delay(3000.milliseconds)
             if (isLoading) {
                 isLoading = false
             }
@@ -255,7 +254,8 @@ fun Greeting(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }) {
                             expanded = false
-                        })
+                        }
+                )
             }
 
             if (windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) {
@@ -329,7 +329,7 @@ fun Greeting(
                                     .shadow(
                                         elevation = 16.dp, clip = false
                                     )
-                                    .background(color = MaterialTheme.colorScheme.surface)
+                                    .background(color = MaterialTheme.colorScheme.background)
                                     .padding(8.dp)
                             ) {
                                 Text(
@@ -401,7 +401,7 @@ fun Greeting(
                                     .shadow(
                                         elevation = 16.dp, clip = false
                                     )
-                                    .background(color = MaterialTheme.colorScheme.surface)
+                                    .background(color = MaterialTheme.colorScheme.background)
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -424,7 +424,7 @@ fun Greeting(
                                             brush = Brush.verticalGradient(
                                                 colors = listOf(
                                                     Color.Transparent,
-                                                    MaterialTheme.colorScheme.surface
+                                                    MaterialTheme.colorScheme.background
                                                 )
                                             )
                                         )
@@ -484,7 +484,7 @@ fun Greeting(
                                     .shadow(
                                         elevation = 16.dp, clip = false
                                     )
-                                    .background(color = MaterialTheme.colorScheme.surface)
+                                    .background(color = MaterialTheme.colorScheme.background)
                             ) {
                                 BackHandler(enabled = isLoading) { }
 
@@ -534,7 +534,8 @@ fun Greeting(
                                         keyboardActions = KeyboardActions(
                                             onNext = {
                                                 passwordFocusRequester.requestFocus()
-                                            })
+                                            }
+                                        )
                                     )
 
                                     TextField(
@@ -670,7 +671,7 @@ fun Greeting(
                                     .shadow(
                                         elevation = 16.dp, clip = false
                                     )
-                                    .background(color = MaterialTheme.colorScheme.surface)
+                                    .background(color = MaterialTheme.colorScheme.background)
                             ) {
                                 BackHandler(enabled = isLoading) { }
 
@@ -847,7 +848,7 @@ fun Greeting(
                     }
                 }
 
-                AnimatedDropMenu(
+                AnimatedMenu(
                     modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                     width = 200.dp,
                     height = 160.dp,
@@ -937,7 +938,7 @@ fun Greeting(
                                         clip = false
                                     )
                                     .background(
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color = MaterialTheme.colorScheme.background,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
                                     )
                                     .padding(8.dp)
@@ -1010,7 +1011,7 @@ fun Greeting(
                                     )
                                 }
 
-                                AnimatedDropMenu(
+                                AnimatedMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
@@ -1082,7 +1083,7 @@ fun Greeting(
                                         clip = false
                                     )
                                     .background(
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color = MaterialTheme.colorScheme.background,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
                                     )
                             ) {
@@ -1159,7 +1160,7 @@ fun Greeting(
                                     )
                                 }
 
-                                AnimatedDropMenu(
+                                AnimatedMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
@@ -1231,7 +1232,7 @@ fun Greeting(
                                         clip = false
                                     )
                                     .background(
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color = MaterialTheme.colorScheme.background,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
                                     )
                             ) {
@@ -1423,7 +1424,7 @@ fun Greeting(
                                     )
                                 }
 
-                                AnimatedDropMenu(
+                                AnimatedMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
@@ -1495,7 +1496,7 @@ fun Greeting(
                                         clip = false
                                     )
                                     .background(
-                                        color = MaterialTheme.colorScheme.surface,
+                                        color = MaterialTheme.colorScheme.background,
                                         shape = RoundedCornerShape(4.dp, 4.dp, 0.dp, 0.dp)
                                     )
                             ) {
@@ -1686,7 +1687,7 @@ fun Greeting(
                                     )
                                 }
 
-                                AnimatedDropMenu(
+                                AnimatedMenu(
                                     modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
@@ -1900,12 +1901,12 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.tertiary
-            ), elevation = CardDefaults.cardElevation(
-                defaultElevation = 4.dp
-            ), shape = RectangleShape
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(4.dp),
+            color = MaterialTheme.colorScheme.tertiary,
+            shape = RectangleShape
         ) {
             Column {
                 Row(
@@ -1929,13 +1930,11 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                     )
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasSmsAppRole) {
-                    Card(
+                    Surface(
                         modifier = Modifier
                             .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
                             .fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        shape = RoundedCornerShape(2.dp),
+                        shadowElevation = 4.dp,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             val roleManager = context.getSystemService(RoleManager::class.java)
@@ -1950,7 +1949,9 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                                     )
                                 )
                             }
-                        }
+                        },
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(2.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -1997,17 +1998,18 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                         }
                     }
                 } else if (!hasPhonePermission) {
-                    Card(
+                    Surface(
                         modifier = Modifier
                             .padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
                             .fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        shape = RoundedCornerShape(2.dp),
+                        shadowElevation = 4.dp,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             phonePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
-                        }) {
+                        },
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(2.dp)
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2045,7 +2047,7 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
         }
 
         iccidList.forEachIndexed { index, iccid ->
-            Card(
+            Surface(
                 modifier = Modifier
                     .padding(
                         start = 8.dp,
@@ -2053,14 +2055,15 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                         end = 8.dp,
                         bottom = 8.dp
                     )
-                    .fillMaxWidth(), colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ), elevation = CardDefaults.cardElevation(
-                    defaultElevation = 4.dp
-                ), shape = RoundedCornerShape(2.dp), onClick = {
+                    .fillMaxWidth(),
+                shadowElevation = 4.dp,
+                onClick = {
                     view.playSoundEffect(SoundEffectConstants.CLICK)
                     setSelectedIccid(iccid)
-                }) {
+                },
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(2.dp)
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
