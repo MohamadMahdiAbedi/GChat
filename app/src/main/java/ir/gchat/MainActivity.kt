@@ -227,7 +227,12 @@ class MainActivity : ComponentActivity() {
                             messageList = socketViewModel.messageList.collectAsState().value,
                             getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
                             getConversations = { socketViewModel.getConversations() },
-                            seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
+                            seenMessage = { contact, id ->
+                                socketViewModel.seenMessage(
+                                    contact,
+                                    id
+                                )
+                            },
                             //smsViewModel = smsViewModel,
                             //viewModel = viewModel,
                             username = socketViewModel.usernameState.collectAsState().value,
@@ -1006,6 +1011,14 @@ fun MainScreen(
     LaunchedEffect(Unit) {
         getConversations()
         //refreshPermissions()
+    }
+
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch {
+            drawerState.apply {
+                close()
+            }
+        }
     }
 
     ModalNavigationDrawer(
