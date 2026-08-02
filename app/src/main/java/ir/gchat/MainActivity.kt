@@ -236,10 +236,7 @@ class MainActivity : ComponentActivity() {
                             setColor = { theme -> viewModel.setColor(theme) },
                             paletteIndex = palette
                         )
-                        SetUpSystemBars(
-                            palette = palette
-                        )
-
+                        SetUpSystemBars(palette = palette)
                     }
                     window.setBackgroundDrawableResource(android.R.color.transparent)
                 }

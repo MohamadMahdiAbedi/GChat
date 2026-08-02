@@ -361,6 +361,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 savedUsername = username
+                _usernameState.value = username
                 context.dataStore.edit { preferences ->
                     preferences[USERNAME_KEY] = username
                 }
@@ -387,6 +388,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     preferences[ICCID_KEY] = iccid
                 }
                 savedUsername = username
+                _usernameState.value = username
                 context.dataStore.edit { preferences ->
                     preferences[USERNAME_KEY] = username
                 }
