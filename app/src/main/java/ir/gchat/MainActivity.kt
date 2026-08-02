@@ -154,94 +154,99 @@ class MainActivity : ComponentActivity() {
     //}
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
-        //socketViewModel.connect()
 
         enableEdgeToEdge()
         setContent {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                // theme
-                val theme by viewModel.theme.collectAsState()
-                val palette by viewModel.palette.collectAsState()
-                val darkTheme = when (theme) {
-                    0 -> isSystemInDarkTheme()
-                    1 -> true
-                    2 -> false
-                    else -> isSystemInDarkTheme()
-                }
-                // login status
-                val loggedIn by socketViewModel.loggedIn.collectAsState()
-                val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
-                // chat list
-                val chatList by socketViewModel.chatList.collectAsState()
-                val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
-                // sms setup
-                //val context = LocalContext.current
-                //if (checkSmsAppRole(context)) {
-                //    DisposableEffect(Unit) {
-                //        smsViewModel.init(context)
-                //        //smsViewModel.refreshChatList()
+            val mainReady = viewModel.ready.collectAsState().value
+            val serverReady = socketViewModel.ready.collectAsState().value
 
-                //        onDispose {
+            if (mainReady && serverReady) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    // theme
+                    val theme by viewModel.theme.collectAsState()
+                    val palette by viewModel.palette.collectAsState()
+                    val darkTheme = when (theme) {
+                        0 -> isSystemInDarkTheme()
+                        1 -> true
+                        2 -> false
+                        else -> isSystemInDarkTheme()
+                    }
+                    // login status
+                    val loggedIn by socketViewModel.loggedIn.collectAsState()
+                    val oldLoggedIn by socketViewModel.oldLoggedIn.collectAsState()
+                    // chat list
+                    val chatList by socketViewModel.chatList.collectAsState()
+                    val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
+                    // sms setup
+                    //val context = LocalContext.current
+                    //if (checkSmsAppRole(context)) {
+                    //    DisposableEffect(Unit) {
+                    //        smsViewModel.init(context)
+                    //        //smsViewModel.refreshChatList()
 
-                //        }
-                //    }
-                //}
-                GChatTheme(
-                    dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
-                ) {
-                    MainNavigation(
-                        setTheme = { viewModel.setTheme() },
-                        theme = theme,
-                        signIn = { username, password ->
-                            socketViewModel.signIn(
-                                username = username, password = password
-                            )
-                        },
-                        signUp = { iccid, username, password ->
-                            socketViewModel.signUp(
-                                iccid = iccid, username = username, password = password
-                            )
-                        },
-                        loggedIn = loggedIn,
-                        oldLoggedIn = oldLoggedIn,
-                        chatList = chatList,
-                        setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
-                        serverIP = socketViewModel.serverIP.collectAsState().value,
-                        setDevice = { device -> viewModel.setDevice(deviceType = device) },
-                        device = { viewModel.getDevice() },
-                        loginError = socketViewModel.loginError.collectAsState().value,
-                        getRules = { viewModel.getRules() },
-                        searchContactList = contactsSearchList,
-                        searchContact = { username -> socketViewModel.searchUsername(username = username) },
-                        clearSearchList = { socketViewModel.clearSearchMemory() },
-                        logout = { socketViewModel.logout() },
-                        sendMessage = { contact, message ->
-                            socketViewModel.sendMessage(
-                                contact = contact, message = message
-                            )
-                        },
-                        messageList = socketViewModel.messageList.collectAsState().value,
-                        getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
-                        getConversations = { socketViewModel.getConversations() },
-                        seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
-                        //smsViewModel = smsViewModel,
-                        //viewModel = viewModel,
-                        username = socketViewModel.usernameState.collectAsState().value,
-                        shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
-                        onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
-                        setColor = { theme -> viewModel.setColor(theme) },
-                        paletteIndex = palette
-                    )
-                    SetUpSystemBars(
-                        palette = palette
-                    )
+                    //        onDispose {
+
+                    //        }
+                    //    }
+                    //}
+                    GChatTheme(
+                        dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
+                    ) {
+                        MainNavigation(
+                            setTheme = { viewModel.setTheme() },
+                            theme = theme,
+                            signIn = { username, password ->
+                                socketViewModel.signIn(
+                                    username = username, password = password
+                                )
+                            },
+                            signUp = { iccid, username, password ->
+                                socketViewModel.signUp(
+                                    iccid = iccid, username = username, password = password
+                                )
+                            },
+                            loggedIn = loggedIn,
+                            oldLoggedIn = oldLoggedIn,
+                            chatList = chatList,
+                            setServerIP = { serverIP -> socketViewModel.setServerIP(serverIP = serverIP) },
+                            serverIP = socketViewModel.serverIP.collectAsState().value,
+                            setDevice = { device -> viewModel.setDevice(deviceType = device) },
+                            device = { viewModel.getDevice() },
+                            loginError = socketViewModel.loginError.collectAsState().value,
+                            getRules = { viewModel.getRules() },
+                            searchContactList = contactsSearchList,
+                            searchContact = { username -> socketViewModel.searchUsername(username = username) },
+                            clearSearchList = { socketViewModel.clearSearchMemory() },
+                            logout = { socketViewModel.logout() },
+                            sendMessage = { contact, message ->
+                                socketViewModel.sendMessage(
+                                    contact = contact, message = message
+                                )
+                            },
+                            messageList = socketViewModel.messageList.collectAsState().value,
+                            getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
+                            getConversations = { socketViewModel.getConversations() },
+                            seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
+                            //smsViewModel = smsViewModel,
+                            //viewModel = viewModel,
+                            username = socketViewModel.usernameState.collectAsState().value,
+                            shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
+                            onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
+                            setColor = { theme -> viewModel.setColor(theme) },
+                            paletteIndex = palette
+                        )
+                        SetUpSystemBars(
+                            palette = palette
+                        )
+
+                    }
+                    window.setBackgroundDrawableResource(android.R.color.transparent)
                 }
             }
         }
 
-        window.setBackgroundDrawableResource(android.R.color.transparent)
+        socketViewModel.connect()
     }
 
     override fun onNewIntent(intent: Intent) {

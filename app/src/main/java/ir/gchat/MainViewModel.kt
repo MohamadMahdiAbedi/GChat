@@ -23,10 +23,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _palette = MutableStateFlow(8)
     val palette: StateFlow<Int> = _palette.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     init {
         viewModelScope.launch {
             _theme.value = context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
             _palette.value = context.dataStore.data.map { it[PALETTE_KEY] ?: 8 }.first()
+            _ready.value = true
         }
     }
 

@@ -2,7 +2,7 @@
 <resources>
     <style name="Theme.GChat" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <!--<style name="Theme.GChat.Splash" parent="Theme.GChat">-->
-    <!--    <item name="android:windowBackground">@drawable/splash_bg</item>-->
-    <!--</style>-->
+    <style name="Theme.GChat.Splash" parent="Theme.GChat">
+        <item name="android:windowBackground">@drawable/splash_bg</item>
+    </style>
 </resources>

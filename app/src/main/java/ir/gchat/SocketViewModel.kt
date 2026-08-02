@@ -79,12 +79,16 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         _serverIP.value = prefs[SERVERIP_KEY] ?: "127.0.0.1:8765"
     }
 
+    private val _ready = MutableStateFlow(false)
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     init {
         viewModelScope.launch {
             loadSavedData()
             //if (_oldLoggedIn.value) {
-            connect()
+                //connect()
             //}
+            _ready.value = true
         }
     }
 
