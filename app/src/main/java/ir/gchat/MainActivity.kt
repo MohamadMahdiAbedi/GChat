@@ -135,7 +135,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat.startActivity
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -319,6 +318,7 @@ fun SetUpSystemBars(palette: Int) {
         // Status Bar
         controller.isAppearanceLightStatusBars = darkTheme
 
+        @Suppress("DEPRECATION")
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             window.statusBarColor = /*statusBarColor*/Color(0x33000000).toArgb()
             window.navigationBarColor = navigationBarColor.toArgb()
