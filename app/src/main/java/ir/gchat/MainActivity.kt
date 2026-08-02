@@ -8,6 +8,7 @@ import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.SoundEffectConstants
@@ -66,6 +67,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,6 +79,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults.colors
 import androidx.compose.material3.TopAppBar
@@ -115,6 +118,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -131,10 +135,12 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat.startActivity
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -464,7 +470,8 @@ fun MainNavigation(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         navController = navController,
-        startDestination = "greeting",
+        startDestination = "wait",
+        //startDestination = "greeting",
 
         enterTransition = {
             slideInVertically(
@@ -909,7 +916,7 @@ fun ContactItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = contact.lastMessageText,
+                            text = contact.lastMessageText.replace("\n", " "),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
@@ -1018,6 +1025,17 @@ fun MainScreen(
             drawerState.apply {
                 close()
             }
+        }
+    }
+
+    val context = LocalContext.current
+    var isSmsApp by remember { mutableStateOf(checkSmsAppRole(context)) }
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            isSmsApp = checkSmsAppRole(context)
         }
     }
 
@@ -1235,23 +1253,6 @@ fun MainScreen(
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         logout()
                     })
-                    //var isSmsApp by remember { mutableStateOf(checkSmsAppRole(context)) }
-
-                    //val lifecycle = LocalLifecycleOwner.current.lifecycle
-
-                    //LaunchedEffect(lifecycle) {
-                    //    lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                    //        isSmsApp = checkSmsAppRole(context)
-                    //    }
-                    //}
-
-                    //LaunchedEffect(isSmsApp) {
-                    //    if (isSmsApp) {
-                    //        smsViewModel.init(context)
-                    //        smsViewModel.refreshChatList()
-                    //    }
-                    //}
-
                     //if (!isSmsApp) {
                     //    DropdownMenuItem(
                     //        text = { Text("Set GChat as default Sms") },
@@ -1408,6 +1409,61 @@ fun MainScreen(
                                 )
                             }
                         }
+
+                        //LaunchedEffect(isSmsApp) {
+                        if (isSmsApp) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                                    .padding(innerPadding),
+                                color = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Restore your default messaging app to receive SMS messages.",
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 8.dp)
+                                    )
+                                    TextButton(
+                                        shape = RoundedCornerShape(2.dp),
+                                        onClick = {
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                                try {
+                                                    context.startActivity(
+                                                        Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                                    )
+                                                } catch (_: Exception) {
+                                                    context.startActivity(
+                                                        Intent(Settings.ACTION_SETTINGS)
+                                                    )
+                                                }
+                                            } else {
+                                                context.startActivity(
+                                                    Intent(Settings.ACTION_SETTINGS)
+                                                )
+                                            }
+                                        },
+                                        colors = ButtonDefaults.textButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    ) {
+                                        Text("Open Settings")
+                                    }
+                                }
+                            }
+                        }
+                        //}
 
                         //Button(
                         //    onClick = {
