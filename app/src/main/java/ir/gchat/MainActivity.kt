@@ -235,11 +235,7 @@ class MainActivity : ComponentActivity() {
                         paletteIndex = palette
                     )
                     SetUpSystemBars(
-                        darkTheme = if (materialColors[palette].luminance() >= 0.7f) {
-                            true
-                        } else {
-                            false
-                        }
+                        palette = palette
                     )
                 }
             }
@@ -256,12 +252,21 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SetUpSystemBars(
-    darkTheme: Boolean,
-    statusBarColor: Color = Color(0x33000000),
-    navigationBarColor: Color = if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) Color.Transparent
-    else Color.Black
-) {
+fun SetUpSystemBars(palette: Int) {
+    val colorLuminance = remember(palette) {
+        materialColors[palette].luminance()
+    }
+    val darkTheme = remember(colorLuminance) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            colorLuminance >= 0.7f
+        } else {
+            colorLuminance >= 0.5f
+        }
+    }
+    //val val statusBarColor = remember { Color(0x33000000) }
+    val navigationBarColor = remember {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) Color.Transparent else Color.Black
+    }
     val view = LocalView.current
     if (view.isInEditMode) return
 
@@ -273,11 +278,14 @@ fun SetUpSystemBars(
 
     fun apply() {
         // Task View
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             activity.setTaskDescription(
-                ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
+                ActivityManager.TaskDescription.Builder()
+                    .setPrimaryColor(primaryColor)
+                    .build()
             )
         } else {
+            @Suppress("DEPRECATION")
             activity.setTaskDescription(
                 ActivityManager.TaskDescription(
                     null, null, primaryColor
@@ -289,7 +297,7 @@ fun SetUpSystemBars(
         val controller = WindowCompat.getInsetsController(window, view)
 
         // Nav Bar
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
 
@@ -299,7 +307,7 @@ fun SetUpSystemBars(
         controller.isAppearanceLightStatusBars = darkTheme
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            window.statusBarColor = statusBarColor.toArgb()
+            window.statusBarColor = /*statusBarColor*/Color(0x33000000).toArgb()
             window.navigationBarColor = navigationBarColor.toArgb()
         }
 
