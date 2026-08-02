@@ -3,7 +3,6 @@ package ir.gchat
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
-import android.app.role.RoleManager
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
@@ -12,7 +11,6 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.SoundEffectConstants
-import android.view.Surface
 import android.view.ViewTreeObserver
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -27,8 +25,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
@@ -36,6 +32,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -80,7 +77,6 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults.colors
 import androidx.compose.material3.TopAppBar
@@ -92,9 +88,9 @@ import androidx.compose.material3.ripple
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Compact
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Medium
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -119,8 +115,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -131,6 +127,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
@@ -138,7 +135,6 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -148,22 +144,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.lifecycle.ViewModelProvider
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
     val socketViewModel: SocketViewModel by viewModels()
-    val smsViewModel: SmsChatViewModel by lazy {
-        ViewModelProvider(this)[SmsChatViewModel::class.java]
-    }
+    //val smsViewModel: SmsChatViewModel by lazy {
+    //    ViewModelProvider(this)[SmsChatViewModel::class.java]
+    //}
 
     override fun onCreate(savedInstanceState: Bundle?) {
 
@@ -189,17 +177,17 @@ class MainActivity : ComponentActivity() {
                 val chatList by socketViewModel.chatList.collectAsState()
                 val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
                 // sms setup
-                val context = LocalContext.current
-                if (checkSmsAppRole(context)) {
-                    DisposableEffect(Unit) {
-                        smsViewModel.init(context)
-                        //smsViewModel.refreshChatList()
+                //val context = LocalContext.current
+                //if (checkSmsAppRole(context)) {
+                //    DisposableEffect(Unit) {
+                //        smsViewModel.init(context)
+                //        //smsViewModel.refreshChatList()
 
-                        onDispose {
+                //        onDispose {
 
-                        }
-                    }
-                }
+                //        }
+                //    }
+                //}
                 GChatTheme(
                     dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
                 ) {
@@ -238,8 +226,8 @@ class MainActivity : ComponentActivity() {
                         getMessagesList = { contact -> socketViewModel.getMessagesList(contact) },
                         getConversations = { socketViewModel.getConversations() },
                         seenMessage = { contact, id -> socketViewModel.seenMessage(contact, id) },
-                        smsViewModel = smsViewModel,
-                        viewModel = viewModel,
+                        //smsViewModel = smsViewModel,
+                        //viewModel = viewModel,
                         username = socketViewModel.usernameState.collectAsState().value,
                         shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
                         onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
@@ -251,8 +239,7 @@ class MainActivity : ComponentActivity() {
                             true
                         } else {
                             false
-                        },
-                        navigationBarColor = Color.Black
+                        }
                     )
                 }
             }
@@ -272,8 +259,8 @@ class MainActivity : ComponentActivity() {
 fun SetUpSystemBars(
     darkTheme: Boolean,
     statusBarColor: Color = Color(0x33000000),
-    navigationBarColor: Color = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) Color.Black
-    else Color.Transparent
+    navigationBarColor: Color = if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) Color.Transparent
+    else Color.Black
 ) {
     val view = LocalView.current
     if (view.isInEditMode) return
@@ -285,28 +272,34 @@ fun SetUpSystemBars(
     val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
 
     fun apply() {
+        // Task View
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             activity.setTaskDescription(
                 ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
             )
         } else {
-            @Suppress("DEPRECATION") activity.setTaskDescription(
+            activity.setTaskDescription(
                 ActivityManager.TaskDescription(
                     null, null, primaryColor
                 )
             )
         }
 
+        // Controller
         val controller = WindowCompat.getInsetsController(window, view)
 
-        controller.isAppearanceLightStatusBars = darkTheme
+        // Nav Bar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+
         controller.isAppearanceLightNavigationBars = !darkTheme
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            @Suppress("DEPRECATION")
-            window.statusBarColor = statusBarColor.toArgb()
+        // Status Bar
+        controller.isAppearanceLightStatusBars = darkTheme
 
-            @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            window.statusBarColor = statusBarColor.toArgb()
             window.navigationBarColor = navigationBarColor.toArgb()
         }
 
@@ -364,8 +357,8 @@ fun MainNavigation(
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
     seenMessage: (String, Int) -> Unit,
-    smsViewModel: SmsChatViewModel,
-    viewModel: MainViewModel,
+    //smsViewModel: SmsChatViewModel,
+    //viewModel: MainViewModel,
     username: String,
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
@@ -373,63 +366,63 @@ fun MainNavigation(
     paletteIndex: Int
 ) {
     val navController = rememberNavController()
-    val pendingIntent by viewModel.pendingIntent.collectAsState()
+    //val pendingIntent by viewModel.pendingIntent.collectAsState()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    val context = LocalContext.current
-    val initialIntent = (context as? Activity)?.intent
+    //val context = LocalContext.current
+    //val initialIntent = (context as? Activity)?.intent
 
-    LaunchedEffect(Unit) {
-        val intent = initialIntent ?: return@LaunchedEffect
-        if (intent.getBooleanExtra("open_sms_chat", false)) {
-            //delay(500.milliseconds)
-            val id = intent.getStringExtra("id").orEmpty()
-            val displayName = intent.getStringExtra("displayName").orEmpty()
-            if (id.isNotBlank()) {
-                navController.navigate(
-                    "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
-                ) {
-                    launchSingleTop = true
-                }
-            }
-        }
-    }
+    //LaunchedEffect(Unit) {
+    //    val intent = initialIntent ?: return@LaunchedEffect
+    //    if (intent.getBooleanExtra("open_sms_chat", false)) {
+    //        //delay(500.milliseconds)
+    //        val id = intent.getStringExtra("id").orEmpty()
+    //        val displayName = intent.getStringExtra("displayName").orEmpty()
+    //        if (id.isNotBlank()) {
+    //            navController.navigate(
+    //                "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+    //            ) {
+    //                launchSingleTop = true
+    //            }
+    //        }
+    //    }
+    //}
 
-    LaunchedEffect(pendingIntent) {
-        val intent = pendingIntent ?: return@LaunchedEffect
-        if (intent.getBooleanExtra("open_sms_chat", false)) {
-            //delay(300.milliseconds)
-            val id = intent.getStringExtra("id").orEmpty()
-            val displayName = intent.getStringExtra("displayName").orEmpty()
+    //LaunchedEffect(pendingIntent) {
+    //    val intent = pendingIntent ?: return@LaunchedEffect
+    //    if (intent.getBooleanExtra("open_sms_chat", false)) {
+    //        //delay(300.milliseconds)
+    //        val id = intent.getStringExtra("id").orEmpty()
+    //        val displayName = intent.getStringExtra("displayName").orEmpty()
 
-            viewModel.setPendingIntent(null)
+    //        viewModel.setPendingIntent(null)
 
-            if (id.isNotBlank()) {
-                val currentRoute = navController.currentBackStackEntry?.destination?.route
+    //        if (id.isNotBlank()) {
+    //            val currentRoute = navController.currentBackStackEntry?.destination?.route
 
-                if (currentRoute?.contains("mainScreen") == true ||
-                    currentRoute?.contains("smsMainScreen") == true
-                ) {
-                    navController.navigate(
-                        "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
-                    ) {
-                        launchSingleTop = true
-                    }
-                } else {
-                    navController.navigate(
-                        "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
-                    ) {
-                        popUpTo("mainScreen") { inclusive = false }
-                        launchSingleTop = true
-                    }
-                }
-            }
-        }
-    }
+    //            if (currentRoute?.contains("mainScreen") == true ||
+    //                currentRoute?.contains("smsMainScreen") == true
+    //            ) {
+    //                navController.navigate(
+    //                    "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+    //                ) {
+    //                    launchSingleTop = true
+    //                }
+    //            } else {
+    //                navController.navigate(
+    //                    "smsChatScreen?id=${Uri.encode(id)}&displayName=${Uri.encode(displayName)}"
+    //                ) {
+    //                    popUpTo("mainScreen") { inclusive = false }
+    //                    launchSingleTop = true
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
 
-    val isSmsScreen = currentRoute?.startsWith("sms") == true
+    //val isSmsScreen = currentRoute?.startsWith("sms") == true
 
-    LaunchedEffect(loggedIn, oldLoggedIn, isSmsScreen) {
-        if (isSmsScreen) return@LaunchedEffect
+    LaunchedEffect(loggedIn, oldLoggedIn/*, isSmsScreen*/) {
+        //if (isSmsScreen) return@LaunchedEffect
 
         if (oldLoggedIn) {
             if (loggedIn) {
@@ -565,14 +558,14 @@ fun MainNavigation(
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onBackground
                         )
-                        TextButton(
-                            shape = RoundedCornerShape(2.dp), onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                navController.navigate("smsMainScreen")
-                            }
-                        ) {
-                            Text("View SMS Chats")
-                        }
+                        //TextButton(
+                        //    shape = RoundedCornerShape(2.dp), onClick = {
+                        //        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        //        navController.navigate("smsMainScreen")
+                        //    }
+                        //) {
+                        //    Text("View SMS Chats")
+                        //}
                     }
                 }
             }
@@ -590,7 +583,7 @@ fun MainNavigation(
                 getMessagesList = getMessagesList,
                 getConversations = getConversations,
                 seenMessage = seenMessage,
-                smsViewModel = smsViewModel,
+                //smsViewModel = smsViewModel,
                 username = username,
                 shouldScrollToBottom = shouldScrollToBottom,
                 onScrolledToBottom = onScrolledToBottom
@@ -641,28 +634,28 @@ fun MainNavigation(
                 onScrolledToBottom = onScrolledToBottom
             )
         }
-        composable(route = "smsMainScreen") {
-            SMSMainScreen(
-                navHostController = navController, smsViewModel = smsViewModel
-            )
-        }
-        composable(
-            route = "smsChatScreen?id={id}&displayName={displayName}",
-            arguments = listOf(navArgument("id") {
-                type = NavType.StringType
-            }, navArgument("displayName") {
-                type = NavType.StringType
-            })
-        ) { backStackEntry ->
-            val id = backStackEntry.arguments?.getString("id") ?: ""
-            val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
-            SMSChatScreen(
-                back = { navController.popBackStack() },
-                id = id,
-                displayName = displayName,
-                smsViewModel = smsViewModel
-            )
-        }
+        //composable(route = "smsMainScreen") {
+        //    SMSMainScreen(
+        //        navHostController = navController, smsViewModel = smsViewModel
+        //    )
+        //}
+        //composable(
+        //    route = "smsChatScreen?id={id}&displayName={displayName}",
+        //    arguments = listOf(navArgument("id") {
+        //        type = NavType.StringType
+        //    }, navArgument("displayName") {
+        //        type = NavType.StringType
+        //    })
+        //) { backStackEntry ->
+        //    val id = backStackEntry.arguments?.getString("id") ?: ""
+        //    val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
+        //    SMSChatScreen(
+        //        back = { navController.popBackStack() },
+        //        id = id,
+        //        displayName = displayName,
+        //        smsViewModel = smsViewModel
+        //    )
+        //}
         composable(route = "ipConfig") {
             IpConfig(
                 serverIP = serverIP,
@@ -957,7 +950,7 @@ fun MainScreen(
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
     seenMessage: (String, Int) -> Unit,
-    smsViewModel: SmsChatViewModel,
+    //smsViewModel: SmsChatViewModel,
     username: String,
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit
@@ -972,7 +965,7 @@ fun MainScreen(
         else -> 0.3f
     }
 
-    val context = LocalContext.current
+    //val context = LocalContext.current
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
     var selectedChat by rememberSaveable { mutableStateOf("") }
@@ -988,21 +981,21 @@ fun MainScreen(
         Color.White
     }
 
-    var hasSmsAppRole by remember { mutableStateOf(false) }
+    //var hasSmsAppRole by remember { mutableStateOf(false) }
 
-    fun refreshPermissions() {
-        hasSmsAppRole = checkSmsAppRole(context)
-    }
+    //fun refreshPermissions() {
+    //    hasSmsAppRole = checkSmsAppRole(context)
+    //}
 
-    val smsRoleLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        refreshPermissions()
-    }
+    //val smsRoleLauncher = rememberLauncherForActivityResult(
+    //    ActivityResultContracts.StartActivityForResult()
+    //) {
+    //    refreshPermissions()
+    //}
 
     LaunchedEffect(Unit) {
         getConversations()
-        refreshPermissions()
+        //refreshPermissions()
     }
 
     ModalNavigationDrawer(
@@ -1219,70 +1212,70 @@ fun MainScreen(
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         logout()
                     })
-                    var isSmsApp by remember { mutableStateOf(checkSmsAppRole(context)) }
+                    //var isSmsApp by remember { mutableStateOf(checkSmsAppRole(context)) }
 
-                    val lifecycle = LocalLifecycleOwner.current.lifecycle
+                    //val lifecycle = LocalLifecycleOwner.current.lifecycle
 
-                    LaunchedEffect(lifecycle) {
-                        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                            isSmsApp = checkSmsAppRole(context)
-                        }
-                    }
+                    //LaunchedEffect(lifecycle) {
+                    //    lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    //        isSmsApp = checkSmsAppRole(context)
+                    //    }
+                    //}
 
-                    LaunchedEffect(isSmsApp) {
-                        if (isSmsApp) {
-                            smsViewModel.init(context)
-                            smsViewModel.refreshChatList()
-                        }
-                    }
+                    //LaunchedEffect(isSmsApp) {
+                    //    if (isSmsApp) {
+                    //        smsViewModel.init(context)
+                    //        smsViewModel.refreshChatList()
+                    //    }
+                    //}
 
-                    if (!isSmsApp) {
-                        DropdownMenuItem(
-                            text = { Text("Set GChat as default Sms") },
-                            leadingIcon = {
-                                Icon(
-                                    painterResource(R.drawable.sms),
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    val roleManager =
-                                        context.getSystemService(RoleManager::class.java)
+                    //if (!isSmsApp) {
+                    //    DropdownMenuItem(
+                    //        text = { Text("Set GChat as default Sms") },
+                    //        leadingIcon = {
+                    //            Icon(
+                    //                painterResource(R.drawable.sms),
+                    //                contentDescription = null
+                    //            )
+                    //        },
+                    //        onClick = {
+                    //            view.playSoundEffect(SoundEffectConstants.CLICK)
+                    //            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    //                val roleManager =
+                    //                    context.getSystemService(RoleManager::class.java)
 
-                                    if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
-                                            RoleManager.ROLE_SMS
-                                        )
-                                    ) {
-                                        smsRoleLauncher.launch(
-                                            roleManager.createRequestRoleIntent(
-                                                RoleManager.ROLE_SMS
-                                            )
-                                        )
-                                    }
-                                } else {
-                                    requestSmsDefaultRole(context)
-                                }
-                            }
-                        )
-                    }
+                    //                if (roleManager.isRoleAvailable(RoleManager.ROLE_SMS) && !roleManager.isRoleHeld(
+                    //                        RoleManager.ROLE_SMS
+                    //                    )
+                    //                ) {
+                    //                    smsRoleLauncher.launch(
+                    //                        roleManager.createRequestRoleIntent(
+                    //                            RoleManager.ROLE_SMS
+                    //                        )
+                    //                    )
+                    //                }
+                    //            } else {
+                    //                requestSmsDefaultRole(context)
+                    //            }
+                    //        }
+                    //    )
+                    //}
 
-                    if (isSmsApp) {
-                        DropdownMenuItem(
-                            text = { Text("SMS Chat List") },
-                            leadingIcon = {
-                                Icon(
-                                    painterResource(R.drawable.sms),
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                navHostController.navigate("smsMainScreen")
-                            }
-                        )
-                    }
+                    //if (isSmsApp) {
+                    //    DropdownMenuItem(
+                    //        text = { Text("SMS Chat List") },
+                    //        leadingIcon = {
+                    //            Icon(
+                    //                painterResource(R.drawable.sms),
+                    //                contentDescription = null
+                    //            )
+                    //        },
+                    //        onClick = {
+                    //            view.playSoundEffect(SoundEffectConstants.CLICK)
+                    //            navHostController.navigate("smsMainScreen")
+                    //        }
+                    //    )
+                    //}
                     DropdownMenuItem(
                         text = { Text("Setting") },
                         leadingIcon = {
@@ -2448,83 +2441,6 @@ fun convertDigits(text: String, digits: CharArray): String {
     return builder.toString()
 }
 
-//@Composable
-//fun AdvancedDynamicLightEffectOptimized(
-//    modifier: Modifier = Modifier, renderValue: Int = 3
-//) {
-//    val targetAngle1 = renderValue * 36f
-//    val angle1 by animateFloatAsState(
-//        targetValue = targetAngle1, animationSpec = tween(
-//            durationMillis = 2000, easing = FastOutSlowInEasing
-//        ), label = "angle1"
-//    )
-//
-//    val targetAngle2 = targetAngle1 + 180f
-//    val angle2 by animateFloatAsState(
-//        targetValue = targetAngle2, animationSpec = tween(
-//            durationMillis = 2000, easing = FastOutSlowInEasing
-//        ), label = "angle2"
-//    )
-//
-//    val sceneRotation by animateFloatAsState(
-//        targetValue = 0f, animationSpec = tween(durationMillis = 1), label = "scene"
-//    )
-//
-//    Canvas(
-//        modifier = modifier.fillMaxSize()
-//    ) {
-//        val radius = hypot(size.width, size.height)
-//        val center = Offset(size.width / 2f, size.height / 2f)
-//        val orbitRadius = minOf(size.width, size.height) * 0.7f
-//
-//        val rad = Math.toRadians((angle1 + 90f).toDouble())
-//
-//        val dx = cos(rad).toFloat() * radius
-//        val dy = sin(rad).toFloat() * radius
-//
-//        drawRect(
-//            brush = Brush.linearGradient(
-//                colors = listOf(
-//                    Color(0xFF6BA587), Color(0xFF88B884)
-//                ),
-//                start = Offset(center.x - dx, center.y - dy),
-//                end = Offset(center.x + dx, center.y + dy)
-//            )
-//        )
-//
-//        rotate(
-//            degrees = sceneRotation, pivot = center
-//        ) {
-//            fun pointOnCircle(angleDegrees: Float): Offset {
-//                val angleRad = Math.toRadians(angleDegrees.toDouble()).toFloat()
-//                return Offset(
-//                    x = center.x + orbitRadius * cos(angleRad),
-//                    y = center.y + orbitRadius * sin(angleRad)
-//                )
-//            }
-//
-//            val lightRadius = radius * 0.7f
-//
-//            drawCircle(
-//                brush = Brush.radialGradient(
-//                    colors = listOf(
-//                        Color(0xFFd5d88d), Color.Transparent
-//                    ), center = pointOnCircle(angle1), radius = lightRadius
-//                ), radius = radius, center = center, blendMode = BlendMode.Screen
-//            )
-//
-//            drawCircle(
-//                brush = Brush.radialGradient(
-//                    colors = listOf(
-//                        Color(0xFFdbddbb), Color.Transparent
-//                    ), center = pointOnCircle(angle2), radius = lightRadius * 0.85f
-//                ), radius = radius, center = center, blendMode = BlendMode.Screen
-//            )
-//        }
-//    }
-//}
-
-// بهینه تر میشه نوشت؟؟؟
 fun hash20(text: String): Int {
     return (text.hashCode() and Int.MAX_VALUE) % 19
 }

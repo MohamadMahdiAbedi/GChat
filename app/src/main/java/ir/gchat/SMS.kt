@@ -1290,539 +1290,499 @@
 ////    smsRoleLauncher.launch(intent)
 ////}
 
+// Grok 2 Edition(خیلی بد):
+
 package ir.gchat
 
-import android.Manifest
-import android.app.Activity
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.database.ContentObserver
-import android.database.Cursor
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
-import android.provider.ContactsContract
-import android.provider.Telephony
-import android.telephony.PhoneNumberUtils
-import android.telephony.SmsManager
-import android.telephony.SubscriptionManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.app.NotificationCompat
-import androidx.core.app.Person
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.concurrent.atomic.AtomicInteger
 
 // ======================== Notification ========================
 
-private fun showNotification(
-    context: Context,
-    id: String,
-    displayName: String,
-    text: String,
-    notificationId: Int = id.hashCode()
-) {
-    val channelId = "sms_messages"
-    val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        if (notificationManager.getNotificationChannel(channelId) == null) {
-            notificationManager.createNotificationChannel(
-                NotificationChannel(
-                    channelId,
-                    "SMS Messages",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Incoming SMS messages"
-                    enableVibration(true)
-                    setShowBadge(true)
-                }
-            )
-        }
-    }
-
-    val openIntent = Intent(context, MainActivity::class.java).apply {
-        action = Intent.ACTION_VIEW
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
-        putExtra("open_sms_chat", true)
-        putExtra("id", id)
-        putExtra("displayName", displayName)
-    }
-
-    val pendingIntent = PendingIntent.getActivity(
-        context,
-        notificationId,
-        openIntent,
-        PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE or
-                PendingIntent.FLAG_CANCEL_CURRENT
-    )
-
-    val person = Person.Builder()
-        .setName(displayName)
-        .build()
-
-    val notification = NotificationCompat.Builder(context, channelId)
-        .setSmallIcon(R.drawable.announcement_sms)
-        .setContentTitle(displayName)
-        .setContentText(text)
-        .setStyle(
-            NotificationCompat.MessagingStyle(person)
-                .addMessage(text, System.currentTimeMillis(), person)
-        )
-        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-        .setContentIntent(pendingIntent)
-        .setAutoCancel(true)
-        .setOnlyAlertOnce(true)
-        .setDefaults(NotificationCompat.DEFAULT_ALL)
-        .setShowWhen(true)
-        .setWhen(System.currentTimeMillis())
-        .setGroup("sms_$id")
-        .build()
-
-    notificationManager.notify(notificationId, notification)
-}
+//private fun showNotification(
+//    context: Context,
+//    id: String,
+//    displayName: String,
+//    text: String,
+//    notificationId: Int = id.hashCode()
+//) {
+//    val channelId = "sms_messages"
+//    val notificationManager =
+//        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+//
+//    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//        if (notificationManager.getNotificationChannel(channelId) == null) {
+//            notificationManager.createNotificationChannel(
+//                NotificationChannel(
+//                    channelId,
+//                    "SMS Messages",
+//                    NotificationManager.IMPORTANCE_HIGH
+//                ).apply {
+//                    description = "Incoming SMS messages"
+//                    enableVibration(true)
+//                    setShowBadge(true)
+//                }
+//            )
+//        }
+//    }
+//
+//    val openIntent = Intent(context, MainActivity::class.java).apply {
+//        action = Intent.ACTION_VIEW
+//        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+//                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+//                Intent.FLAG_ACTIVITY_CLEAR_TOP
+//        putExtra("open_sms_chat", true)
+//        putExtra("id", id)
+//        putExtra("displayName", displayName)
+//    }
+//
+//    val pendingIntent = PendingIntent.getActivity(
+//        context,
+//        notificationId,
+//        openIntent,
+//        PendingIntent.FLAG_UPDATE_CURRENT or
+//                PendingIntent.FLAG_IMMUTABLE or
+//                PendingIntent.FLAG_CANCEL_CURRENT
+//    )
+//
+//    val person = Person.Builder()
+//        .setName(displayName)
+//        .build()
+//
+//    val notification = NotificationCompat.Builder(context, channelId)
+//        .setSmallIcon(R.drawable.announcement_sms)
+//        .setContentTitle(displayName)
+//        .setContentText(text)
+//        .setStyle(
+//            NotificationCompat.MessagingStyle(person)
+//                .addMessage(text, System.currentTimeMillis(), person)
+//        )
+//        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+//        .setPriority(NotificationCompat.PRIORITY_HIGH)
+//        .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+//        .setContentIntent(pendingIntent)
+//        .setAutoCancel(true)
+//        .setOnlyAlertOnce(true)
+//        .setDefaults(NotificationCompat.DEFAULT_ALL)
+//        .setShowWhen(true)
+//        .setWhen(System.currentTimeMillis())
+//        .setGroup("sms_$id")
+//        .build()
+//
+//    notificationManager.notify(notificationId, notification)
+//}
 
 // ======================== Utils ========================
 
-object SmsUtils {
-
-    fun normalizeNumber(number: String?): String {
-        if (number.isNullOrBlank()) return ""
-        if (number.any { it.isLetter() }) return number.trim()
-
-        var cleaned = number.replace(Regex("[^0-9+]"), "")
-        if (cleaned.startsWith("+")) {
-            cleaned = cleaned.substring(1)
-        }
-
-        when {
-            cleaned.startsWith("98") && cleaned.length >= 12 -> { /* already good */ }
-            cleaned.startsWith("0") && cleaned.length == 11 -> cleaned = "98" + cleaned.substring(1)
-            cleaned.startsWith("9") && cleaned.length == 10 -> cleaned = "98$cleaned"
-        }
-        return cleaned
-    }
-
-    fun isSameNumber(a: String?, b: String?): Boolean {
-        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
-        if (PhoneNumberUtils.compare(a, b)) return true
-
-        val na = normalizeNumber(a)
-        val nb = normalizeNumber(b)
-        if (na.length >= 10 && nb.length >= 10) {
-            return na.takeLast(10) == nb.takeLast(10)
-        }
-        return na == nb
-    }
-
-    fun formatDate(millis: Long): String {
-        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(millis))
-    }
-
-    fun hasReadSmsPermission(context: Context): Boolean {
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
-                PackageManager.PERMISSION_GRANTED
-    }
-
-    fun hasReadContactsPermission(context: Context): Boolean {
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
-                PackageManager.PERMISSION_GRANTED
-    }
-
-    fun getContactName(context: Context, phoneNumber: String): String? {
-        if (!hasReadContactsPermission(context)) return null
-        return try {
-            val uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(phoneNumber)
-            )
-            context.contentResolver.query(
-                uri,
-                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
-                null, null, null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun getContactPhotoUri(context: Context, phoneNumber: String): String? {
-        if (!hasReadContactsPermission(context)) return null
-        return try {
-            val uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(phoneNumber)
-            )
-            context.contentResolver.query(
-                uri,
-                arrayOf(ContactsContract.PhoneLookup.PHOTO_URI),
-                null, null, null
-            )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun getSmsManager(): SmsManager {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            SmsManager.getSmsManagerForSubscriptionId(
-                SubscriptionManager.getDefaultSmsSubscriptionId()
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            SmsManager.getDefault()
-        }
-    }
-}
+//object SmsUtils {
+//
+//    fun normalizeNumber(number: String?): String {
+//        if (number.isNullOrBlank()) return ""
+//        if (number.any { it.isLetter() }) return number.trim()
+//
+//        var cleaned = number.replace(Regex("[^0-9+]"), "")
+//        if (cleaned.startsWith("+")) {
+//            cleaned = cleaned.substring(1)
+//        }
+//
+//        when {
+//            cleaned.startsWith("98") && cleaned.length >= 12 -> { /* already good */ }
+//            cleaned.startsWith("0") && cleaned.length == 11 -> cleaned = "98" + cleaned.substring(1)
+//            cleaned.startsWith("9") && cleaned.length == 10 -> cleaned = "98$cleaned"
+//        }
+//        return cleaned
+//    }
+//
+//    fun isSameNumber(a: String?, b: String?): Boolean {
+//        if (a.isNullOrBlank() || b.isNullOrBlank()) return false
+//        if (PhoneNumberUtils.compare(a, b)) return true
+//
+//        val na = normalizeNumber(a)
+//        val nb = normalizeNumber(b)
+//        if (na.length >= 10 && nb.length >= 10) {
+//            return na.takeLast(10) == nb.takeLast(10)
+//        }
+//        return na == nb
+//    }
+//
+//    fun formatDate(millis: Long): String {
+//        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(millis))
+//    }
+//
+//    fun hasReadSmsPermission(context: Context): Boolean {
+//        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
+//                PackageManager.PERMISSION_GRANTED
+//    }
+//
+//    fun hasReadContactsPermission(context: Context): Boolean {
+//        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) ==
+//                PackageManager.PERMISSION_GRANTED
+//    }
+//
+//    fun getContactName(context: Context, phoneNumber: String): String? {
+//        if (!hasReadContactsPermission(context)) return null
+//        return try {
+//            val uri = Uri.withAppendedPath(
+//                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+//                Uri.encode(phoneNumber)
+//            )
+//            context.contentResolver.query(
+//                uri,
+//                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+//                null, null, null
+//            )?.use { cursor ->
+//                if (cursor.moveToFirst()) cursor.getString(0) else null
+//            }
+//        } catch (_: Exception) {
+//            null
+//        }
+//    }
+//
+//    fun getContactPhotoUri(context: Context, phoneNumber: String): String? {
+//        if (!hasReadContactsPermission(context)) return null
+//        return try {
+//            val uri = Uri.withAppendedPath(
+//                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+//                Uri.encode(phoneNumber)
+//            )
+//            context.contentResolver.query(
+//                uri,
+//                arrayOf(ContactsContract.PhoneLookup.PHOTO_URI),
+//                null, null, null
+//            )?.use { cursor ->
+//                if (cursor.moveToFirst()) cursor.getString(0) else null
+//            }
+//        } catch (_: Exception) {
+//            null
+//        }
+//    }
+//
+//    fun getSmsManager(): SmsManager {
+//        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+//            SmsManager.getSmsManagerForSubscriptionId(
+//                SubscriptionManager.getDefaultSmsSubscriptionId()
+//            )
+//        } else {
+//            @Suppress("DEPRECATION")
+//            SmsManager.getDefault()
+//        }
+//    }
+//}
 
 // ======================== Database Helper ========================
 
-object SmsDbHelper {
-
-    fun insertIncomingSms(
-        context: Context,
-        address: String,
-        body: String,
-        date: Long
-    ): Uri? {
-        if (exists(context, address, body, date)) return null
-
-        val values = ContentValues().apply {
-            put(Telephony.Sms.ADDRESS, address)
-            put(Telephony.Sms.BODY, body)
-            put(Telephony.Sms.DATE, date)
-            put(Telephony.Sms.DATE_SENT, date)
-            put(Telephony.Sms.READ, 0)
-            put(Telephony.Sms.SEEN, 0)
-            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
-            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_NONE)
-        }
-
-        return try {
-            context.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    fun insertOutgoingSms(
-        context: Context,
-        address: String,
-        body: String,
-        date: Long = System.currentTimeMillis()
-    ): Uri? {
-        val values = ContentValues().apply {
-            put(Telephony.Sms.ADDRESS, address)
-            put(Telephony.Sms.BODY, body)
-            put(Telephony.Sms.DATE, date)
-            put(Telephony.Sms.DATE_SENT, date)
-            put(Telephony.Sms.READ, 1)
-            put(Telephony.Sms.SEEN, 1)
-            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_OUTBOX)
-            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_PENDING)
-        }
-        return try {
-            context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    fun updateSmsStatus(
-        context: Context,
-        uri: Uri?,
-        type: Int? = null,
-        status: Int? = null
-    ) {
-        if (uri == null) return
-        val values = ContentValues()
-        type?.let { values.put(Telephony.Sms.TYPE, it) }
-        status?.let { values.put(Telephony.Sms.STATUS, it) }
-        if (values.size() == 0) return
-        try {
-            context.contentResolver.update(uri, values, null, null)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun exists(context: Context, address: String, body: String, date: Long): Boolean {
-        return try {
-            context.contentResolver.query(
-                Telephony.Sms.CONTENT_URI,
-                arrayOf(Telephony.Sms._ID),
-                "${Telephony.Sms.ADDRESS}=? AND ${Telephony.Sms.DATE}=? AND ${Telephony.Sms.BODY}=?",
-                arrayOf(address, date.toString(), body),
-                null
-            )?.use { it.moveToFirst() } ?: false
-        } catch (_: Exception) {
-            false
-        }
-    }
-}
+//object SmsDbHelper {
+//
+//    fun insertIncomingSms(
+//        context: Context,
+//        address: String,
+//        body: String,
+//        date: Long
+//    ): Uri? {
+//        if (exists(context, address, body, date)) return null
+//
+//        val values = ContentValues().apply {
+//            put(Telephony.Sms.ADDRESS, address)
+//            put(Telephony.Sms.BODY, body)
+//            put(Telephony.Sms.DATE, date)
+//            put(Telephony.Sms.DATE_SENT, date)
+//            put(Telephony.Sms.READ, 0)
+//            put(Telephony.Sms.SEEN, 0)
+//            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
+//            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_NONE)
+//        }
+//
+//        return try {
+//            context.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
+//        } catch (e: Exception) {
+//            e.printStackTrace()
+//            null
+//        }
+//    }
+//
+//    fun insertOutgoingSms(
+//        context: Context,
+//        address: String,
+//        body: String,
+//        date: Long = System.currentTimeMillis()
+//    ): Uri? {
+//        val values = ContentValues().apply {
+//            put(Telephony.Sms.ADDRESS, address)
+//            put(Telephony.Sms.BODY, body)
+//            put(Telephony.Sms.DATE, date)
+//            put(Telephony.Sms.DATE_SENT, date)
+//            put(Telephony.Sms.READ, 1)
+//            put(Telephony.Sms.SEEN, 1)
+//            put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_OUTBOX)
+//            put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_PENDING)
+//        }
+//        return try {
+//            context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
+//        } catch (e: Exception) {
+//            e.printStackTrace()
+//            null
+//        }
+//    }
+//
+//    fun updateSmsStatus(
+//        context: Context,
+//        uri: Uri?,
+//        type: Int? = null,
+//        status: Int? = null
+//    ) {
+//        if (uri == null) return
+//        val values = ContentValues()
+//        type?.let { values.put(Telephony.Sms.TYPE, it) }
+//        status?.let { values.put(Telephony.Sms.STATUS, it) }
+//        if (values.size() == 0) return
+//        try {
+//            context.contentResolver.update(uri, values, null, null)
+//        } catch (e: Exception) {
+//            e.printStackTrace()
+//        }
+//    }
+//
+//    private fun exists(context: Context, address: String, body: String, date: Long): Boolean {
+//        return try {
+//            context.contentResolver.query(
+//                Telephony.Sms.CONTENT_URI,
+//                arrayOf(Telephony.Sms._ID),
+//                "${Telephony.Sms.ADDRESS}=? AND ${Telephony.Sms.DATE}=? AND ${Telephony.Sms.BODY}=?",
+//                arrayOf(address, date.toString(), body),
+//                null
+//            )?.use { it.moveToFirst() } ?: false
+//        } catch (_: Exception) {
+//            false
+//        }
+//    }
+//}
 
 // ======================== Chat List & Messages ========================
-
-fun getChatList(context: Context): List<Contact> {
-    if (!SmsUtils.hasReadSmsPermission(context)) return emptyList()
-
-    val chatMap = linkedMapOf<String, Contact>()
-    val projection = arrayOf(
-        Telephony.Sms._ID,
-        Telephony.Sms.ADDRESS,
-        Telephony.Sms.BODY,
-        Telephony.Sms.DATE,
-        Telephony.Sms.TYPE,
-        Telephony.Sms.READ
-    )
-
-    val cursor: Cursor? = try {
-        context.contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            projection,
-            null,
-            null,
-            "${Telephony.Sms.DATE} DESC"
-        )
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-
-    cursor?.use {
-        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-        val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
-        val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
-        val typeIdx = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
-        val readIdx = it.getColumnIndexOrThrow(Telephony.Sms.READ)
-
-        while (it.moveToNext()) {
-            val address = it.getString(addressIdx) ?: continue
-            val key = SmsUtils.normalizeNumber(address).ifBlank { address }
-            if (key.isBlank()) continue
-
-            val isInbox = it.getInt(typeIdx) == Telephony.Sms.MESSAGE_TYPE_INBOX
-            val isUnread = it.getInt(readIdx) == 0
-
-            if (chatMap.containsKey(key)) {
-                if (isInbox && isUnread) {
-                    val existing = chatMap[key]!!
-                    chatMap[key] = existing.copy(unreadMessages = existing.unreadMessages + 1)
-                }
-                continue
-            }
-
-            val body = it.getString(bodyIdx) ?: ""
-            val dateMillis = it.getLong(dateIdx)
-            val name = SmsUtils.getContactName(context, address) ?: address
-            val photoUri = SmsUtils.getContactPhotoUri(context, address)
-
-            chatMap[key] = Contact(
-                id = key,
-                name = name,
-                profilePicture = photoUri ?: "",
-                lastMessageText = body,
-                lastMessageDate = SmsUtils.formatDate(dateMillis),
-                unreadMessages = if (isInbox && isUnread) 1 else 0,
-                isOnline = false
-            )
-        }
-    }
-    return chatMap.values.toList()
-}
-
-fun getMessagesForNumber(context: Context, phoneNumber: String): List<MessageItem> {
-    if (!SmsUtils.hasReadSmsPermission(context)) return emptyList()
-
-    val targetNormalized = SmsUtils.normalizeNumber(phoneNumber)
-    if (targetNormalized.isBlank() && phoneNumber.any { it.isLetter() }.not()) return emptyList()
-
-    val messages = mutableListOf<MessageItem>()
-    val projection = arrayOf(
-        Telephony.Sms._ID,
-        Telephony.Sms.ADDRESS,
-        Telephony.Sms.BODY,
-        Telephony.Sms.DATE,
-        Telephony.Sms.TYPE,
-        Telephony.Sms.READ,
-        Telephony.Sms.STATUS
-    )
-
-    val cursor: Cursor? = try {
-        context.contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            projection,
-            null,
-            null,
-            "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC"
-        )
-    } catch (e: Exception) {
-        e.printStackTrace()
-        null
-    }
-
-    cursor?.use {
-        val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
-        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-        val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
-        val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
-        val typeIdx = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
-        val readIdx = it.getColumnIndexOrThrow(Telephony.Sms.READ)
-        val statusIdx = it.getColumnIndex(Telephony.Sms.STATUS)
-
-        while (it.moveToNext()) {
-            val address = it.getString(addressIdx) ?: continue
-            if (!SmsUtils.isSameNumber(address, phoneNumber)) continue
-
-            val id = it.getInt(idIdx)
-            val body = it.getString(bodyIdx) ?: ""
-            val dateMillis = it.getLong(dateIdx)
-            val type = it.getInt(typeIdx)
-            val read = it.getInt(readIdx)
-            val status = if (statusIdx >= 0) it.getInt(statusIdx) else -1
-
-            val isMyMessage = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
-                    type == Telephony.Sms.MESSAGE_TYPE_OUTBOX ||
-                    type == Telephony.Sms.MESSAGE_TYPE_FAILED
-
-            val seen = when {
-                isMyMessage -> status == Telephony.Sms.STATUS_COMPLETE
-                else -> read == 1
-            }
-
-            messages.add(
-                MessageItem(
-                    text = body,
-                    id = id,
-                    date = SmsUtils.formatDate(dateMillis),
-                    myMessage = isMyMessage,
-                    seen = seen
-                )
-            )
-        }
-    }
-    return messages
-}
-
-fun markSmsAsRead(context: Context, phoneNumber: String) {
-    val values = ContentValues().apply {
-        put(Telephony.Sms.READ, 1)
-        put(Telephony.Sms.SEEN, 1)
-    }
-
-    val cursor = try {
-        context.contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS),
-            "${Telephony.Sms.READ} = 0",
-            null,
-            null
-        )
-    } catch (_: Exception) {
-        null
-    }
-
-    cursor?.use {
-        val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
-        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-
-        while (it.moveToNext()) {
-            val address = it.getString(addressIdx) ?: continue
-            if (SmsUtils.isSameNumber(address, phoneNumber)) {
-                val id = it.getLong(idIdx)
-                try {
-                    context.contentResolver.update(
-                        Telephony.Sms.CONTENT_URI,
-                        values,
-                        "${Telephony.Sms._ID} = ?",
-                        arrayOf(id.toString())
-                    )
-                } catch (_: Exception) {
-                }
-            }
-        }
-    }
-}
+//
+//fun getChatList(context: Context): List<Contact> {
+//    if (!SmsUtils.hasReadSmsPermission(context)) return emptyList()
+//
+//    val chatMap = linkedMapOf<String, Contact>()
+//    val projection = arrayOf(
+//        Telephony.Sms._ID,
+//        Telephony.Sms.ADDRESS,
+//        Telephony.Sms.BODY,
+//        Telephony.Sms.DATE,
+//        Telephony.Sms.TYPE,
+//        Telephony.Sms.READ
+//    )
+//
+//    val cursor: Cursor? = try {
+//        context.contentResolver.query(
+//            Telephony.Sms.CONTENT_URI,
+//            projection,
+//            null,
+//            null,
+//            "${Telephony.Sms.DATE} DESC"
+//        )
+//    } catch (e: Exception) {
+//        e.printStackTrace()
+//        null
+//    }
+//
+//    cursor?.use {
+//        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+//        val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+//        val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
+//        val typeIdx = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+//        val readIdx = it.getColumnIndexOrThrow(Telephony.Sms.READ)
+//
+//        while (it.moveToNext()) {
+//            val address = it.getString(addressIdx) ?: continue
+//            val key = SmsUtils.normalizeNumber(address).ifBlank { address }
+//            if (key.isBlank()) continue
+//
+//            val isInbox = it.getInt(typeIdx) == Telephony.Sms.MESSAGE_TYPE_INBOX
+//            val isUnread = it.getInt(readIdx) == 0
+//
+//            if (chatMap.containsKey(key)) {
+//                if (isInbox && isUnread) {
+//                    val existing = chatMap[key]!!
+//                    chatMap[key] = existing.copy(unreadMessages = existing.unreadMessages + 1)
+//                }
+//                continue
+//            }
+//
+//            val body = it.getString(bodyIdx) ?: ""
+//            val dateMillis = it.getLong(dateIdx)
+//            val name = SmsUtils.getContactName(context, address) ?: address
+//            val photoUri = SmsUtils.getContactPhotoUri(context, address)
+//
+//            chatMap[key] = Contact(
+//                id = key,
+//                name = name,
+//                profilePicture = photoUri ?: "",
+//                lastMessageText = body,
+//                lastMessageDate = SmsUtils.formatDate(dateMillis),
+//                unreadMessages = if (isInbox && isUnread) 1 else 0,
+//                isOnline = false
+//            )
+//        }
+//    }
+//    return chatMap.values.toList()
+//}
+//
+//fun getMessagesForNumber(context: Context, phoneNumber: String): List<MessageItem> {
+//    if (!SmsUtils.hasReadSmsPermission(context)) return emptyList()
+//
+//    val targetNormalized = SmsUtils.normalizeNumber(phoneNumber)
+//    if (targetNormalized.isBlank() && phoneNumber.any { it.isLetter() }.not()) return emptyList()
+//
+//    val messages = mutableListOf<MessageItem>()
+//    val projection = arrayOf(
+//        Telephony.Sms._ID,
+//        Telephony.Sms.ADDRESS,
+//        Telephony.Sms.BODY,
+//        Telephony.Sms.DATE,
+//        Telephony.Sms.TYPE,
+//        Telephony.Sms.READ,
+//        Telephony.Sms.STATUS
+//    )
+//
+//    val cursor: Cursor? = try {
+//        context.contentResolver.query(
+//            Telephony.Sms.CONTENT_URI,
+//            projection,
+//            null,
+//            null,
+//            "${Telephony.Sms.DATE} ASC, ${Telephony.Sms._ID} ASC"
+//        )
+//    } catch (e: Exception) {
+//        e.printStackTrace()
+//        null
+//    }
+//
+//    cursor?.use {
+//        val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
+//        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+//        val bodyIdx = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+//        val dateIdx = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
+//        val typeIdx = it.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+//        val readIdx = it.getColumnIndexOrThrow(Telephony.Sms.READ)
+//        val statusIdx = it.getColumnIndex(Telephony.Sms.STATUS)
+//
+//        while (it.moveToNext()) {
+//            val address = it.getString(addressIdx) ?: continue
+//            if (!SmsUtils.isSameNumber(address, phoneNumber)) continue
+//
+//            val id = it.getInt(idIdx)
+//            val body = it.getString(bodyIdx) ?: ""
+//            val dateMillis = it.getLong(dateIdx)
+//            val type = it.getInt(typeIdx)
+//            val read = it.getInt(readIdx)
+//            val status = if (statusIdx >= 0) it.getInt(statusIdx) else -1
+//
+//            val isMyMessage = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
+//                    type == Telephony.Sms.MESSAGE_TYPE_OUTBOX ||
+//                    type == Telephony.Sms.MESSAGE_TYPE_FAILED
+//
+//            val seen = when {
+//                isMyMessage -> status == Telephony.Sms.STATUS_COMPLETE
+//                else -> read == 1
+//            }
+//
+//            messages.add(
+//                MessageItem(
+//                    text = body,
+//                    id = id,
+//                    date = SmsUtils.formatDate(dateMillis),
+//                    myMessage = isMyMessage,
+//                    seen = seen
+//                )
+//            )
+//        }
+//    }
+//    return messages
+//}
+//
+//fun markSmsAsRead(context: Context, phoneNumber: String) {
+//    val values = ContentValues().apply {
+//        put(Telephony.Sms.READ, 1)
+//        put(Telephony.Sms.SEEN, 1)
+//    }
+//
+//    val cursor = try {
+//        context.contentResolver.query(
+//            Telephony.Sms.CONTENT_URI,
+//            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS),
+//            "${Telephony.Sms.READ} = 0",
+//            null,
+//            null
+//        )
+//    } catch (_: Exception) {
+//        null
+//    }
+//
+//    cursor?.use {
+//        val idIdx = it.getColumnIndexOrThrow(Telephony.Sms._ID)
+//        val addressIdx = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+//
+//        while (it.moveToNext()) {
+//            val address = it.getString(addressIdx) ?: continue
+//            if (SmsUtils.isSameNumber(address, phoneNumber)) {
+//                val id = it.getLong(idIdx)
+//                try {
+//                    context.contentResolver.update(
+//                        Telephony.Sms.CONTENT_URI,
+//                        values,
+//                        "${Telephony.Sms._ID} = ?",
+//                        arrayOf(id.toString())
+//                    )
+//                } catch (_: Exception) {
+//                }
+//            }
+//        }
+//    }
+//}
 
 // ======================== SMS Receiver (Multipart Safe) ========================
 
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Telephony.Sms.Intents.SMS_DELIVER_ACTION) return
-        if (!isDefaultSmsApp(context)) return
+        //if (intent.action != Telephony.Sms.Intents.SMS_DELIVER_ACTION) return
+        //if (!isDefaultSmsApp(context)) return
 
-        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
-        if (messages.isNullOrEmpty()) return
+        //val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+        //if (messages.isNullOrEmpty()) return
 
-        // گروه‌بندی بر اساس آدرس (گاهی چند فرستنده در یک Intent می‌آید)
-        val grouped = messages.groupBy { it.originatingAddress ?: "" }
+        //// گروه‌بندی بر اساس آدرس (گاهی چند فرستنده در یک Intent می‌آید)
+        //val grouped = messages.groupBy { it.originatingAddress ?: "" }
 
-        for ((address, parts) in grouped) {
-            if (address.isBlank()) continue
+        //for ((address, parts) in grouped) {
+        //    if (address.isBlank()) continue
 
-            val sortedParts = parts.sortedWith(
-                compareBy<android.telephony.SmsMessage> { it.indexOnIcc }
-                    .thenBy { it.timestampMillis }
-            )
+        //    val sortedParts = parts.sortedWith(
+        //        compareBy<android.telephony.SmsMessage> { it.indexOnIcc }
+        //            .thenBy { it.timestampMillis }
+        //    )
 
-            val body = sortedParts.joinToString("") { it.messageBody.orEmpty() }
-            if (body.isBlank()) continue
+        //    val body = sortedParts.joinToString("") { it.messageBody.orEmpty() }
+        //    if (body.isBlank()) continue
 
-            val timestamp = sortedParts.maxOfOrNull { it.timestampMillis }
-                ?.takeIf { it > 0 } ?: System.currentTimeMillis()
+        //    val timestamp = sortedParts.maxOfOrNull { it.timestampMillis }
+        //        ?.takeIf { it > 0 } ?: System.currentTimeMillis()
 
-            SmsDbHelper.insertIncomingSms(context, address, body, timestamp)
+        //    SmsDbHelper.insertIncomingSms(context, address, body, timestamp)
 
-            val displayName = SmsUtils.getContactName(context, address) ?: address
-            showNotification(
-                context = context,
-                id = SmsUtils.normalizeNumber(address).ifBlank { address },
-                displayName = displayName,
-                text = body,
-                notificationId = address.hashCode()
-            )
-        }
+        //    val displayName = SmsUtils.getContactName(context, address) ?: address
+        //    showNotification(
+        //        context = context,
+        //        id = SmsUtils.normalizeNumber(address).ifBlank { address },
+        //        displayName = displayName,
+        //        text = body,
+        //        notificationId = address.hashCode()
+        //    )
+        //}
     }
 }
 
@@ -1830,36 +1790,36 @@ class SmsReceiver : BroadcastReceiver() {
 
 class MmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Telephony.Sms.Intents.WAP_PUSH_DELIVER_ACTION) return
-        if (!isDefaultSmsApp(context)) return
-        if (intent.type != "application/vnd.wap.mms-message") return
+        //if (intent.action != Telephony.Sms.Intents.WAP_PUSH_DELIVER_ACTION) return
+        //if (!isDefaultSmsApp(context)) return
+        //if (intent.type != "application/vnd.wap.mms-message") return
 
-        handleMms(context)
+        //handleMms(context)
     }
 
-    private fun handleMms(context: Context) {
-        try {
-            val cursor = context.contentResolver.query(
-                Telephony.Mms.Inbox.CONTENT_URI,
-                arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE),
-                null,
-                null,
-                "${Telephony.Mms.DATE} DESC LIMIT 1"
-            )
-            cursor?.use {
-                if (!it.moveToFirst()) return
-                val mmsId = it.getLong(0)
-                showNotification(
-                    context = context,
-                    id = mmsId.toString(),
-                    displayName = "MMS",
-                    text = "New multimedia message received",
-                    notificationId = mmsId.toInt()
-                )
-            }
-        } catch (_: Exception) {
-        }
-    }
+    //private fun handleMms(context: Context) {
+    //    try {
+    //        val cursor = context.contentResolver.query(
+    //            Telephony.Mms.Inbox.CONTENT_URI,
+    //            arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE),
+    //            null,
+    //            null,
+    //            "${Telephony.Mms.DATE} DESC LIMIT 1"
+    //        )
+    //        cursor?.use {
+    //            if (!it.moveToFirst()) return
+    //            val mmsId = it.getLong(0)
+    //            showNotification(
+    //                context = context,
+    //                id = mmsId.toString(),
+    //                displayName = "MMS",
+    //                text = "New multimedia message received",
+    //                notificationId = mmsId.toInt()
+    //            )
+    //        }
+    //    } catch (_: Exception) {
+    //    }
+    //}
 }
 
 // ======================== Headless SMS Send Service ========================
@@ -1868,413 +1828,414 @@ class HeadlessSmsSendService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!isDefaultSmsApp(this) || !checkSmsAppRole(this)) {
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
-        intent?.let { handleSendSms(it) }
-        stopSelf(startId)
+        //if (!isDefaultSmsApp(this) || !checkSmsAppRole(this)) {
+        //    stopSelf(startId)
+        //    return START_NOT_STICKY
+        //}
+        //intent?.let { handleSendSms(it) }
+        //stopSelf(startId)
         return START_NOT_STICKY
     }
 
-    private fun handleSendSms(intent: Intent) {
-        val phoneNumber = when {
-            intent.data?.scheme == "smsto" || intent.data?.scheme == "sms" ->
-                intent.data?.schemeSpecificPart
-            intent.hasExtra("address") ->
-                intent.getStringExtra("address")
-            else -> null
-        } ?: return
+    //private fun handleSendSms(intent: Intent) {
+    //    val phoneNumber = when {
+    //        intent.data?.scheme == "smsto" || intent.data?.scheme == "sms" ->
+    //            intent.data?.schemeSpecificPart
+    //        intent.hasExtra("address") ->
+    //            intent.getStringExtra("address")
+    //        else -> null
+    //    } ?: return
 
-        val message = when {
-            intent.hasExtra("sms_body") -> intent.getStringExtra("sms_body")
-            intent.hasExtra(Intent.EXTRA_TEXT) -> intent.getStringExtra(Intent.EXTRA_TEXT)
-            else -> null
-        } ?: return
+    //    val message = when {
+    //        intent.hasExtra("sms_body") -> intent.getStringExtra("sms_body")
+    //        intent.hasExtra(Intent.EXTRA_TEXT) -> intent.getStringExtra(Intent.EXTRA_TEXT)
+    //        else -> null
+    //    } ?: return
 
-        if (phoneNumber.isBlank() || message.isBlank()) return
+    //    if (phoneNumber.isBlank() || message.isBlank()) return
 
-        SmsSender.send(this, phoneNumber, message)
-    }
+    //    SmsSender.send(this, phoneNumber, message)
+    //}
 }
 
 // ======================== Sent / Delivered Receivers ========================
 
 class SmsSentReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val uri = intent.getStringExtra("sms_uri")?.let { Uri.parse(it) }
+        //val uri = intent.getStringExtra("sms_uri")?.let { Uri.parse(it) }
 
-        when (resultCode) {
-            Activity.RESULT_OK -> {
-                SmsDbHelper.updateSmsStatus(
-                    context = context,
-                    uri = uri,
-                    type = Telephony.Sms.MESSAGE_TYPE_SENT,
-                    status = Telephony.Sms.STATUS_PENDING
-                )
-            }
-            else -> {
-                SmsDbHelper.updateSmsStatus(
-                    context = context,
-                    uri = uri,
-                    type = Telephony.Sms.MESSAGE_TYPE_FAILED,
-                    status = Telephony.Sms.STATUS_FAILED
-                )
-            }
-        }
+        //when (resultCode) {
+        //    Activity.RESULT_OK -> {
+        //        SmsDbHelper.updateSmsStatus(
+        //            context = context,
+        //            uri = uri,
+        //            type = Telephony.Sms.MESSAGE_TYPE_SENT,
+        //            status = Telephony.Sms.STATUS_PENDING
+        //        )
+        //    }
+        //    else -> {
+        //        SmsDbHelper.updateSmsStatus(
+        //            context = context,
+        //            uri = uri,
+        //            type = Telephony.Sms.MESSAGE_TYPE_FAILED,
+        //            status = Telephony.Sms.STATUS_FAILED
+        //        )
+        //    }
+        //}
     }
 }
 
 class SmsDeliveredReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val uri = intent.getStringExtra("sms_uri")?.let { Uri.parse(it) }
-        val phoneNumber = intent.getStringExtra("phone_number").orEmpty()
-        val displayName = if (phoneNumber.isNotEmpty()) {
-            SmsUtils.getContactName(context, phoneNumber) ?: phoneNumber
-        } else {
-            "Message"
-        }
+        //val uri = intent.getStringExtra("sms_uri")?.let { Uri.parse(it) }
+        //val phoneNumber = intent.getStringExtra("phone_number").orEmpty()
+        //val displayName = if (phoneNumber.isNotEmpty()) {
+        //    SmsUtils.getContactName(context, phoneNumber) ?: phoneNumber
+        //} else {
+        //    "Message"
+        //}
 
-        when (resultCode) {
-            Activity.RESULT_OK -> {
-                SmsDbHelper.updateSmsStatus(
-                    context = context,
-                    uri = uri,
-                    status = Telephony.Sms.STATUS_COMPLETE
-                )
-                // نوتیف تحویل (اختیاری – اگر نمی‌خواهی حذف کن)
-                // showNotification(
-                //     context = context,
-                //     id = phoneNumber.ifEmpty { "delivery" },
-                //     displayName = displayName,
-                //     text = "Message delivered successfully",
-                //     notificationId = if (phoneNumber.isNotEmpty()) phoneNumber.hashCode() + 1000 else 9999
-                // )
-            }
-            else -> {
-                SmsDbHelper.updateSmsStatus(
-                    context = context,
-                    uri = uri,
-                    status = Telephony.Sms.STATUS_FAILED
-                )
-            }
-        }
+        //when (resultCode) {
+        //    Activity.RESULT_OK -> {
+        //        SmsDbHelper.updateSmsStatus(
+        //            context = context,
+        //            uri = uri,
+        //            status = Telephony.Sms.STATUS_COMPLETE
+        //        )
+        //        // نوتیف تحویل (اختیاری – اگر نمی‌خواهی حذف کن)
+        //        // showNotification(
+        //        //     context = context,
+        //        //     id = phoneNumber.ifEmpty { "delivery" },
+        //        //     displayName = displayName,
+        //        //     text = "Message delivered successfully",
+        //        //     notificationId = if (phoneNumber.isNotEmpty()) phoneNumber.hashCode() + 1000 else 9999
+        //        // )
+        //    }
+        //    else -> {
+        //        SmsDbHelper.updateSmsStatus(
+        //            context = context,
+        //            uri = uri,
+        //            status = Telephony.Sms.STATUS_FAILED
+        //        )
+        //    }
+        //}
     }
 }
 
 // ======================== Sender (Robust Multipart) ========================
 
-object SmsSender {
-
-    private val pendingCounter = AtomicInteger(0)
-
-    fun send(
-        context: Context,
-        phoneNumber: String,
-        message: String,
-        onResult: ((success: Boolean) -> Unit)? = null
-    ): Boolean {
-        if (phoneNumber.isBlank() || message.isBlank()) {
-            onResult?.invoke(false)
-            return false
-        }
-
-        if (!isDefaultSmsApp(context) || !checkSmsAppRole(context)) {
-            onResult?.invoke(false)
-            return false
-        }
-
-        return try {
-            val smsManager = SmsUtils.getSmsManager()
-            val messageUri = SmsDbHelper.insertOutgoingSms(context, phoneNumber, message)
-
-            val baseId = pendingCounter.incrementAndGet()
-            val sentAction = "ir.gchat.SMS_SENT"
-            val deliveredAction = "ir.gchat.SMS_DELIVERED"
-
-            val parts = smsManager.divideMessage(message)
-
-            if (parts.size > 1) {
-                val sentIntents = ArrayList<PendingIntent>(parts.size)
-                val deliveredIntents = ArrayList<PendingIntent>(parts.size)
-
-                parts.forEachIndexed { index, _ ->
-                    sentIntents.add(
-                        createPendingIntent(
-                            context, sentAction, messageUri, phoneNumber,
-                            baseId + index
-                        )
-                    )
-                    deliveredIntents.add(
-                        createPendingIntent(
-                            context, deliveredAction, messageUri, phoneNumber,
-                            baseId + 1_000_000 + index
-                        )
-                    )
-                }
-
-                smsManager.sendMultipartTextMessage(
-                    phoneNumber, null, parts, sentIntents, deliveredIntents
-                )
-            } else {
-                val sentIntent = createPendingIntent(
-                    context, sentAction, messageUri, phoneNumber, baseId
-                )
-                val deliveredIntent = createPendingIntent(
-                    context, deliveredAction, messageUri, phoneNumber, baseId + 1_000_000
-                )
-                smsManager.sendTextMessage(
-                    phoneNumber, null, message, sentIntent, deliveredIntent
-                )
-            }
-
-            onResult?.invoke(true)
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            onResult?.invoke(false)
-            false
-        }
-    }
-
-    private fun createPendingIntent(
-        context: Context,
-        action: String,
-        uri: Uri?,
-        phoneNumber: String,
-        requestCode: Int
-    ): PendingIntent {
-        val intent = Intent(action).apply {
-            putExtra("sms_uri", uri?.toString())
-            putExtra("phone_number", phoneNumber)
-            setPackage(context.packageName)
-        }
-        return PendingIntent.getBroadcast(
-            context,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-}
+//object SmsSender {
+//
+//    //private val pendingCounter = AtomicInteger(0)
+//
+//    fun send(
+//        context: Context,
+//        phoneNumber: String,
+//        message: String,
+//        onResult: ((success: Boolean) -> Unit)? = null
+//    ): Boolean {
+//        return false
+//        //if (phoneNumber.isBlank() || message.isBlank()) {
+//        //    onResult?.invoke(false)
+//        //    return false
+//        //}
+//
+//        //if (!isDefaultSmsApp(context) || !checkSmsAppRole(context)) {
+//        //    onResult?.invoke(false)
+//        //    return false
+//        //}
+//
+//        //return try {
+//        //    val smsManager = SmsUtils.getSmsManager()
+//        //    val messageUri = SmsDbHelper.insertOutgoingSms(context, phoneNumber, message)
+//
+//        //    val baseId = pendingCounter.incrementAndGet()
+//        //    val sentAction = "ir.gchat.SMS_SENT"
+//        //    val deliveredAction = "ir.gchat.SMS_DELIVERED"
+//
+//        //    val parts = smsManager.divideMessage(message)
+//
+//        //    if (parts.size > 1) {
+//        //        val sentIntents = ArrayList<PendingIntent>(parts.size)
+//        //        val deliveredIntents = ArrayList<PendingIntent>(parts.size)
+//
+//        //        parts.forEachIndexed { index, _ ->
+//        //            sentIntents.add(
+//        //                createPendingIntent(
+//        //                    context, sentAction, messageUri, phoneNumber,
+//        //                    baseId + index
+//        //                )
+//        //            )
+//        //            deliveredIntents.add(
+//        //                createPendingIntent(
+//        //                    context, deliveredAction, messageUri, phoneNumber,
+//        //                    baseId + 1_000_000 + index
+//        //                )
+//        //            )
+//        //        }
+//
+//        //        smsManager.sendMultipartTextMessage(
+//        //            phoneNumber, null, parts, sentIntents, deliveredIntents
+//        //        )
+//        //    } else {
+//        //        val sentIntent = createPendingIntent(
+//        //            context, sentAction, messageUri, phoneNumber, baseId
+//        //        )
+//        //        val deliveredIntent = createPendingIntent(
+//        //            context, deliveredAction, messageUri, phoneNumber, baseId + 1_000_000
+//        //        )
+//        //        smsManager.sendTextMessage(
+//        //            phoneNumber, null, message, sentIntent, deliveredIntent
+//        //        )
+//        //    }
+//
+//        //    onResult?.invoke(true)
+//        //    true
+//        //} catch (e: Exception) {
+//        //    e.printStackTrace()
+//        //    onResult?.invoke(false)
+//        //    false
+//        //}
+//    }
+//
+//    //private fun createPendingIntent(
+//    //    context: Context,
+//    //    action: String,
+//    //    uri: Uri?,
+//    //    phoneNumber: String,
+//    //    requestCode: Int
+//    //): PendingIntent {
+//    //    val intent = Intent(action).apply {
+//    //        putExtra("sms_uri", uri?.toString())
+//    //        putExtra("phone_number", phoneNumber)
+//    //        setPackage(context.packageName)
+//    //    }
+//    //    return PendingIntent.getBroadcast(
+//    //        context,
+//    //        requestCode,
+//    //        intent,
+//    //        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+//    //    )
+//    //}
+//}
 
 // ======================== SendSmsActivity ========================
 
 class SendSmsActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        val phone = intent.data?.schemeSpecificPart.orEmpty()
-        val body = when {
-            intent.hasExtra("sms_body") -> intent.getStringExtra("sms_body").orEmpty()
-            intent.hasExtra(Intent.EXTRA_TEXT) -> intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-            else -> ""
-        }
-
-        val viewModel: MainViewModel by viewModels()
-        val smsViewModel: SmsChatViewModel by viewModels()
-
-        enableEdgeToEdge()
-        setContent {
-            val theme by viewModel.theme.collectAsState()
-            val palette by viewModel.palette.collectAsState()
-            val darkTheme = when (theme) {
-                0 -> isSystemInDarkTheme()
-                1 -> true
-                2 -> false
-                else -> isSystemInDarkTheme()
-            }
-
-            val context = LocalContext.current
-            if (checkSmsAppRole(context)) {
-                DisposableEffect(Unit) {
-                    smsViewModel.init(context)
-                    smsViewModel.refreshChatList()
-                    onDispose {}
-                }
-            }
-
-            GChatTheme(dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette) {
-                SMSChatScreen(
-                    back = {
-                        (context as? Activity)?.finish()
-                        true
-                    },
-                    id = phone,
-                    draft = body,
-                    displayName = SmsUtils.getContactName(context, phone) ?: phone,
-                    smsViewModel = smsViewModel
-                )
-                SetUpSystemBars(darkTheme)
-            }
-        }
-    }
+//    override fun onCreate(savedInstanceState: Bundle?) {
+//        super.onCreate(savedInstanceState)
+//
+//        val phone = intent.data?.schemeSpecificPart.orEmpty()
+//        val body = when {
+//            intent.hasExtra("sms_body") -> intent.getStringExtra("sms_body").orEmpty()
+//            intent.hasExtra(Intent.EXTRA_TEXT) -> intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+//            else -> ""
+//        }
+//
+//        val viewModel: MainViewModel by viewModels()
+//        val smsViewModel: SmsChatViewModel by viewModels()
+//
+//        enableEdgeToEdge()
+//        setContent {
+//            val theme by viewModel.theme.collectAsState()
+//            val palette by viewModel.palette.collectAsState()
+//            val darkTheme = when (theme) {
+//                0 -> isSystemInDarkTheme()
+//                1 -> true
+//                2 -> false
+//                else -> isSystemInDarkTheme()
+//            }
+//
+//            val context = LocalContext.current
+//            if (checkSmsAppRole(context)) {
+//                DisposableEffect(Unit) {
+//                    smsViewModel.init(context)
+//                    smsViewModel.refreshChatList()
+//                    onDispose {}
+//                }
+//            }
+//
+//            GChatTheme(dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette) {
+//                SMSChatScreen(
+//                    back = {
+//                        (context as? Activity)?.finish()
+//                        true
+//                    },
+//                    id = phone,
+//                    draft = body,
+//                    displayName = SmsUtils.getContactName(context, phone) ?: phone,
+//                    smsViewModel = smsViewModel
+//                )
+//                SetUpSystemBars(darkTheme)
+//            }
+//        }
+//    }
 }
 
 // ======================== ViewModel ========================
 
-class SmsChatViewModel : ViewModel() {
-
-    private val _chatList = MutableStateFlow<List<Contact>>(emptyList())
-    val chatList: StateFlow<List<Contact>> = _chatList
-
-    private val _messages = MutableStateFlow<List<MessageItem>>(emptyList())
-    val messages: StateFlow<List<MessageItem>> = _messages
-
-    private var currentPhoneNumber: String = ""
-    private var smsObserver: ContentObserver? = null
-    private var context: Context? = null
-    private var lastRefreshTime = 0L
-    private val REFRESH_DEBOUNCE = 600L
-
-    fun init(context: Context) {
-        this.context = context.applicationContext
-        startObservingSmsChanges()
-        refreshChatList()
-    }
-
-    fun refreshChatList() {
-        val now = System.currentTimeMillis()
-        if (now - lastRefreshTime < REFRESH_DEBOUNCE) return
-        lastRefreshTime = now
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val ctx = context ?: return@launch
-            val chats = getChatList(ctx)
-            withContext(Dispatchers.Main) {
-                _chatList.value = chats
-            }
-        }
-    }
-
-    fun loadMessages(phoneNumber: String) {
-        currentPhoneNumber = phoneNumber
-        viewModelScope.launch(Dispatchers.IO) {
-            val ctx = context ?: return@launch
-            val list = getMessagesForNumber(ctx, phoneNumber)
-            withContext(Dispatchers.Main) {
-                _messages.value = list
-            }
-        }
-    }
-
-    fun sendMessage(context: Context, phoneNumber: String, message: String): Boolean {
-        if (phoneNumber.isBlank() || message.isBlank()) return false
-
-        return SmsSender.send(context, phoneNumber, message) { success ->
-            if (success) {
-                // کمی تأخیر برای اینکه دیتابیس آپدیت شود
-                viewModelScope.launch {
-                    kotlinx.coroutines.delay(400)
-                    refreshChatList()
-                    if (SmsUtils.isSameNumber(currentPhoneNumber, phoneNumber)) {
-                        loadMessages(phoneNumber)
-                    }
-                }
-            }
-        }
-    }
-
-    fun markMessageAsRead(context: Context, phoneNumber: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                markSmsAsRead(context, phoneNumber)
-                withContext(Dispatchers.Main) {
-                    refreshChatList()
-                    if (SmsUtils.isSameNumber(currentPhoneNumber, phoneNumber)) {
-                        loadMessages(phoneNumber)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private fun startObservingSmsChanges() {
-        val ctx = context ?: return
-        smsObserver?.let {
-            try {
-                ctx.contentResolver.unregisterContentObserver(it)
-            } catch (_: Exception) {
-            }
-        }
-
-        smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean, uri: Uri?) {
-                refreshChatList()
-                if (currentPhoneNumber.isNotEmpty()) {
-                    loadMessages(currentPhoneNumber)
-                }
-            }
-        }
-
-        try {
-            ctx.contentResolver.registerContentObserver(
-                Telephony.Sms.CONTENT_URI,
-                true,
-                smsObserver!!
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        smsObserver?.let {
-            try {
-                context?.contentResolver?.unregisterContentObserver(it)
-            } catch (_: Exception) {
-            }
-        }
-        smsObserver = null
-        context = null
-    }
-}
+//class SmsChatViewModel : ViewModel() {
+//
+//    private val _chatList = MutableStateFlow<List<Contact>>(emptyList())
+//    val chatList: StateFlow<List<Contact>> = _chatList
+//
+//    private val _messages = MutableStateFlow<List<MessageItem>>(emptyList())
+//    val messages: StateFlow<List<MessageItem>> = _messages
+//
+//    private var currentPhoneNumber: String = ""
+//    private var smsObserver: ContentObserver? = null
+//    private var context: Context? = null
+//    private var lastRefreshTime = 0L
+//    private val REFRESH_DEBOUNCE = 600L
+//
+//    fun init(context: Context) {
+//        this.context = context.applicationContext
+//        startObservingSmsChanges()
+//        refreshChatList()
+//    }
+//
+//    fun refreshChatList() {
+//        val now = System.currentTimeMillis()
+//        if (now - lastRefreshTime < REFRESH_DEBOUNCE) return
+//        lastRefreshTime = now
+//
+//        viewModelScope.launch(Dispatchers.IO) {
+//            val ctx = context ?: return@launch
+//            val chats = getChatList(ctx)
+//            withContext(Dispatchers.Main) {
+//                _chatList.value = chats
+//            }
+//        }
+//    }
+//
+//    fun loadMessages(phoneNumber: String) {
+//        currentPhoneNumber = phoneNumber
+//        viewModelScope.launch(Dispatchers.IO) {
+//            val ctx = context ?: return@launch
+//            val list = getMessagesForNumber(ctx, phoneNumber)
+//            withContext(Dispatchers.Main) {
+//                _messages.value = list
+//            }
+//        }
+//    }
+//
+//    fun sendMessage(context: Context, phoneNumber: String, message: String): Boolean {
+//        if (phoneNumber.isBlank() || message.isBlank()) return false
+//
+//        return SmsSender.send(context, phoneNumber, message) { success ->
+//            if (success) {
+//                // کمی تأخیر برای اینکه دیتابیس آپدیت شود
+//                viewModelScope.launch {
+//                    kotlinx.coroutines.delay(400)
+//                    refreshChatList()
+//                    if (SmsUtils.isSameNumber(currentPhoneNumber, phoneNumber)) {
+//                        loadMessages(phoneNumber)
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//    fun markMessageAsRead(context: Context, phoneNumber: String) {
+//        viewModelScope.launch(Dispatchers.IO) {
+//            try {
+//                markSmsAsRead(context, phoneNumber)
+//                withContext(Dispatchers.Main) {
+//                    refreshChatList()
+//                    if (SmsUtils.isSameNumber(currentPhoneNumber, phoneNumber)) {
+//                        loadMessages(phoneNumber)
+//                    }
+//                }
+//            } catch (e: Exception) {
+//                e.printStackTrace()
+//            }
+//        }
+//    }
+//
+//    private fun startObservingSmsChanges() {
+//        val ctx = context ?: return
+//        smsObserver?.let {
+//            try {
+//                ctx.contentResolver.unregisterContentObserver(it)
+//            } catch (_: Exception) {
+//            }
+//        }
+//
+//        smsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+//            override fun onChange(selfChange: Boolean, uri: Uri?) {
+//                refreshChatList()
+//                if (currentPhoneNumber.isNotEmpty()) {
+//                    loadMessages(currentPhoneNumber)
+//                }
+//            }
+//        }
+//
+//        try {
+//            ctx.contentResolver.registerContentObserver(
+//                Telephony.Sms.CONTENT_URI,
+//                true,
+//                smsObserver!!
+//            )
+//        } catch (e: Exception) {
+//            e.printStackTrace()
+//        }
+//    }
+//
+//    override fun onCleared() {
+//        super.onCleared()
+//        smsObserver?.let {
+//            try {
+//                context?.contentResolver?.unregisterContentObserver(it)
+//            } catch (_: Exception) {
+//            }
+//        }
+//        smsObserver = null
+//        context = null
+//    }
+//}
 
 // ======================== Open Contact ========================
 
-fun openContact(context: Context, phoneNumber: String) {
-    try {
-        val uri = Uri.withAppendedPath(
-            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-            Uri.encode(phoneNumber)
-        )
-        val cursor = context.contentResolver.query(
-            uri,
-            arrayOf(
-                ContactsContract.PhoneLookup._ID,
-                ContactsContract.PhoneLookup.DISPLAY_NAME
-            ),
-            null, null, null
-        )
-
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val contactId = it.getString(0)
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    data = Uri.withAppendedPath(
-                        ContactsContract.Contacts.CONTENT_URI,
-                        contactId
-                    )
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-            } else {
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    data = Uri.parse("tel:$phoneNumber")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        val intent = Intent(Intent.ACTION_DIAL).apply {
-            data = Uri.parse("tel:$phoneNumber")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    }
-}
+//fun openContact(context: Context, phoneNumber: String) {
+//    try {
+//        val uri = Uri.withAppendedPath(
+//            ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+//            Uri.encode(phoneNumber)
+//        )
+//        val cursor = context.contentResolver.query(
+//            uri,
+//            arrayOf(
+//                ContactsContract.PhoneLookup._ID,
+//                ContactsContract.PhoneLookup.DISPLAY_NAME
+//            ),
+//            null, null, null
+//        )
+//
+//        cursor?.use {
+//            if (it.moveToFirst()) {
+//                val contactId = it.getString(0)
+//                val intent = Intent(Intent.ACTION_VIEW).apply {
+//                    data = Uri.withAppendedPath(
+//                        ContactsContract.Contacts.CONTENT_URI,
+//                        contactId
+//                    )
+//                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+//                }
+//                context.startActivity(intent)
+//            } else {
+//                val intent = Intent(Intent.ACTION_VIEW).apply {
+//                    data = Uri.parse("tel:$phoneNumber")
+//                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+//                }
+//                context.startActivity(intent)
+//            }
+//        }
+//    } catch (e: Exception) {
+//        e.printStackTrace()
+//        val intent = Intent(Intent.ACTION_DIAL).apply {
+//            data = Uri.parse("tel:$phoneNumber")
+//            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+//        }
+//        context.startActivity(intent)
+//    }
+//}

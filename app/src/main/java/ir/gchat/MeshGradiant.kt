@@ -22,10 +22,6 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.time.Duration.Companion.milliseconds
 
-// ─────────────────────────────────────────────
-// مدل‌ها و ثابت‌ها
-// ─────────────────────────────────────────────
-
 data class Position(val x: Float, val y: Float)
 data class Rgb(val r: Float, val g: Float, val b: Float)
 
@@ -41,10 +37,6 @@ private val POSITIONS = listOf(
 )
 
 private val PHASES = POSITIONS.size // 8
-
-// ─────────────────────────────────────────────
-// توابع کمکی
-// ─────────────────────────────────────────────
 
 fun hexToRgb(hex: String): Rgb {
     val clean = hex.removePrefix("#")
@@ -81,10 +73,6 @@ fun currentPositions(phase: Int, tail: Float, tails: Int): List<Position> {
     }
 }
 
-/**
- * الگوریتم اصلی TWallpaper
- * رزولوشن خیلی پایین (۵۰×۵۰) → بسیار سبک
- */
 fun generateGradientBitmap(
     width: Int = 50,
     height: Int = 50,
@@ -138,7 +126,6 @@ fun generateGradientBitmap(
         }
     }
 
-    // تبدیل به Android Bitmap و بعد ImageBitmap
     val androidBitmap = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
     return androidBitmap.asImageBitmap()
 }

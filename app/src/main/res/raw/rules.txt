@@ -1,0 +1,79 @@
+GChat and GCorp Platform Rules and Regulations
+
+1. Platform Principles
+Equality: Users have complete freedom of opinion, choice of audience, and membership in groups. The GChat platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.
+Content Responsibility: The publishing user is directly responsible for all published content. The platform acts as a technical intermediary and does not accept legal or criminal liability for user content (except in cases where the law expressly provides otherwise).
+
+2. Registration, Account Ownership, and Privacy
+Account Ownership: Your account information belongs to you and you should not make it available to other parties. The platform is not responsible for any incidents resulting from the sharing of information by the user.
+Account Deletion: If you request to delete your account, all information related to the user, including messages, contacts, files, groups, and channels created, will be completely removed from the user's access.
+Impersonation Prohibition: Impersonating others, especially celebrities, or members of the GChat team, is prohibited and will result in immediate account blocking.
+
+3. Content Privacy Classification
+The platform's intelligent system defines different levels of content access based on the type of interaction:
+1. Private messages: Only the parties involved in the conversation (2-person or private groups) can view the content.
+2. Private group/channel: Only members who have officially joined can view the content.
+3. Public channel: The content of these channels is visible on the GChat website and can even be viewed by non-members.
+The GChat intelligent system can access all information to verify the virtual security of users.
+
+4. Unauthorized content
+Any publication or promotion of the following is prohibited and will be subject to legal action:
+1. Crimes against persons:
+Insult, humiliation, insult and spam.
+Harassment, harassment and nuisance in personal messages, groups, comments, etc.
+Threats to life, encouragement of violence, suicide, self-harm or other harm.
+Publishing and revealing the private information of others (such as address, contact number, identification documents) without their consent.
+Unhelpful content, setting up fun groups, activities against an individual or destruction campaigns.
+2. Immoral and sexual content:
+Pornography and pornography are prohibited in all spaces (including cloud space) and will lead to expulsion from the platform.
+Content related to child abuse will lead to the strictest treatment.
+3. Fraud and illegal activities:
+Publishing online theft links, fraud and redirection to fake portals.
+Buying and selling drugs, alcoholic beverages, smuggling, gambling and betting.
+Selling memberships and buying/selling user accounts.
+Publishing fake news that leads to serious harm to individuals or real/legal entities.
+4. Technical security:
+Distribution of viruses, malware or any malicious code (unless explicitly published for educational purposes and with the necessary warnings).
+
+5. Special rules for managing channels, groups and rooms
+Creator's responsibility: The creator of each group, channel or room is fully responsible for monitoring the content and behavior of its members.
+Room rules:
+The admin or creator of the room is obliged to delete the offending content and remove the offending user from the room.
+Rooms whose purpose is spam (multiple messages with low content value), fraudulent advertising, or promotion of prohibited content will be closed.
+Choosing offensive/immoral names or descriptions for the room is not allowed.
+Channel rules:
+Store channels: The GChat platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.
+Model face rule: In store products where the model is present in the image, the model must be dressed in a way that cannot be abused.
+Disagreements: Disagreements are natural, but users are required to handle disagreements respectfully and without insults or harassment.
+
+6. Mechanism for dealing with violations
+The GChat platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):
+
+a) Personal account penalties:
+1. Official warning and removal of the offending content.
+2. Stopping contact list synchronization.
+3. Restriction on sending messages to non-contacts.
+4. Restriction on sending messages in groups that the user is not an administrator of.
+5. Complete restriction on sending messages on the platform.
+6. Restriction on creating new channels or groups.
+7. Restriction on adding members to groups/channels.
+8. Expulsion from the platform: In extreme cases, the user account will be deleted and all groups and channels created by that user will also be deleted.
+
+b) Group or channel penalties:
+1. Revocation of public membership links.
+2. Disabling the public search feature for the group/channel.
+3. Restricting new post posting.
+4. Blocking or completely deleting the group/channel.
+5. Removing the public channel from the platform lists.
+
+7. Reporting violations and contacting support
+Users are required to register any violating content or inappropriate behavior via the "Report" button in the application. All reports will be carefully reviewed.
+To send suggestions, criticism, bug reports or questions, you can contact us from the internal support section of the application or through the admin ID.
+
+8. Changes to the rules
+The GChat platform has the right to change, modify or update its rules and regulations at any time and without prior notice.
+Continuing to use the platform services after any changes are made means full acceptance of the new rules by the user.
+Major and critical changes will be notified to users via an in-app message or the official GChat notification channel.
+Users are advised to periodically check the page Check the rules.
+
+GCorp | Always with you for a safe and fast space
