@@ -41,12 +41,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -168,7 +170,7 @@ fun Greeting(
             linkInteractionListener = { showTermsDialog = true },
             styles = TextLinkStyles(
                 style = SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
+                    color = Color(0xFF296A47),
                     textDecoration = TextDecoration.Underline
                 )
             )
@@ -187,7 +189,7 @@ fun Greeting(
             linkInteractionListener = { navController.navigate("signIn") /*showSignInDialog = true */ },
             styles = TextLinkStyles(
                 style = SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
+                    color = Color(0xFF296A47),
                     textDecoration = TextDecoration.Underline
                 )
             )
@@ -274,7 +276,7 @@ fun Greeting(
                             Icon(
                                 painter = painterResource(id = R.drawable.menu_dots),
                                 contentDescription = "Menu",
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color(0xFFFFFFFF),
                             )
                         }
                     }
@@ -341,6 +343,10 @@ fun Greeting(
                                         .padding(16.dp)
                                 )
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         navController.navigate("login") {
@@ -365,7 +371,7 @@ fun Greeting(
                                         painter = painterResource(R.drawable.arrow_forward),
                                         contentDescription = "Accept and Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
                                 Row(
@@ -443,6 +449,10 @@ fun Greeting(
                                 }
 
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         navController.navigate("signUp")
@@ -465,7 +475,7 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
                             }
@@ -523,6 +533,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -549,6 +562,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -598,6 +614,10 @@ fun Greeting(
                                 }
 
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         if (firstClick) {
@@ -629,11 +649,11 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
 
-                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = Color(0xFF296A47).toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -710,6 +730,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -741,6 +764,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -786,6 +812,10 @@ fun Greeting(
                                 }
 
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         if (firstClick) {
@@ -817,11 +847,11 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
 
-                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = Color(0xFF296A47).toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -966,6 +996,10 @@ fun Greeting(
                                         .padding(16.dp)
                                 )
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         navController.navigate("login") {
@@ -990,7 +1024,7 @@ fun Greeting(
                                         painter = painterResource(R.drawable.arrow_forward),
                                         contentDescription = "Accept and Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
                                 Row(
@@ -1112,10 +1146,14 @@ fun Greeting(
                                     Icon(
                                         painter = painterResource(id = R.drawable.menu_dots),
                                         contentDescription = "Menu",
-                                        tint = MaterialTheme.colorScheme.onTertiary,
+                                        tint = Color(0xFFFFFFFF),
                                     )
                                 }
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         navController.navigate("signUp")
@@ -1138,7 +1176,7 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
 
@@ -1276,6 +1314,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -1301,6 +1342,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -1350,6 +1394,10 @@ fun Greeting(
                                 }
 
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         if (firstClick) {
@@ -1382,11 +1430,11 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
 
-                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = Color(0xFF296A47).toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -1540,6 +1588,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -1565,6 +1616,9 @@ fun Greeting(
                                         },
                                         enabled = !isLoading,
                                         colors = TextFieldDefaults.colors(
+                                            focusedIndicatorColor = Color(0xFF296A47),
+                                            focusedLabelColor = Color(0xFF296A47),
+                                            cursorColor = Color(0xFF296A47),
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,
@@ -1614,6 +1668,10 @@ fun Greeting(
                                 }
 
                                 Button(
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF296A47),
+                                        contentColor = Color(0xFFFFFFFF)
+                                    ),
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         if (firstClick) {
@@ -1645,11 +1703,11 @@ fun Greeting(
                                         painter = painterResource(R.drawable.check),
                                         contentDescription = "OK Sign-In",
                                         modifier = Modifier.fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = Color(0xFFFFFFFF)
                                     )
                                 }
 
-                                val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+                                val progressColor = Color(0xFF296A47).toArgb()
 
                                 if (isLoading) {
                                     AndroidView(
@@ -1774,6 +1832,10 @@ fun Greeting(
             shape = RoundedCornerShape(2.dp),
             confirmButton = {
                 Button(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF296A47),
+                        contentColor = Color(0xFFFFFFFF)
+                    ),
                     onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         val phoneNumber = "09369152046"
@@ -1792,6 +1854,10 @@ fun Greeting(
             },
             dismissButton = {
                 TextButton(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = Color(0xFF296A47)
+                    ),
                     shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showSupportDialog = false
@@ -1829,6 +1895,10 @@ fun Greeting(
             shape = RoundedCornerShape(2.dp),
             confirmButton = {
                 TextButton(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = Color(0xFF296A47)
+                    ),
                     shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showTermsDialog = false
@@ -1905,7 +1975,7 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(4.dp),
-            color = MaterialTheme.colorScheme.tertiary,
+            color = Color(0xFF3B6471),
             shape = RectangleShape
         ) {
             Column {
@@ -1924,7 +1994,7 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                     )
                     Text(
                         text = "The ICCID is the unique identifier of your SIM card. Use it to verify your identity.",
-                        color = MaterialTheme.colorScheme.onTertiary,
+                        color = Color(0xFFFFFFFF),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(end = endPadding)
                     )
@@ -2071,6 +2141,9 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     RadioButton(
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = Color(0xFF296A47), // primary light
+                        ),
                         selected = selectedIccid == iccid,
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
