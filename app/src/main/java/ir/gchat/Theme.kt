@@ -31,7 +31,8 @@ val materialColors = listOf(
     Color(0xFFFF5722),
     Color(0xFF795548),
     Color(0xFF9E9E9E),
-    Color(0xFF607D8B)
+    Color(0xFF607D8B),
+    Color(0xFF296A47)
 )
 
 val materialPalette = listOf(
@@ -91,6 +92,11 @@ val materialPalette = listOf(
         onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF607D8B),
+        onPrimary = Color(0xFFFFFFFF)
+    ),
+    // GChat Palette
+    Palette(
+        primary = Color(0xFF296A47),
         onPrimary = Color(0xFFFFFFFF)
     )
 )

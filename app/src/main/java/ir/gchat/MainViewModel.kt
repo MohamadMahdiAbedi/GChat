@@ -20,7 +20,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _theme = MutableStateFlow(0)
     val theme: StateFlow<Int> = _theme.asStateFlow()
 
-    private val _palette = MutableStateFlow(8)
+    private val _palette = MutableStateFlow(19)
     val palette: StateFlow<Int> = _palette.asStateFlow()
 
     private val _ready = MutableStateFlow(false)
@@ -29,7 +29,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             _theme.value = context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
-            _palette.value = context.dataStore.data.map { it[PALETTE_KEY] ?: 8 }.first()
+            _palette.value = context.dataStore.data.map { it[PALETTE_KEY] ?: 19 }.first()
             _ready.value = true
         }
     }
