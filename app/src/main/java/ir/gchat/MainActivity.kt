@@ -9,8 +9,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.BidiFormatter
+import androidx.compose.ui.text.*
 import android.text.Editable
+import android.text.SpannableString
 import android.text.TextWatcher
+import android.text.style.URLSpan
+import android.text.util.Linkify
 import android.view.SoundEffectConstants
 import android.view.ViewTreeObserver
 import android.widget.EditText
@@ -128,12 +133,21 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -238,8 +252,7 @@ class MainActivity : ComponentActivity() {
                             getConversations = { socketViewModel.getConversations() },
                             seenMessage = { contact, id ->
                                 socketViewModel.seenMessage(
-                                    contact,
-                                    id
+                                    contact, id
                                 )
                             },
                             //smsViewModel = smsViewModel,
@@ -296,13 +309,10 @@ fun SetUpSystemBars(palette: Int) {
         // Task View
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             activity.setTaskDescription(
-                ActivityManager.TaskDescription.Builder()
-                    .setPrimaryColor(primaryColor)
-                    .build()
+                ActivityManager.TaskDescription.Builder().setPrimaryColor(primaryColor).build()
             )
         } else {
-            @Suppress("DEPRECATION")
-            activity.setTaskDescription(
+            @Suppress("DEPRECATION") activity.setTaskDescription(
                 ActivityManager.TaskDescription(
                     null, null, primaryColor
                 )
@@ -322,8 +332,7 @@ fun SetUpSystemBars(palette: Int) {
         // Status Bar
         controller.isAppearanceLightStatusBars = darkTheme
 
-        @Suppress("DEPRECATION")
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        @Suppress("DEPRECATION") if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             window.statusBarColor = /*statusBarColor*/Color(0x33000000).toArgb()
             window.navigationBarColor = navigationBarColor.toArgb()
         }
@@ -451,9 +460,7 @@ fun MainNavigation(
 
         if (oldLoggedIn) {
             if (loggedIn) {
-                if (currentRoute != "mainScreen" &&
-                    currentRoute != "chatScreen"
-                ) {
+                if (currentRoute != "mainScreen" && currentRoute != "chatScreen") {
                     navController.navigate("mainScreen") {
                         popUpTo(0) { inclusive = true }
                     }
@@ -630,18 +637,13 @@ fun MainNavigation(
         composable(
             //route = "chatScreen?id={id}&type={type}&displayName={displayName}",
             route = "chatScreen?id={id}&displayName={displayName}&selectedChatUnreadCount={selectedChatUnreadCount}",
-            arguments = listOf(
-                navArgument("id") {
-                    type = NavType.StringType
-                },
-                navArgument("displayName") {
-                    type = NavType.StringType
-                },
-                navArgument("selectedChatUnreadCount") {
-                    type = NavType.IntType
-                }
-            )
-        ) { backStackEntry ->
+            arguments = listOf(navArgument("id") {
+                type = NavType.StringType
+            }, navArgument("displayName") {
+                type = NavType.StringType
+            }, navArgument("selectedChatUnreadCount") {
+                type = NavType.IntType
+            })) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
             val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
             val selectedChatUnreadCount =
@@ -825,17 +827,14 @@ fun MainNavigation(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactItem(
-    contact: Contact,
-    onClick: () -> Unit
+    contact: Contact, onClick: () -> Unit
 ) {
     val backgroundColor = remember(contact.id) {
         materialColors[hash20(contact.id)]
     }
 
-    val iconColor = if (backgroundColor.luminance() >= 0.5f)
-        Color.Black
-    else
-        Color.White
+    val iconColor = if (backgroundColor.luminance() >= 0.5f) Color.Black
+    else Color.White
 
     Surface(
         modifier = Modifier
@@ -845,8 +844,7 @@ fun ContactItem(
         onClick = onClick
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             Spacer(
                 modifier = Modifier
@@ -871,8 +869,7 @@ fun ContactItem(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(backgroundColor),
-                        contentAlignment = Alignment.Center
+                            .background(backgroundColor), contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             painter = painterResource(
@@ -890,16 +887,14 @@ fun ContactItem(
                                 .padding(1.dp)
                                 .size(9.dp)
                                 .background(
-                                    Color(0xFF23A55A),
-                                    CircleShape
+                                    Color(0xFF23A55A), CircleShape
                                 )
                         )
                     }
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center
+                    modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically
@@ -923,16 +918,15 @@ fun ContactItem(
                         TooltipBox(
                             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                             tooltip = {
-                                PlainTooltip { Text(contact.lastMessageText) }
+                                PlainTooltip { Text(contact.lastMessageText.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary)) }
                             },
                             state = rememberTooltipState()
                         ) {
                             Text(
-                                text = contact.lastMessageText.replace("\n", " "),
+                                text = contact.lastMessageText.replace("\n", " ").toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                                    .copy(alpha = .6f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -946,8 +940,7 @@ fun ContactItem(
                                     .height(20.dp)
                                     .defaultMinSize(minWidth = 20.dp)
                                     .background(
-                                        MaterialTheme.colorScheme.primary,
-                                        RoundedCornerShape(50)
+                                        MaterialTheme.colorScheme.primary, RoundedCornerShape(50)
                                     )
                                     .padding(horizontal = 5.dp),
                                 contentAlignment = Alignment.Center
@@ -1103,8 +1096,7 @@ fun MainScreen(
 
                     Column(
                         modifier = Modifier.padding(
-                            top = WindowInsets.statusBars.asPaddingValues()
-                                .calculateTopPadding()
+                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                         )
                     ) {
                         Row(
@@ -1116,9 +1108,7 @@ fun MainScreen(
                                     .fillMaxHeight()
                                     .aspectRatio(1f)
                                     .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape),
-                                shape = CircleShape,
-                                color = backgroundColor
+                                    .clip(CircleShape), shape = CircleShape, color = backgroundColor
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.profile_black_content),
@@ -1313,18 +1303,15 @@ fun MainScreen(
                     //        }
                     //    )
                     //}
-                    DropdownMenuItem(
-                        text = { Text("Setting") },
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.settings),
-                                contentDescription = null
-                            )
-                        }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            navHostController.navigate("settings")
-                        }
-                    )
+                    DropdownMenuItem(text = { Text("Setting") }, leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.settings),
+                            contentDescription = null
+                        )
+                    }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        navHostController.navigate("settings")
+                    })
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -1390,8 +1377,7 @@ fun MainScreen(
                                 elevation = 4.dp, shape = RectangleShape, clip = false
                             )
                         )
-                    }
-                ) { innerPadding ->
+                    }) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
                             modifier = Modifier
@@ -1401,8 +1387,7 @@ fun MainScreen(
                             items(
                                 items = chatList, key = { it.id }) { contact ->
                                 ContactItem(
-                                    contact = contact,
-                                    onClick = {
+                                    contact = contact, onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         val id = contact.id
                                         selectedChat = id
@@ -1418,8 +1403,7 @@ fun MainScreen(
                                                 }&selectedChatUnreadCount=${selectedChatUnreadCount}"
                                             )
                                         }
-                                    }
-                                )
+                                    })
                             }
                         }
 
@@ -1446,8 +1430,7 @@ fun MainScreen(
                                             .padding(end = 8.dp)
                                     )
                                     TextButton(
-                                        shape = RoundedCornerShape(2.dp),
-                                        onClick = {
+                                        shape = RoundedCornerShape(2.dp), onClick = {
                                             view.playSoundEffect(SoundEffectConstants.CLICK)
 
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1465,8 +1448,7 @@ fun MainScreen(
                                                     Intent(Settings.ACTION_SETTINGS)
                                                 )
                                             }
-                                        },
-                                        colors = ButtonDefaults.textButtonColors(
+                                        }, colors = ButtonDefaults.textButtonColors(
                                             containerColor = MaterialTheme.colorScheme.errorContainer,
                                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                                         )
@@ -1547,8 +1529,7 @@ fun MainScreen(
                         onClick = {
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             searching = !searching
-                        }
-                    ) {
+                        }) {
                         Row(
                             modifier = Modifier.fillMaxSize(),
                             verticalAlignment = Alignment.CenterVertically
@@ -1597,9 +1578,7 @@ fun MainScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         keyboardController?.hide()
-                                    }
-                                )
-                            )
+                                    }))
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -1631,8 +1610,7 @@ fun MainScreen(
                     ) {
                         items(items = searchContactList) { item ->
                             ContactItem(
-                                contact = item,
-                                onClick = {
+                                contact = item, onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     val id = item.id
                                     selectedChat = id
@@ -1641,8 +1619,7 @@ fun MainScreen(
                                         //selectedChatUnreadCount این رو باید درست پاس بدی این یه باگ نیست در آیده هندل میشه
                                         navHostController.navigate("chatScreen?id=$id&displayName=$id&selectedChatUnreadCount=${selectedChatUnreadCount}")
                                     }
-                                }
-                            )
+                                })
                         }
                     }
                 }
@@ -1852,12 +1829,9 @@ fun AnimatedMenu(
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
-        targetValue = if (isExpanded) chord * 2 else 48.dp,
-        animationSpec = tween(
-            durationMillis = 200,
-            easing = FastOutSlowInEasing
-        ),
-        label = "circle_size"
+        targetValue = if (isExpanded) chord * 2 else 48.dp, animationSpec = tween(
+            durationMillis = 200, easing = FastOutSlowInEasing
+        ), label = "circle_size"
     )
 
     val surface = MenuDefaults.containerColor
@@ -1866,8 +1840,7 @@ fun AnimatedMenu(
         if (chord == 24.dp) {
             1f
         } else {
-            ((sizeBtn - 48.dp).value / (chord.value * 2 - 48f))
-                .coerceIn(0f, 1f)
+            ((sizeBtn - 48.dp).value / (chord.value * 2 - 48f)).coerceIn(0f, 1f)
         }
     }
 
@@ -1883,8 +1856,7 @@ fun AnimatedMenu(
 
     LaunchedEffect(backgroundFilter, showContent) {
         whatIsMyBackgroundFilterColor(
-            backgroundFilter,
-            showContent
+            backgroundFilter, showContent
         )
     }
 
@@ -1903,13 +1875,11 @@ fun AnimatedMenu(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable(
-                        indication = null,
-                        interactionSource = interactionSource
+                        indication = null, interactionSource = interactionSource
                     ) {
                         close()
                     }
-                    .background(backgroundFilter)
-            )
+                    .background(backgroundFilter))
         }
 
         Box(
@@ -1921,9 +1891,7 @@ fun AnimatedMenu(
                         8.dp
                     } else {
                         0.dp
-                    },
-                    shape = RoundedCornerShape(2.dp),
-                    clip = false
+                    }, shape = RoundedCornerShape(2.dp), clip = false
                 )
                 .clip(RoundedCornerShape(2.dp))
                 .align(position)
@@ -1935,13 +1903,10 @@ fun AnimatedMenu(
                     .align(Alignment.Center)
                     .then(
                         if (sizeBtn != 48.dp) {
-                            Modifier.clickable(
-                                indication = null,
-                                interactionSource = interactionSource
-                            ) {}
-                        } else Modifier
-                    )
-            ) {
+                        Modifier.clickable(
+                            indication = null, interactionSource = interactionSource
+                        ) {}
+                    } else Modifier)) {
 
                 val radius = sizeBtn.toPx() / 2
 
@@ -1949,27 +1914,19 @@ fun AnimatedMenu(
 
                     Alignment.BottomStart -> {
                         Offset(
-                            x = size.width * ratioX +
-                                    24.dp.toPx() -
-                                    offsetX.toPx(),
+                            x = size.width * ratioX + 24.dp.toPx() - offsetX.toPx(),
 
-                            y = size.height * ratioY -
-                                    24.dp.toPx() -
-                                    offsetY.toPx()
+                            y = size.height * ratioY - 24.dp.toPx() - offsetY.toPx()
                         )
                     }
 
                     Alignment.TopEnd -> {
                         Offset(
-                            x = size.width * ratioX -
-                                    if (tabletView) 24.dp.toPx()
-                                    else 12.dp.toPx() -
-                                            offsetX.toPx(),
+                            x = size.width * ratioX - if (tabletView) 24.dp.toPx()
+                            else 12.dp.toPx() - offsetX.toPx(),
 
-                            y = size.height * ratioY +
-                                    if (tabletView) 24.dp.toPx()
-                                    else 12.dp.toPx() -
-                                            offsetY.toPx()
+                            y = size.height * ratioY + if (tabletView) 24.dp.toPx()
+                            else 12.dp.toPx() - offsetY.toPx()
                         )
                     }
 
@@ -1987,9 +1944,7 @@ fun AnimatedMenu(
                         surface
                     } else {
                         Color.Transparent
-                    },
-                    radius = radius,
-                    center = center
+                    }, radius = radius, center = center
                 )
             }
 
@@ -2065,11 +2020,9 @@ fun ChatScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            modifier = Modifier
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             //.background(MaterialTheme.colorScheme.background),
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
+            containerColor = MaterialTheme.colorScheme.background, topBar = {
                 if (id != "") {
                     TopAppBar(
                         title = {
@@ -2169,8 +2122,8 @@ fun ChatScreen(
                     LaunchedEffect(messageList.size, unreadCount) {
                         if (messageList.isEmpty()) return@LaunchedEffect
 
-                        val index = (messageList.size - unreadCount)
-                            .coerceIn(0, messageList.lastIndex)
+                        val index =
+                            (messageList.size - unreadCount).coerceIn(0, messageList.lastIndex)
 
                         val visible = listState.layoutInfo.visibleItemsInfo
 
@@ -2188,7 +2141,7 @@ fun ChatScreen(
                     LaunchedEffect(shouldScrollToBottom) {
                         if (shouldScrollToBottom) {
                             listState.animateScrollToItem(messageList.lastIndex)
-                            /*viewModel.*/onScrolledToBottom()
+                            onScrolledToBottom()
                         }
                     }
 
@@ -2443,8 +2396,7 @@ fun ChatScreen(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }) {
                         isExpandedAttachment = false
-                    }
-            )
+                    })
         }
     }
 }
@@ -2477,17 +2429,14 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
                 ) {
 
                     Text(
-                        text = message,
-                        modifier = Modifier.padding(
+                        text = message.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary), modifier = Modifier.padding(
                             end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
                             bottom = if (lineCount > 1) 24.dp else 0.dp
-                        ),
-                        onTextLayout = {
+                        ), onTextLayout = {
                             if (lineCount == 0) {
                                 lineCount = it.lineCount
                             }
-                        }
-                    )
+                        })
                     Row(
                         modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
                         verticalAlignment = Alignment.CenterVertically
@@ -2516,6 +2465,311 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
         }
     }
 }
+
+
+fun String.toRichAnnotatedString(
+    linkColor: Color
+): AnnotatedString {
+
+    val source = this
+
+    val spannable = SpannableString(source)
+
+    Linkify.addLinks(
+        spannable,
+        Linkify.WEB_URLS
+    )
+
+    val urls = spannable.getSpans(
+        0,
+        spannable.length,
+        URLSpan::class.java
+    )
+
+    fun AnnotatedString.Builder.parseRange(
+        start: Int,
+        end: Int,
+        style: SpanStyle = SpanStyle()
+    ) {
+        var i = start
+
+        while (i < end) {
+
+            // URL
+            val urlSpan = urls.firstOrNull {
+                spannable.getSpanStart(it) == i
+            }
+
+            if (urlSpan != null) {
+                val urlEnd = spannable.getSpanEnd(urlSpan)
+
+                withLink(
+                    LinkAnnotation.Url(
+                        url = urlSpan.url,
+                        styles = TextLinkStyles(
+                            style = SpanStyle(
+                                color = linkColor,
+                                textDecoration = TextDecoration.Underline
+                            )
+                        )
+                    )
+                ) {
+                    append(source.substring(i, urlEnd))
+                }
+
+                i = urlEnd
+                continue
+            }
+
+
+            // **bold**
+            if (source.startsWith("**", i)) {
+
+                val close = source.indexOf(
+                    "**",
+                    i + 2
+                )
+
+                if (close > i + 2) {
+
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        parseRange(
+                            i + 2,
+                            close
+                        )
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+
+            // __italic__
+            if (source.startsWith("__", i)) {
+
+                val close = source.indexOf(
+                    "__",
+                    i + 2
+                )
+
+                if (close > i + 2) {
+
+                    withStyle(
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic
+                        )
+                    ) {
+                        parseRange(
+                            i + 2,
+                            close
+                        )
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+
+            // ~~strike~~
+            if (source.startsWith("~~", i)) {
+
+                val close = source.indexOf(
+                    "~~",
+                    i + 2
+                )
+
+                if (close > i + 2) {
+
+                    withStyle(
+                        SpanStyle(
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                    ) {
+                        parseRange(
+                            i + 2,
+                            close
+                        )
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+
+            append(source[i])
+            i++
+        }
+    }
+
+
+    return buildAnnotatedString {
+        withStyle(
+            ParagraphStyle(
+                textDirection = TextDirection.Content
+            )
+        ) {
+            parseRange(0, source.length)
+        }
+    }
+}
+
+//fun String.toRichAnnotatedString(
+//    linkColor: Color
+//): AnnotatedString {
+//
+//    val bidi = BidiFormatter.getInstance()
+//
+//    val spannable = SpannableString(
+//        lines().joinToString("\n") { bidi.unicodeWrap(it) }
+//    )
+//
+//    Linkify.addLinks(spannable, Linkify.WEB_URLS)
+//
+//    val urlSpans = spannable.getSpans(
+//        0,
+//        spannable.length,
+//        URLSpan::class.java
+//    )
+//
+//    return buildAnnotatedString {
+//
+//        val text = spannable.toString()
+//        var index = 0
+//
+//        while (index < text.length) {
+//
+//            // لینک
+//            val urlSpan = urlSpans.firstOrNull {
+//                spannable.getSpanStart(it) == index
+//            }
+//
+//            if (urlSpan != null) {
+//                val end = spannable.getSpanEnd(urlSpan)
+//
+//                withLink(
+//                    LinkAnnotation.Url(
+//                        url = urlSpan.url,
+//                        styles = TextLinkStyles(
+//                            style = SpanStyle(
+//                                color = linkColor,
+//                                textDecoration = TextDecoration.Underline
+//                            )
+//                        )
+//                    )
+//                ) {
+//                    append(text.substring(index, end))
+//                }
+//
+//                index = end
+//                continue
+//            }
+//
+//
+//            // بولد *text*
+//            if (text[index] == '*') {
+//                val end = text.indexOf('*', index + 1)
+//
+//                if (end > index + 1) {
+//                    withStyle(
+//                        SpanStyle(
+//                            fontWeight = FontWeight.Bold
+//                        )
+//                    ) {
+//                        append(text.substring(index + 1, end))
+//                    }
+//
+//                    index = end + 1
+//                    continue
+//                }
+//            }
+//
+//
+//            // ایتالیک _text_
+//            if (text[index] == '_') {
+//                val end = text.indexOf('_', index + 1)
+//
+//                if (end != -1) {
+//                    withStyle(
+//                        SpanStyle(
+//                            fontStyle = FontStyle.Italic
+//                        )
+//                    ) {
+//                        append(text.substring(index + 1, end))
+//                    }
+//
+//                    index = end + 1
+//                    continue
+//                }
+//            }
+//
+//
+//            // خط خورده ~text~
+//            if (text[index] == '~') {
+//                val end = text.indexOf('~', index + 1)
+//
+//                if (end > index + 1) {
+//                    withStyle(
+//                        SpanStyle(
+//                            textDecoration = TextDecoration.LineThrough
+//                        )
+//                    ) {
+//                        append(text.substring(index + 1, end))
+//                    }
+//
+//                    index = end + 1
+//                    continue
+//                }
+//            }
+//
+//            append(text[index])
+//            index++
+//        }
+//    }
+//}
+//
+//fun String.toAnnotatedLinkString(onPrimary: Color): AnnotatedString {
+//    val spannable = SpannableString(this)
+//
+//    Linkify.addLinks(spannable, Linkify.WEB_URLS)
+//
+//    val spans = spannable.getSpans(0, spannable.length, URLSpan::class.java)
+//
+//    return buildAnnotatedString {
+//        var lastIndex = 0
+//
+//        for (span in spans.sortedBy { urlSpan ->
+//            spannable.getSpanStart(urlSpan)
+//        }) {
+//            val start = spannable.getSpanStart(span)
+//            val end = spannable.getSpanEnd(span)
+//
+//            append(this@toAnnotatedLinkString.substring(lastIndex, start))
+//
+//            withLink(
+//                LinkAnnotation.Url(
+//                    url = span.url, styles = TextLinkStyles(
+//                        style = SpanStyle(
+//                            color = onPrimary, textDecoration = TextDecoration.Underline
+//                        )
+//                    )
+//                )
+//            ) {
+//                append(this@toAnnotatedLinkString.substring(start, end))
+//            }
+//
+//            lastIndex = end
+//        }
+//
+//        append(this@toAnnotatedLinkString.substring(lastIndex))
+//    }
+//}
 
 fun convertDigits(text: String, digits: CharArray): String {
     require(digits.size == 10) { "digits must contain exactly 10 characters." }
