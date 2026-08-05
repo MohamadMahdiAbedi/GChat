@@ -1,6 +1,8 @@
 package ir.gchat
 
+import android.R
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -8,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.compose.ui.graphics.Color
+import org.jetbrains.annotations.ApiStatus
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
 
@@ -31,14 +34,31 @@ data class Contact(
 )
 
 data class MessageItem(
-    val text: String,
+    //val text: String,
+    val content: List<ContentEntity>,
     val id: Int,
     val date: String,
     val myMessage: Boolean,
     val seen: Boolean
 )
 
+data class ContentEntity(
+    val type: String,
+    //text content
+    val text: String = "",
+    // file content
+    val id: String = "",
+    val fileName: String = "",
+)
+
 data class Palette(
     val primary: Color,
     val onPrimary: Color
+)
+
+data class File(
+    val name: String,
+    var id: String? = null,
+    val localUri: Uri?,
+    var thumbUrl: String = ""
 )

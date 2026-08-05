@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.text.BidiFormatter
 import androidx.compose.ui.text.*
 import android.text.Editable
 import android.text.SpannableString
@@ -22,8 +21,10 @@ import android.widget.EditText
 import android.widget.ProgressBar
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
@@ -168,6 +169,12 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import android.content.Context
+import android.provider.OpenableColumns
+import androidx.compose.foundation.horizontalScroll
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import java.security.MessageDigest
+
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
@@ -261,7 +268,16 @@ class MainActivity : ComponentActivity() {
                             shouldScrollToBottom = socketViewModel.shouldScrollToBottom.collectAsState().value,
                             onScrolledToBottom = { socketViewModel.onScrolledToBottom() },
                             setColor = { theme -> viewModel.setColor(theme) },
-                            paletteIndex = palette
+                            paletteIndex = palette,
+                            getUploadUri = { name, size, hash, uri ->
+                                socketViewModel.getUploadUri(
+                                    name,
+                                    size,
+                                    hash,
+                                    uri
+                                )
+                            },
+                            uploads = socketViewModel.uploads.collectAsState().value
                         )
                         SetUpSystemBars(palette = palette)
                     }
@@ -386,7 +402,7 @@ fun MainNavigation(
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
-    sendMessage: (String, String) -> Unit,
+    sendMessage: (String, List<ContentEntity>) -> Unit,
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
@@ -397,7 +413,9 @@ fun MainNavigation(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     setColor: (Int) -> Unit,
-    paletteIndex: Int
+    paletteIndex: Int,
+    getUploadUri: (String, Long, String, Uri?) -> Unit,
+    uploads: List<File>
 ) {
     val navController = rememberNavController()
     //val pendingIntent by viewModel.pendingIntent.collectAsState()
@@ -483,7 +501,6 @@ fun MainNavigation(
         navController = navController,
         startDestination = "wait",
         //startDestination = "greeting",
-
         enterTransition = {
             slideInVertically(
                 initialOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
@@ -619,7 +636,9 @@ fun MainNavigation(
                 //smsViewModel = smsViewModel,
                 username = username,
                 shouldScrollToBottom = shouldScrollToBottom,
-                onScrolledToBottom = onScrolledToBottom
+                onScrolledToBottom = onScrolledToBottom,
+                getUploadUri = getUploadUri,
+                uploads = uploads
             )
         }
         composable(route = "appearanceSettings") {
@@ -643,7 +662,8 @@ fun MainNavigation(
                 type = NavType.StringType
             }, navArgument("selectedChatUnreadCount") {
                 type = NavType.IntType
-            })) { backStackEntry ->
+            })
+        ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: ""
             val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
             val selectedChatUnreadCount =
@@ -659,7 +679,9 @@ fun MainNavigation(
                 displayName = displayName,
                 unreadCount = selectedChatUnreadCount,
                 shouldScrollToBottom = shouldScrollToBottom,
-                onScrolledToBottom = onScrolledToBottom
+                onScrolledToBottom = onScrolledToBottom,
+                getUploadUri = getUploadUri,
+                uploads = uploads
             )
         }
         //composable(route = "smsMainScreen") {
@@ -918,12 +940,19 @@ fun ContactItem(
                         TooltipBox(
                             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                             tooltip = {
-                                PlainTooltip { Text(contact.lastMessageText.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary)) }
+                                PlainTooltip {
+                                    Text(
+                                        contact.lastMessageText.toRichAnnotatedString(
+                                            linkColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    )
+                                }
                             },
                             state = rememberTooltipState()
                         ) {
                             Text(
-                                text = contact.lastMessageText.replace("\n", " ").toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
+                                text = contact.lastMessageText.replace("\n", " ")
+                                    .toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
                                 modifier = Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
@@ -973,7 +1002,7 @@ fun MainScreen(
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
-    sendMessage: (String, String) -> Unit,
+    sendMessage: (String, List<ContentEntity>) -> Unit,
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
@@ -981,7 +1010,9 @@ fun MainScreen(
     //smsViewModel: SmsChatViewModel,
     username: String,
     shouldScrollToBottom: Boolean,
-    onScrolledToBottom: () -> Unit
+    onScrolledToBottom: () -> Unit,
+    getUploadUri: (String, Long, String, Uri?) -> Unit,
+    uploads: List<File>
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -1578,7 +1609,8 @@ fun MainScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         keyboardController?.hide()
-                                    }))
+                                    })
+                            )
                             IconButton(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -1652,7 +1684,9 @@ fun MainScreen(
                         displayName = selectedChatDisplayName,
                         unreadCount = selectedChatUnreadCount,
                         shouldScrollToBottom = shouldScrollToBottom,
-                        onScrolledToBottom = onScrolledToBottom
+                        onScrolledToBottom = onScrolledToBottom,
+                        getUploadUri = getUploadUri,
+                        uploads = uploads
                     )
                 }
             }
@@ -1903,10 +1937,10 @@ fun AnimatedMenu(
                     .align(Alignment.Center)
                     .then(
                         if (sizeBtn != 48.dp) {
-                        Modifier.clickable(
-                            indication = null, interactionSource = interactionSource
-                        ) {}
-                    } else Modifier)) {
+                            Modifier.clickable(
+                                indication = null, interactionSource = interactionSource
+                            ) {}
+                        } else Modifier)) {
 
                 val radius = sizeBtn.toPx() / 2
 
@@ -1960,12 +1994,51 @@ fun AnimatedMenu(
     }
 }
 
+private fun Context.getFileName(uri: Uri): String? {
+    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (cursor.moveToFirst() && index >= 0) {
+            return cursor.getString(index)
+        }
+    }
+    return null
+}
+
+private fun Context.getFileSize(uri: Uri): Long? {
+    contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+        if (cursor.moveToFirst() && index >= 0) {
+            return cursor.getLong(index)
+        }
+    }
+    return null
+}
+
+private fun Context.sha256(uri: Uri): String? {
+    val digest = MessageDigest.getInstance("SHA-256")
+
+    contentResolver.openInputStream(uri)?.use { input ->
+        val buffer = ByteArray(8192)
+
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
+
+            digest.update(buffer, 0, read)
+        }
+    } ?: return null
+
+    return digest.digest().joinToString("") {
+        "%02x".format(it)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     back: () -> Boolean,
     id: String,
-    sendMessage: (String, String) -> Unit,
+    sendMessage: (String, List<ContentEntity>) -> Unit,
     messageList: List<MessageItem>,
     seenMessage: (String, Int) -> Unit,
     getMessagesList: (String) -> Unit,
@@ -1973,7 +2046,9 @@ fun ChatScreen(
     displayName: String,
     unreadCount: Int,
     shouldScrollToBottom: Boolean,
-    onScrolledToBottom: () -> Unit
+    onScrolledToBottom: () -> Unit,
+    getUploadUri: (String, Long, String, Uri?) -> Unit,
+    uploads: List<File>
 ) {
     //val context = LocalContext.current
     //var localSms by remember { mutableStateOf(emptyList<MessageItem>()) }
@@ -2017,6 +2092,28 @@ fun ChatScreen(
     }
 
     var animate by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
+
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        selectedUri = uri
+
+        val name = context.getFileName(uri)!!
+        val size = context.getFileSize(uri)!!
+        val sha256 = context.sha256(uri)!!
+
+        val uri = selectedUri
+        getUploadUri(name, size, sha256, uri)
+    }
+
+    var showFileRow by rememberSaveable(uploads) { mutableStateOf(uploads.isNotEmpty()) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -2138,9 +2235,18 @@ fun ChatScreen(
 
                     //val shouldScrollToBottom by viewModel.shouldScrollToBottom.collectAsState()
 
-                    LaunchedEffect(shouldScrollToBottom) {
-                        if (shouldScrollToBottom) {
+//                    LaunchedEffect(shouldScrollToBottom) {
+//                        if (shouldScrollToBottom) {
+//                            listState.animateScrollToItem(messageList.lastIndex)
+//                            onScrolledToBottom()
+//                        }
+//                    }
+
+                    LaunchedEffect(shouldScrollToBottom, messageList.size) {
+                        if (shouldScrollToBottom && messageList.isNotEmpty()) {
                             listState.animateScrollToItem(messageList.lastIndex)
+                        }
+                        if (shouldScrollToBottom) {
                             onScrolledToBottom()
                         }
                     }
@@ -2160,7 +2266,7 @@ fun ChatScreen(
 
                                 Message(
                                     isMe = item.myMessage,
-                                    message = item.text,
+                                    content = item.content,
                                     seen = item.seen,
                                     timestamp = item.date
                                 )
@@ -2178,10 +2284,15 @@ fun ChatScreen(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     scope.launch {
-                                        val last = listState.layoutInfo.totalItemsCount - 1
+                                        //val last = listState.layoutInfo.totalItemsCount - 1
+                                        ////listState.scrollToItem(last)
+                                        ////listState.scrollBy(-listState.layoutInfo.viewportSize.height.toFloat())
                                         //listState.scrollToItem(last)
-                                        //listState.scrollBy(-listState.layoutInfo.viewportSize.height.toFloat())
-                                        listState.scrollToItem(last)
+
+                                        val last = listState.layoutInfo.totalItemsCount - 1
+                                        if (last >= 0) {
+                                            listState.scrollToItem(last)
+                                        }
                                     }
                                 },
                                 modifier = Modifier
@@ -2204,7 +2315,33 @@ fun ChatScreen(
                         }
                     }
                     //}
-
+                    if (showFileRow && uploads.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 56.dp)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            uploads.forEach { file ->
+                                Surface(
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    shape = RoundedCornerShape(2.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Text(
+                                        text = file.name,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2235,8 +2372,8 @@ fun ChatScreen(
                                     elevation = 4.dp, shape = RectangleShape, clip = false
                                 )
                                 .background(
-                                    //color = MaterialTheme.colorScheme.surface,
-                                    color = MaterialTheme.colorScheme.background,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    //color = MaterialTheme.colorScheme.background,
                                     shape = RoundedCornerShape(2.dp)
                                 )
                         ) {
@@ -2311,8 +2448,19 @@ fun ChatScreen(
                                         delay(1000.milliseconds)
                                         animate = false
                                     }
-                                    //renderValue = (1..10).random()
-                                    sendMessage(id, message)
+                                    val content = mutableListOf<ContentEntity>()
+                                    uploads.forEach { file ->
+                                        content += ContentEntity(
+                                            type = "file",
+                                            id = file.id.toString(),
+                                            fileName = file.name
+                                        )
+                                    }
+                                    content += ContentEntity(
+                                        type = "text",
+                                        text = message
+                                    )
+                                    sendMessage(id, content)
                                     message = ""
                                 } else {
                                     // شروع ضبط صوت
@@ -2360,6 +2508,11 @@ fun ChatScreen(
                             text = { Text(text = "Photos and videos") }, onClick = {
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                 isExpandedAttachment = false
+                                launcher.launch(
+                                    arrayOf(
+                                        "image/*", "video/*"
+                                    )
+                                )
                             }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
                                 Icon(
                                     painterResource(R.drawable.photo), contentDescription = null
@@ -2402,11 +2555,11 @@ fun ChatScreen(
 }
 
 @Composable
-fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
+fun Message(isMe: Boolean,content: List<ContentEntity> /*message: String*/, seen: Boolean, timestamp: String) {
     Box(
         modifier = Modifier.fillMaxWidth()
     ) {
-        var lineCount by remember(message) { mutableIntStateOf(0) }
+        var lineCount by remember(content) { mutableIntStateOf(0) }
         val formatMessageTime = formatMessageTime(timestamp)
         var timeWidth by remember { mutableStateOf(0.dp) }
         val density = LocalDensity.current
@@ -2427,16 +2580,82 @@ fun Message(isMe: Boolean, message: String, seen: Boolean, timestamp: String) {
                 Box(
                     modifier = Modifier.padding(8.dp)
                 ) {
-
-                    Text(
-                        text = message.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary), modifier = Modifier.padding(
-                            end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
-                            bottom = if (lineCount > 1) 24.dp else 0.dp
-                        ), onTextLayout = {
-                            if (lineCount == 0) {
-                                lineCount = it.lineCount
+                    if (content.size == 1) {
+                        if (content[0].type == "text") {
+                            Text(
+                                text = content[0].text.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
+                                modifier = Modifier.padding(
+                                    end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                                    bottom = if (lineCount > 1) 24.dp else 0.dp
+                                ),
+                                onTextLayout = {
+                                    if (lineCount == 0) {
+                                        lineCount = it.lineCount
+                                    }
+                                }
+                            )
+                        } else {
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                Surface(shape = CircleShape) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.photo),
+                                        contentDescription = null
+                                    )
+                                }
+                                Text(content[0].fileName)
                             }
-                        })
+                        }
+                        // فایل به هر صورت یک خطی
+                        // متن طبق الگوریتم قبلی
+                    } else {
+                        Column(
+                            modifier = Modifier.padding(
+                                bottom = 24.dp
+                            ),
+                        ) {
+                            content.forEach { contentEntity ->
+                                when (contentEntity.type) {
+                                    "text" -> {
+                                        Text(
+                                            text = contentEntity.text.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
+                                            modifier = Modifier.padding(
+                                                end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                                                bottom = if (lineCount > 1) 24.dp else 0.dp
+                                            ),
+                                            onTextLayout = {
+                                                if (lineCount == 0) {
+                                                    lineCount = it.lineCount
+                                                }
+                                            }
+                                        )
+                                    }
+                                    "file" -> {
+                                        Row(modifier = Modifier.fillMaxSize()) {
+                                            Surface(shape = CircleShape) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.photo),
+                                                    contentDescription = null
+                                                )
+                                            }
+                                            Text(contentEntity.fileName)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    //Text(
+                    //    text = message.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
+                    //    modifier = Modifier.padding(
+                    //        end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
+                    //        bottom = if (lineCount > 1) 24.dp else 0.dp
+                    //    ),
+                    //    onTextLayout = {
+                    //        if (lineCount == 0) {
+                    //            lineCount = it.lineCount
+                    //        }
+                    //    }
+                    //)
                     Row(
                         modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
                         verticalAlignment = Alignment.CenterVertically
@@ -2476,20 +2695,15 @@ fun String.toRichAnnotatedString(
     val spannable = SpannableString(source)
 
     Linkify.addLinks(
-        spannable,
-        Linkify.WEB_URLS
+        spannable, Linkify.WEB_URLS
     )
 
     val urls = spannable.getSpans(
-        0,
-        spannable.length,
-        URLSpan::class.java
+        0, spannable.length, URLSpan::class.java
     )
 
     fun AnnotatedString.Builder.parseRange(
-        start: Int,
-        end: Int,
-        style: SpanStyle = SpanStyle()
+        start: Int, end: Int, style: SpanStyle = SpanStyle()
     ) {
         var i = start
 
@@ -2505,11 +2719,9 @@ fun String.toRichAnnotatedString(
 
                 withLink(
                     LinkAnnotation.Url(
-                        url = urlSpan.url,
-                        styles = TextLinkStyles(
+                        url = urlSpan.url, styles = TextLinkStyles(
                             style = SpanStyle(
-                                color = linkColor,
-                                textDecoration = TextDecoration.Underline
+                                color = linkColor, textDecoration = TextDecoration.Underline
                             )
                         )
                     )
@@ -2526,8 +2738,7 @@ fun String.toRichAnnotatedString(
             if (source.startsWith("**", i)) {
 
                 val close = source.indexOf(
-                    "**",
-                    i + 2
+                    "**", i + 2
                 )
 
                 if (close > i + 2) {
@@ -2538,8 +2749,7 @@ fun String.toRichAnnotatedString(
                         )
                     ) {
                         parseRange(
-                            i + 2,
-                            close
+                            i + 2, close
                         )
                     }
 
@@ -2553,8 +2763,7 @@ fun String.toRichAnnotatedString(
             if (source.startsWith("__", i)) {
 
                 val close = source.indexOf(
-                    "__",
-                    i + 2
+                    "__", i + 2
                 )
 
                 if (close > i + 2) {
@@ -2565,8 +2774,7 @@ fun String.toRichAnnotatedString(
                         )
                     ) {
                         parseRange(
-                            i + 2,
-                            close
+                            i + 2, close
                         )
                     }
 
@@ -2580,8 +2788,7 @@ fun String.toRichAnnotatedString(
             if (source.startsWith("~~", i)) {
 
                 val close = source.indexOf(
-                    "~~",
-                    i + 2
+                    "~~", i + 2
                 )
 
                 if (close > i + 2) {
@@ -2592,8 +2799,7 @@ fun String.toRichAnnotatedString(
                         )
                     ) {
                         parseRange(
-                            i + 2,
-                            close
+                            i + 2, close
                         )
                     }
 

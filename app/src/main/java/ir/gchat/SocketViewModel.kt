@@ -1,6 +1,7 @@
 package ir.gchat
 
 import android.app.Application
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
@@ -12,19 +13,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 import java.util.concurrent.TimeUnit
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     var webSocket: WebSocket? = null
-    private val client = OkHttpClient.Builder()
+    /*private*/ val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
         //.readTimeout(3, TimeUnit.SECONDS)
         //.writeTimeout(3, TimeUnit.SECONDS)
@@ -45,6 +53,28 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _serverIP = MutableStateFlow("127.0.0.1:8765")
     val serverIP: StateFlow<String> = _serverIP.asStateFlow()
+
+    private suspend fun loadSavedData() {
+        val prefs = context.dataStore.data.first()
+        savedUsername = prefs[USERNAME_KEY] ?: ""
+        _usernameState.value = savedUsername
+        savedPassword = prefs[PASSWORD_KEY] ?: ""
+        _oldLoggedIn.value = prefs[LOGGED_IN_STATUS_KEY] ?: false
+        _serverIP.value = prefs[SERVERIP_KEY] ?: "127.0.0.1:8765"
+    }
+
+    private val _ready = MutableStateFlow(false)
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            loadSavedData()
+            //if (_oldLoggedIn.value) {
+            //connect()
+            //}
+            _ready.value = true
+        }
+    }
 
     // 0 -> success
     // 1 -> iccid already exist
@@ -70,27 +100,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _shouldScrollToBottom = MutableStateFlow(false)
     val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
 
-    private suspend fun loadSavedData() {
-        val prefs = context.dataStore.data.first()
-        savedUsername = prefs[USERNAME_KEY] ?: ""
-        _usernameState.value = savedUsername
-        savedPassword = prefs[PASSWORD_KEY] ?: ""
-        _oldLoggedIn.value = prefs[LOGGED_IN_STATUS_KEY] ?: false
-        _serverIP.value = prefs[SERVERIP_KEY] ?: "127.0.0.1:8765"
-    }
+    private var _uploads = MutableStateFlow(emptyList<File>())
+    val uploads: StateFlow<List<File>> = _uploads.asStateFlow()
 
-    private val _ready = MutableStateFlow(false)
-    val ready: StateFlow<Boolean> = _ready.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            loadSavedData()
-            //if (_oldLoggedIn.value) {
-                //connect()
-            //}
-            _ready.value = true
-        }
-    }
+    private var uploadToken = ""
 
     fun connect() {
         if (webSocket != null) {
@@ -120,8 +133,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     try {
                         val jsonObject = JSONObject(text)
                         Log.d("server", jsonObject.toString())
-                        val type = jsonObject.getString("type")
-                        when (type) {
+                        when (jsonObject.getString("type")) {
                             "signup_response" -> {
                                 val message = jsonObject.getString("status")
                                 when (message) {
@@ -129,10 +141,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         _loginError.value = 0
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
+                                        uploadToken = jsonObject.getString("token")
                                         context.dataStore.edit { preferences ->
                                             preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
                                     }
+
                                     "iccid_error" -> {
                                         _loginError.value = 1
                                         Toast.makeText(
@@ -144,6 +158,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "username_error" -> {
                                         _loginError.value = 2
                                         Toast.makeText(
@@ -155,6 +170,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "error" -> {
                                         _loginError.value = 4
                                         Toast.makeText(
@@ -166,6 +182,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "invalid_input" -> {
                                         _loginError.value = 6
                                         Toast.makeText(
@@ -179,6 +196,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
                                 }
                             }
+
                             "signin_response" -> {
                                 val message = jsonObject.getString("status")
                                 when (message) {
@@ -186,10 +204,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         _loginError.value = 0
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
+                                        uploadToken = jsonObject.getString("token")
                                         context.dataStore.edit { preferences ->
                                             preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
                                     }
+
                                     "password_error" -> {
                                         _loginError.value = 3
                                         Toast.makeText(
@@ -201,6 +221,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "error" -> {
                                         _loginError.value = 4
                                         Toast.makeText(
@@ -212,6 +233,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "username_error" -> {
                                         _loginError.value = 5
                                         Toast.makeText(
@@ -223,6 +245,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             preferences[LOGGED_IN_STATUS_KEY] = false
                                         }
                                     }
+
                                     "invalid_input" -> {
                                         _loginError.value = 6
                                         Toast.makeText(
@@ -236,6 +259,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
                                 }
                             }
+
                             "search_user_response" -> {
                                 _contactSearchList.value = emptyList<Contact>()
                                 if (jsonObject.getString("status") == "success") {
@@ -261,14 +285,35 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         .show()
                                 }
                             }
+
                             "get_dms_response" -> {
-                                _messageList.value = emptyList<MessageItem>()
+                                _messageList.value = emptyList()
+
                                 if (jsonObject.getString("status") == "success") {
                                     val results = jsonObject.getJSONArray("messages")
+
                                     for (i in 0 until results.length()) {
                                         val item = results.getJSONObject(i)
+
+                                        val contentArray = item.getJSONArray("content")
+
+                                        val content = buildList {
+                                            for (j in 0 until contentArray.length()) {
+                                                val obj = contentArray.getJSONObject(j)
+
+                                                add(
+                                                    ContentEntity(
+                                                        type = obj.getString("type"),
+                                                        text = obj.optString("text"),
+                                                        id = obj.optString("id"),
+                                                        fileName = obj.optString("file_name")
+                                                    )
+                                                )
+                                            }
+                                        }
+
                                         _messageList.value += MessageItem(
-                                            text = item.getString("content"),
+                                            content = content,
                                             id = item.getInt("id"),
                                             myMessage = item.getString("sender") == savedUsername,
                                             date = item.getString("timestamp"),
@@ -277,10 +322,13 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
                                 } else {
                                     Toast.makeText(
-                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
+                                        context,
+                                        "Error Receiving messages",
+                                        Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
+
                             "get_conversations_response" -> {
                                 _chatList.value = emptyList<Contact>()
                                 if (jsonObject.getString("status") == "success") {
@@ -302,6 +350,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     ).show()
                                 }
                             }
+
                             "new_dm" -> {
                                 getConversations()
                                 if (jsonObject.getString("sender") == openedChat.value) {
@@ -315,17 +364,117 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     getMessagesList(openedChat.value)
                                 }
                             }
+
                             "mark_read_response" -> {
                                 // اگر سین نخورده بود یه بار دیگه سین بزن
                                 getConversations()
                                 getMessagesList(openedChat.value)
                             }
+
                             "message_read" -> {
                                 if (jsonObject.getString("reader") == openedChat.value) {
                                     getMessagesList(openedChat.value)
                                 } else {
                                     getConversations()
                                 }
+                            }
+
+                            "file_upload_response" -> {
+                                when (jsonObject.getString("status")) {
+
+                                    "duplicate" -> {
+                                        val file = _uploads.value.find {
+                                            it.name == jsonObject.getString("name")
+                                        }
+
+                                        file?.apply {
+                                            id = jsonObject.getLong("file_id").toString()
+
+                                            if (jsonObject.has("thumb_url")) {
+                                                thumbUrl = jsonObject.getString("thumb_url")
+                                            }
+                                        }
+                                    }
+
+                                    "new" -> {
+
+                                        val file = _uploads.value.find {
+                                            it.name == jsonObject.getString("name")
+                                        } ?: return@launch
+
+                                        val uri = file.localUri ?: return@launch
+
+                                        val input = context.contentResolver.openInputStream(uri) ?: return@launch
+
+                                        val requestBody = MultipartBody.Builder()
+                                            .setType(MultipartBody.FORM)
+                                            .addFormDataPart(
+                                                "file",
+                                                file.name,
+                                                input.readBytes().toRequestBody(
+                                                    "application/octet-stream".toMediaType()
+                                                )
+                                            )
+                                            .build()
+
+                                        input.close()
+
+                                        val request = Request.Builder()
+                                            .url(jsonObject.getString("upload_url"))
+                                            .header("Authorization", "Bearer $uploadToken")
+                                            .post(requestBody)
+                                            .build()
+
+                                        /*OkHttpClient()*/client.newCall(request).enqueue(object : Callback {
+
+                                            override fun onFailure(call: Call, e: IOException) {
+                                                e.printStackTrace()
+                                            }
+
+                                            override fun onResponse(call: Call, response: Response) {
+
+                                                response.use {
+
+                                                    if (!it.isSuccessful)
+                                                        return
+
+                                                    val result =
+                                                        JSONObject(it.body.string())
+
+                                                    if (result.getString("status") == "success") {
+
+                                                        file.id =
+                                                            result.getLong("file_id").toString()
+
+                                                        if (result.has("thumb_url")) {
+                                                            file.thumbUrl = result.getString("thumb_url")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        })
+                                    }
+
+                                    "pending" -> {
+                                        Toast.makeText(
+                                            context,
+                                            jsonObject.getString("message"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+
+                                    "error" -> {
+                                        Toast.makeText(
+                                            context,
+                                            jsonObject.getString("message"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
+
+                            "shutdown" -> {
+                                _loggedIn.value = false
                             }
                         }
                     } catch (_: Exception) {
@@ -458,16 +607,38 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun sendMessage(contact: String, message: String) {
+    fun sendMessage(contact: String, message: List<ContentEntity>/*message: String*/) {
         // id رو باید درست هندل کنیم که با دوتا پیام بدون نت کرش نکنه
-        _messageList.value += MessageItem(text = message, myMessage = true, id = 0, date = getCurrentUtcTimestamp(), seen = false)
+        val contentArray = JSONArray()
+
+        message.forEach { content ->
+            contentArray.put(
+                JSONObject().apply {
+                    put("type", content.type)
+                    if (content.type == "text") {
+                        put("text", content.text)
+                    } else {
+                        put("file_id", content.id)
+                        put("file_name", content.fileName)
+                    }
+                }
+            )
+        }
+        _messageList.value += MessageItem(
+            //text = message,
+            content = message,
+            myMessage = true,
+            id = 0,
+            date = getCurrentUtcTimestamp(),
+            seen = false
+        )
         _shouldScrollToBottom.value = true
         viewModelScope.launch {
             try {
                 val json = JSONObject().apply {
                     put("type", "send_dm")
                     put("recipient", contact)
-                    put("content", message)
+                    put("content", contentArray)
                 }
                 webSocket?.send(json.toString())
             } catch (_: Exception) {
@@ -524,5 +695,25 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onScrolledToBottom() {
         _shouldScrollToBottom.value = false
+    }
+
+    fun getUploadUri(name: String, size: Long, hash: String, uri: Uri?) {
+        viewModelScope.launch {
+            try {
+                webSocket?.send(
+                    JSONObject().apply {
+                        put("type", "file_upload_request")
+                        put("name", name)
+                        put("size", size)
+                        put("hash", hash)
+                    }.toString()
+                )
+                _uploads.value += File(
+                    name = name,
+                    localUri = uri
+                )
+            } catch (_: Exception) {
+            }
+        }
     }
 }

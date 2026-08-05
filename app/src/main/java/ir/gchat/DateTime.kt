@@ -6,13 +6,14 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 fun getCurrentUtcTimestamp(): String {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")//.ofPattern("yyyy-MM-dd HH:mm:ss")
     return LocalDateTime.now(ZoneOffset.UTC).format(formatter)
 }
 
 fun formatMessageTime(timestamp: String): String {
     try {
-        val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        //val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
         val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
             .atZone(ZoneOffset.UTC)
@@ -88,7 +89,7 @@ fun formatMessageTime(timestamp: String): String {
             }
         }
     }  catch (_: Exception) {
-         return ""
+         return timestamp
     }
 }
 
