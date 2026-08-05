@@ -397,62 +397,109 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "new" -> {
+                                        Log.d("FileUpload", "وضعیت: new - شروع آپلود")
 
                                         val file = _uploads.value.find {
                                             it.name == jsonObject.getString("name")
-                                        } ?: return@launch
+                                        }
 
-                                        val uri = file.localUri ?: return@launch
+                                        if (file == null) {
+                                            Log.e("FileUpload", "فایل پیدا نشد با نام: ${jsonObject.getString("name")}")
+                                            return@launch
+                                        }
 
-                                        val input = context.contentResolver.openInputStream(uri) ?: return@launch
+                                        Log.d("FileUpload", "فایل پیدا شد: name=${file.name}, localUri=${file.localUri}")
 
-                                        val requestBody = MultipartBody.Builder()
-                                            .setType(MultipartBody.FORM)
-                                            .addFormDataPart(
-                                                "file",
-                                                file.name,
-                                                input.readBytes().toRequestBody(
-                                                    "application/octet-stream".toMediaType()
+                                        val uri = file.localUri
+                                        if (uri == null) {
+                                            Log.e("FileUpload", "localUri خالی است")
+                                            return@launch
+                                        }
+
+                                        val input = context.contentResolver.openInputStream(uri)
+                                        if (input == null) {
+                                            Log.e("FileUpload", "نتونستم InputStream باز کنم برای uri: $uri")
+                                            return@launch
+                                        }
+
+                                        try {
+                                            val fileBytes = input.readBytes()
+                                            val fileSize = fileBytes.size
+                                            Log.d("FileUpload", "حجم فایل خوانده شده: $fileSize بایت (${fileSize / 1024 / 1024f} مگابایت)")
+
+                                            val requestBody = MultipartBody.Builder()
+                                                .setType(MultipartBody.FORM)
+                                                .addFormDataPart(
+                                                    "file",
+                                                    file.name,
+                                                    fileBytes.toRequestBody("video/mp4".toMediaType())
                                                 )
+                                                .build()
+
+                                            val originalUrl = jsonObject.getString("upload_url")
+                                            val finalUrl = originalUrl.replace(
+                                                "0.0.0.0",
+                                                serverIP.value.split(":")[0]
                                             )
-                                            .build()
 
-                                        input.close()
+                                            Log.d("FileUpload", "URL اصلی: $originalUrl")
+                                            Log.d("FileUpload", "URL نهایی: $finalUrl")
 
-                                        val request = Request.Builder()
-                                            .url(jsonObject.getString("upload_url"))
-                                            .header("Authorization", "Bearer $uploadToken")
-                                            .post(requestBody)
-                                            .build()
+                                            val request = Request.Builder()
+                                                .url(finalUrl)
+                                                .header("Authorization", "Bearer $uploadToken")
+                                                .post(requestBody)
+                                                .build()
 
-                                        /*OkHttpClient()*/client.newCall(request).enqueue(object : Callback {
+                                            Log.d("FileUpload", "درخواست آپلود ساخته شد، شروع ارسال...")
 
-                                            override fun onFailure(call: Call, e: IOException) {
-                                                e.printStackTrace()
-                                            }
+                                            OkHttpClient().newCall(request).enqueue(object : Callback {
 
-                                            override fun onResponse(call: Call, response: Response) {
+                                                override fun onFailure(call: Call, e: IOException) {
+                                                    Log.e("FileUpload", "آپلود شکست خورد (onFailure)", e)
+                                                    e.printStackTrace()
+                                                }
 
-                                                response.use {
+                                                override fun onResponse(call: Call, response: Response) {
+                                                    response.use {
+                                                        val code = it.code
+                                                        val bodyString = it.body?.string() ?: "null"
 
-                                                    if (!it.isSuccessful)
-                                                        return
+                                                        Log.d("FileUpload", "پاسخ سرور: code=$code")
+                                                        Log.d("FileUpload", "بدنه پاسخ: $bodyString")
 
-                                                    val result =
-                                                        JSONObject(it.body.string())
+                                                        if (!it.isSuccessful) {
+                                                            Log.e("FileUpload", "آپلود ناموفق - کد: $code")
+                                                            return
+                                                        }
 
-                                                    if (result.getString("status") == "success") {
+                                                        try {
+                                                            val result = JSONObject(bodyString)
 
-                                                        file.id =
-                                                            result.getLong("file_id").toString()
+                                                            if (result.getString("status") == "success") {
+                                                                file.id = result.getLong("file_id").toString()
 
-                                                        if (result.has("thumb_url")) {
-                                                            file.thumbUrl = result.getString("thumb_url")
+                                                                if (result.has("thumb_url")) {
+                                                                    file.thumbUrl = result.getString("thumb_url")
+                                                                }
+
+                                                                Log.d("FileUpload", "آپلود موفق! file_id=${file.id}, thumb=${file.thumbUrl}")
+                                                            } else {
+                                                                Log.e("FileUpload", "سرور status=success نداد: $bodyString")
+                                                            }
+                                                        } catch (e: Exception) {
+                                                            Log.e("FileUpload", "خطا در پارس کردن پاسخ JSON", e)
                                                         }
                                                     }
                                                 }
-                                            }
-                                        })
+                                            })
+
+                                        } catch (e: Exception) {
+                                            Log.e("FileUpload", "خطا هنگام خواندن فایل یا ساخت درخواست", e)
+                                        } finally {
+                                            input.close()
+                                            Log.d("FileUpload", "InputStream بسته شد")
+                                        }
                                     }
 
                                     "pending" -> {
@@ -477,7 +524,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 _loggedIn.value = false
                             }
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.d("error", e.toString())
                     }
                 }
             }
