@@ -47,8 +47,9 @@ data class ContentEntity(
     //text content
     val text: String = "",
     // file content
-    val id: String = "",
+    val id: Int = 0,
     val fileName: String = "",
+    var progress: Float = 0f
 )
 
 data class Palette(
@@ -58,7 +59,8 @@ data class Palette(
 
 data class File(
     val name: String,
-    var id: String? = null,
+    var id: Int = 0,
     val localUri: Uri?,
-    var thumbUrl: String = ""
+    var thumbUrl: String = "",
+    var progress: Float = 0f
 )

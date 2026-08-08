@@ -1,12 +1,18 @@
 package ir.gchat
 
 import android.app.Application
+import android.content.ContentValues
+import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,20 +21,24 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
 import java.util.concurrent.TimeUnit
-
+import kotlin.io.outputStream
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     var webSocket: WebSocket? = null
@@ -305,8 +315,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                     ContentEntity(
                                                         type = obj.getString("type"),
                                                         text = obj.optString("text"),
-                                                        id = obj.optString("id"),
-                                                        fileName = obj.optString("file_name")
+                                                        id = obj.optInt("file_id"),
+                                                        fileName = obj.optString("name")
                                                     )
                                                 )
                                             }
@@ -388,7 +398,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         }
 
                                         file?.apply {
-                                            id = jsonObject.getLong("file_id").toString()
+                                            id = jsonObject.getInt("file_id")
 
                                             if (jsonObject.has("thumb_url")) {
                                                 thumbUrl = jsonObject.getString("thumb_url")
@@ -396,109 +406,359 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         }
                                     }
 
-                                    "new" -> {
-                                        Log.d("FileUpload", "وضعیت: new - شروع آپلود")
+//                                    "new" -> {
+//                                        val file = _uploads.value.find {
+//                                            it.name == jsonObject.getString("name")
+//                                        }
+//
+//                                        if (file == null) {
+//                                            Log.e("FileUpload", "فایل پیدا نشد با نام: ${jsonObject.getString("name")}")
+//                                            return@launch
+//                                        }
+//
+//                                        val uri = file.localUri
+//                                        if (uri == null) {
+//                                            Log.e("FileUpload", "localUri خالی است")
+//                                            return@launch
+//                                        }
+//
+//                                        val input = context.contentResolver.openInputStream(uri)
+//                                        if (input == null) {
+//                                            Log.e("FileUpload", "نتونستم InputStream باز کنم برای uri: $uri")
+//                                            return@launch
+//                                        }
+//
+//                                        try {
+//                                            val fileBytes = input.readBytes()
+//                                            val fileSize = fileBytes.size
+//                                            Log.d("FileUpload", "حجم فایل خوانده شده: $fileSize بایت (${fileSize / 1024 / 1024f} مگابایت)")
+//
+//                                            val mimeType = context.contentResolver.getType(uri)
+//                                                ?: run {
+//                                                    // اگر ContentResolver نتونست، از اسم فایل حدس بزن
+//                                                    val extension = file.name.substringAfterLast('.', "").lowercase()
+//                                                    android.webkit.MimeTypeMap.getSingleton()
+//                                                        .getMimeTypeFromExtension(extension)
+//                                                        ?: "application/octet-stream"
+//                                                }
+//
+//                                            Log.d("FileUpload", "MIME Type تشخیص داده شده: $mimeType")
+//
+//                                            val requestBody = MultipartBody.Builder()
+//                                                .setType(MultipartBody.FORM)
+//                                                .addFormDataPart(
+//                                                    "file",
+//                                                    file.name,
+//                                                    fileBytes.toRequestBody(mimeType.toMediaType())
+//                                                )
+//                                                .build()
+//
+//                                            val originalUrl = jsonObject.getString("upload_url")
+//                                            val finalUrl = originalUrl.replace(
+//                                                "0.0.0.0",
+//                                                serverIP.value.split(":")[0]
+//                                            )
+//
+//                                            Log.d("FileUpload", "URL اصلی: $originalUrl")
+//                                            Log.d("FileUpload", "URL نهایی: $finalUrl")
+//
+//                                            val request = Request.Builder()
+//                                                .url(finalUrl)
+//                                                .header("Authorization", "Bearer $uploadToken")
+//                                                .post(requestBody)
+//                                                .build()
+//
+//                                            Log.d("FileUpload", "درخواست آپلود ساخته شد، شروع ارسال...")
+//
+//                                            OkHttpClient().newCall(request).enqueue(object : Callback {
+//
+//                                                override fun onFailure(call: Call, e: IOException) {
+//                                                    Log.e("FileUpload", "آپلود شکست خورد (onFailure)", e)
+//                                                    e.printStackTrace()
+//                                                }
+//
+//                                                override fun onResponse(call: Call, response: Response) {
+//                                                    response.use {
+//                                                        val code = it.code
+//                                                        val bodyString = it.body?.string() ?: "null"
+//
+//                                                        Log.d("FileUpload", "پاسخ سرور: code=$code")
+//                                                        Log.d("FileUpload", "بدنه پاسخ: $bodyString")
+//
+//                                                        if (!it.isSuccessful) {
+//                                                            Log.e("FileUpload", "آپلود ناموفق - کد: $code")
+//                                                            return
+//                                                        }
+//
+//                                                        try {
+//                                                            val result = JSONObject(bodyString)
+//
+//                                                            if (result.getString("status") == "success") {
+//                                                                file.id = result.getInt("file_id")
+//
+//                                                                if (result.has("thumb_url")) {
+//                                                                    file.thumbUrl = result.getString("thumb_url")
+//                                                                }
+//
+//                                                                Log.d("FileUpload", "آپلود موفق! file_id=${file.id}, thumb=${file.thumbUrl}")
+//                                                            } else {
+//                                                                Log.e("FileUpload", "سرور status=success نداد: $bodyString")
+//                                                            }
+//                                                        } catch (e: Exception) {
+//                                                            Log.e("FileUpload", "خطا در پارس کردن پاسخ JSON", e)
+//                                                        }
+//                                                    }
+//                                                }
+//                                            })
+//
+//                                        } catch (e: Exception) {
+//                                            Log.e("FileUpload", "خطا هنگام خواندن فایل یا ساخت درخواست", e)
+//                                        } finally {
+//                                            input.close()
+//                                            Log.d("FileUpload", "InputStream بسته شد")
+//                                        }
+//                                    }
 
+                                    "new" -> {
                                         val file = _uploads.value.find {
                                             it.name == jsonObject.getString("name")
                                         }
 
                                         if (file == null) {
-                                            Log.e("FileUpload", "فایل پیدا نشد با نام: ${jsonObject.getString("name")}")
+                                            Log.e(
+                                                "FileUpload",
+                                                "فایل پیدا نشد با نام: ${jsonObject.getString("name")}"
+                                            )
                                             return@launch
                                         }
 
-                                        Log.d("FileUpload", "فایل پیدا شد: name=${file.name}, localUri=${file.localUri}")
-
                                         val uri = file.localUri
+
                                         if (uri == null) {
                                             Log.e("FileUpload", "localUri خالی است")
                                             return@launch
                                         }
 
                                         val input = context.contentResolver.openInputStream(uri)
+
                                         if (input == null) {
-                                            Log.e("FileUpload", "نتونستم InputStream باز کنم برای uri: $uri")
+                                            Log.e(
+                                                "FileUpload",
+                                                "نتونستم InputStream باز کنم برای uri: $uri"
+                                            )
                                             return@launch
                                         }
 
                                         try {
                                             val fileBytes = input.readBytes()
                                             val fileSize = fileBytes.size
-                                            Log.d("FileUpload", "حجم فایل خوانده شده: $fileSize بایت (${fileSize / 1024 / 1024f} مگابایت)")
+
+                                            Log.d(
+                                                "FileUpload",
+                                                "حجم فایل خوانده شده: $fileSize بایت (${fileSize / 1024 / 1024f} مگابایت)"
+                                            )
+
+                                            val mimeType = context.contentResolver.getType(uri)
+                                                ?: run {
+                                                    val extension = file.name
+                                                        .substringAfterLast('.', "")
+                                                        .lowercase()
+
+                                                    android.webkit.MimeTypeMap
+                                                        .getSingleton()
+                                                        .getMimeTypeFromExtension(extension)
+                                                        ?: "application/octet-stream"
+                                                }
+
+                                            Log.d(
+                                                "FileUpload",
+                                                "MIME Type تشخیص داده شده: $mimeType"
+                                            )
+
+                                            file.progress = 0f
+                                            _uploads.value = _uploads.value.toList()
+
+                                            val progressRequestBody = object : RequestBody() {
+
+                                                override fun contentType(): MediaType {
+                                                    return mimeType.toMediaType()
+                                                }
+
+                                                override fun contentLength(): Long {
+                                                    return fileBytes.size.toLong()
+                                                }
+
+                                                override fun writeTo(sink: BufferedSink) {
+                                                    val total = fileBytes.size.toLong()
+                                                    var uploaded = 0L
+
+                                                    val bufferSize = 8 * 1024
+                                                    var offset = 0
+
+                                                    while (offset < fileBytes.size) {
+                                                        val count = minOf(
+                                                            bufferSize,
+                                                            fileBytes.size - offset
+                                                        )
+
+                                                        sink.write(
+                                                            fileBytes,
+                                                            offset,
+                                                            count
+                                                        )
+
+                                                        offset += count
+                                                        uploaded += count
+
+                                                        file.progress =
+                                                            uploaded.toFloat() / total.toFloat()
+
+                                                        _uploads.value = _uploads.value.toList()
+                                                    }
+                                                }
+                                            }
 
                                             val requestBody = MultipartBody.Builder()
                                                 .setType(MultipartBody.FORM)
                                                 .addFormDataPart(
                                                     "file",
                                                     file.name,
-                                                    fileBytes.toRequestBody("video/mp4".toMediaType())
+                                                    progressRequestBody
                                                 )
                                                 .build()
 
                                             val originalUrl = jsonObject.getString("upload_url")
+
                                             val finalUrl = originalUrl.replace(
                                                 "0.0.0.0",
                                                 serverIP.value.split(":")[0]
                                             )
 
-                                            Log.d("FileUpload", "URL اصلی: $originalUrl")
-                                            Log.d("FileUpload", "URL نهایی: $finalUrl")
+                                            Log.d(
+                                                "FileUpload",
+                                                "URL اصلی: $originalUrl"
+                                            )
+
+                                            Log.d(
+                                                "FileUpload",
+                                                "URL نهایی: $finalUrl"
+                                            )
 
                                             val request = Request.Builder()
                                                 .url(finalUrl)
-                                                .header("Authorization", "Bearer $uploadToken")
+                                                .header(
+                                                    "Authorization",
+                                                    "Bearer $uploadToken"
+                                                )
                                                 .post(requestBody)
                                                 .build()
 
-                                            Log.d("FileUpload", "درخواست آپلود ساخته شد، شروع ارسال...")
+                                            Log.d(
+                                                "FileUpload",
+                                                "درخواست آپلود ساخته شد، شروع ارسال..."
+                                            )
 
-                                            OkHttpClient().newCall(request).enqueue(object : Callback {
+                                            OkHttpClient().newCall(request).enqueue(
+                                                object : Callback {
 
-                                                override fun onFailure(call: Call, e: IOException) {
-                                                    Log.e("FileUpload", "آپلود شکست خورد (onFailure)", e)
-                                                    e.printStackTrace()
-                                                }
+                                                    override fun onFailure(
+                                                        call: Call,
+                                                        e: IOException
+                                                    ) {
+                                                        Log.e(
+                                                            "FileUpload",
+                                                            "آپلود شکست خورد (onFailure)",
+                                                            e
+                                                        )
+                                                    }
 
-                                                override fun onResponse(call: Call, response: Response) {
-                                                    response.use {
-                                                        val code = it.code
-                                                        val bodyString = it.body?.string() ?: "null"
+                                                    override fun onResponse(
+                                                        call: Call,
+                                                        response: Response
+                                                    ) {
+                                                        response.use {
 
-                                                        Log.d("FileUpload", "پاسخ سرور: code=$code")
-                                                        Log.d("FileUpload", "بدنه پاسخ: $bodyString")
+                                                            val code = it.code
+                                                            val bodyString =
+                                                                it.body.string() ?: "null"
 
-                                                        if (!it.isSuccessful) {
-                                                            Log.e("FileUpload", "آپلود ناموفق - کد: $code")
-                                                            return
-                                                        }
+                                                            Log.d(
+                                                                "FileUpload",
+                                                                "پاسخ سرور: code=$code"
+                                                            )
 
-                                                        try {
-                                                            val result = JSONObject(bodyString)
+                                                            Log.d(
+                                                                "FileUpload",
+                                                                "بدنه پاسخ: $bodyString"
+                                                            )
 
-                                                            if (result.getString("status") == "success") {
-                                                                file.id = result.getLong("file_id").toString()
+                                                            if (!it.isSuccessful) {
+                                                                Log.e(
+                                                                    "FileUpload",
+                                                                    "آپلود ناموفق - کد: $code"
+                                                                )
+                                                                return
+                                                            }
 
-                                                                if (result.has("thumb_url")) {
-                                                                    file.thumbUrl = result.getString("thumb_url")
+                                                            try {
+                                                                val result =
+                                                                    JSONObject(bodyString)
+
+                                                                if (
+                                                                    result.getString("status")
+                                                                    == "success"
+                                                                ) {
+                                                                    file.id =
+                                                                        result.getInt("file_id")
+
+                                                                    file.progress = 1f
+
+                                                                    if (result.has("thumb_url")) {
+                                                                        file.thumbUrl =
+                                                                            result.getString(
+                                                                                "thumb_url"
+                                                                            )
+                                                                    }
+
+                                                                    _uploads.value =
+                                                                        _uploads.value.toList()
+
+                                                                    Log.d(
+                                                                        "FileUpload",
+                                                                        "آپلود موفق! file_id=${file.id}, thumb=${file.thumbUrl}"
+                                                                    )
+                                                                } else {
+                                                                    Log.e(
+                                                                        "FileUpload",
+                                                                        "سرور status=success نداد: $bodyString"
+                                                                    )
                                                                 }
 
-                                                                Log.d("FileUpload", "آپلود موفق! file_id=${file.id}, thumb=${file.thumbUrl}")
-                                                            } else {
-                                                                Log.e("FileUpload", "سرور status=success نداد: $bodyString")
+                                                            } catch (e: Exception) {
+                                                                Log.e(
+                                                                    "FileUpload",
+                                                                    "خطا در پارس کردن پاسخ JSON",
+                                                                    e
+                                                                )
                                                             }
-                                                        } catch (e: Exception) {
-                                                            Log.e("FileUpload", "خطا در پارس کردن پاسخ JSON", e)
                                                         }
                                                     }
                                                 }
-                                            })
+                                            )
 
                                         } catch (e: Exception) {
-                                            Log.e("FileUpload", "خطا هنگام خواندن فایل یا ساخت درخواست", e)
+                                            Log.e(
+                                                "FileUpload",
+                                                "خطا هنگام خواندن فایل یا ساخت درخواست",
+                                                e
+                                            )
                                         } finally {
                                             input.close()
-                                            Log.d("FileUpload", "InputStream بسته شد")
+
+                                            Log.d(
+                                                "FileUpload",
+                                                "InputStream بسته شد"
+                                            )
                                         }
                                     }
 
@@ -521,12 +781,16 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                             }
 
                             "shutdown" -> {
+                                // بهتره اپ رو ببندیم
+                                this@SocketViewModel.webSocket = null
                                 _loggedIn.value = false
+                                viewModelScope.launch {
+                                    delay(1000.milliseconds)
+                                    connect()
+                                }
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.d("error", e.toString())
-                    }
+                    } catch (_: Exception) { }
                 }
             }
 
@@ -761,6 +1025,91 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     localUri = uri
                 )
             } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun downloadFile(
+        fileId: Int,
+        fileName: String
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+
+            try {
+
+                val url = "http://${serverIP.value.split(":")[0]+":8080"}/files/$fileId"
+                Log.d("Download", "URL = $url")
+                Log.d("Download", "TOKEN = $uploadToken")
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Authorization", "Bearer $uploadToken")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+
+                    if (!response.isSuccessful) {
+                        Log.e("Download", "HTTP ${response.code}")
+                        return@launch
+                    }
+
+                    val body = response.body ?: return@launch
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+                        val values = ContentValues().apply {
+                            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                            put(
+                                MediaStore.Downloads.MIME_TYPE,
+                                URLConnection.guessContentTypeFromName(fileName)
+                                    ?: "application/octet-stream"
+                            )
+                            put(
+                                MediaStore.Downloads.RELATIVE_PATH,
+                                Environment.DIRECTORY_DOWNLOADS
+                            )
+                            put(MediaStore.Downloads.IS_PENDING, 1)
+                        }
+
+                        val uri = context.contentResolver.insert(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            values
+                        ) ?: return@launch
+
+                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                            body.byteStream().use { input ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        context.contentResolver.update(uri, values, null, null)
+
+                    } else {
+
+                        val downloads =
+                            Environment.getExternalStoragePublicDirectory(
+                                Environment.DIRECTORY_DOWNLOADS
+                            )
+
+                        if (!downloads.exists()) {
+                            downloads.mkdirs()
+                        }
+
+                        val file = java.io.File(downloads, fileName)
+
+                        file.outputStream().use { output ->
+                            body.byteStream().use { input ->
+                                input.copyTo(output)
+                            }
+                        }
+                    }
+
+                    Log.d("Download", "Download finished")
+                }
+
+            } catch (e: Exception) {
+                Log.e("Download", "Download failed", e)
             }
         }
     }

@@ -1,5 +1,6 @@
 package ir.gchat
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
@@ -170,9 +171,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.OpenableColumns
+import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.compose.foundation.horizontalScroll
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.core.content.ContextCompat
 import java.security.MessageDigest
 
 
@@ -277,7 +282,13 @@ class MainActivity : ComponentActivity() {
                                     uri
                                 )
                             },
-                            uploads = socketViewModel.uploads.collectAsState().value
+                            uploads = socketViewModel.uploads.collectAsState().value,
+                            downloadFile = { fileId, fileName ->
+                                socketViewModel.downloadFile(
+                                    fileId,
+                                    fileName
+                                )
+                            }
                         )
                         SetUpSystemBars(palette = palette)
                     }
@@ -415,7 +426,8 @@ fun MainNavigation(
     setColor: (Int) -> Unit,
     paletteIndex: Int,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    uploads: List<File>
+    uploads: List<File>,
+    downloadFile: (Int, String) -> Unit
 ) {
     val navController = rememberNavController()
     //val pendingIntent by viewModel.pendingIntent.collectAsState()
@@ -638,7 +650,8 @@ fun MainNavigation(
                 shouldScrollToBottom = shouldScrollToBottom,
                 onScrolledToBottom = onScrolledToBottom,
                 getUploadUri = getUploadUri,
-                uploads = uploads
+                uploads = uploads,
+                downloadFile = downloadFile
             )
         }
         composable(route = "appearanceSettings") {
@@ -681,7 +694,8 @@ fun MainNavigation(
                 shouldScrollToBottom = shouldScrollToBottom,
                 onScrolledToBottom = onScrolledToBottom,
                 getUploadUri = getUploadUri,
-                uploads = uploads
+                uploads = uploads,
+                downloadFile = downloadFile
             )
         }
         //composable(route = "smsMainScreen") {
@@ -1012,7 +1026,8 @@ fun MainScreen(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    uploads: List<File>
+    uploads: List<File>,
+    downloadFile: (Int, String) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -1686,7 +1701,8 @@ fun MainScreen(
                         shouldScrollToBottom = shouldScrollToBottom,
                         onScrolledToBottom = onScrolledToBottom,
                         getUploadUri = getUploadUri,
-                        uploads = uploads
+                        uploads = uploads,
+                        downloadFile = downloadFile
                     )
                 }
             }
@@ -2048,7 +2064,8 @@ fun ChatScreen(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    uploads: List<File>
+    uploads: List<File>,
+    downloadFile: (Int, String) -> Unit
 ) {
     //val context = LocalContext.current
     //var localSms by remember { mutableStateOf(emptyList<MessageItem>()) }
@@ -2114,6 +2131,18 @@ fun ChatScreen(
     }
 
     var showFileRow by rememberSaveable(uploads) { mutableStateOf(uploads.isNotEmpty()) }
+
+    val storagePermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
+//
+//            if (granted) {
+//                // دانلود را شروع کن
+//            } else {
+//                // کاربر رد کرد
+//            }
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -2268,7 +2297,10 @@ fun ChatScreen(
                                     isMe = item.myMessage,
                                     content = item.content,
                                     seen = item.seen,
-                                    timestamp = item.date
+                                    timestamp = item.date,
+                                    storagePermissionLauncher = storagePermissionLauncher,
+                                    context = context,
+                                    downloadFile = downloadFile
                                 )
                             }
                         }
@@ -2316,28 +2348,69 @@ fun ChatScreen(
                     }
                     //}
                     if (showFileRow && uploads.isNotEmpty()) {
+                        //Row(
+                        //    modifier = Modifier
+                        //        .fillMaxWidth()
+                        //        .height(72.dp)
+                        //        .background(
+                        //            MaterialTheme.colorScheme.primary,
+                        //            RoundedCornerShape(8.dp)
+                        //        )
+                        //        .clickable { }
+                        //        .padding(horizontal = 8.dp),
+                        //    verticalAlignment = Alignment.CenterVertically
+                        //) {
+                        //    Surface(
+                        //        modifier = Modifier.size(56.dp),
+                        //        shape = CircleShape
+                        //    ) {
+                        //        Icon(
+                        //            painter = painterResource(R.drawable.photo),
+                        //            contentDescription = null,
+                        //            modifier = Modifier.padding(12.dp)
+                        //        )
+                        //    }
+
+                        //    Spacer(Modifier.width(12.dp))
+
+                        //    Text(
+                        //        text = contentEntity.fileName,
+                        //        modifier = Modifier.weight(1f),
+                        //        maxLines = 1,
+                        //        overflow = TextOverflow.Ellipsis
+                        //    )
+                        //}
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 56.dp)
                                 .background(MaterialTheme.colorScheme.primary)
                                 .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp)
+                                .padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             uploads.forEach { file ->
                                 Surface(
-                                    modifier = Modifier.padding(end = 8.dp),
                                     shape = RoundedCornerShape(2.dp),
                                     color = MaterialTheme.colorScheme.surface,
                                     shadowElevation = 2.dp
                                 ) {
-                                    Text(
-                                        text = file.name,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(modifier = Modifier.weight(1f)) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.fillMaxSize(),
+                                            progress = { file.progress }
+                                        )
+                                        Text(
+                                            text = file.name,
+                                            modifier = Modifier.padding(
+                                                horizontal = 12.dp,
+                                                vertical = 8.dp
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2452,7 +2525,7 @@ fun ChatScreen(
                                     uploads.forEach { file ->
                                         content += ContentEntity(
                                             type = "file",
-                                            id = file.id.toString(),
+                                            id = file.id,
                                             fileName = file.name
                                         )
                                     }
@@ -2555,7 +2628,15 @@ fun ChatScreen(
 }
 
 @Composable
-fun Message(isMe: Boolean,content: List<ContentEntity> /*message: String*/, seen: Boolean, timestamp: String) {
+fun Message(
+    isMe: Boolean,
+    content: List<ContentEntity>,
+    seen: Boolean,
+    timestamp: String,
+    storagePermissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
+    context: Context,
+    downloadFile: (Int, String) -> Unit
+) {
     Box(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -2580,44 +2661,15 @@ fun Message(isMe: Boolean,content: List<ContentEntity> /*message: String*/, seen
                 Box(
                     modifier = Modifier.padding(8.dp)
                 ) {
-                    if (content.size == 1) {
-                        if (content[0].type == "text") {
-                            Text(
-                                text = content[0].text.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
-                                modifier = Modifier.padding(
-                                    end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
-                                    bottom = if (lineCount > 1) 24.dp else 0.dp
-                                ),
-                                onTextLayout = {
-                                    if (lineCount == 0) {
-                                        lineCount = it.lineCount
-                                    }
-                                }
-                            )
-                        } else {
-                            Row(modifier = Modifier.fillMaxSize()) {
-                                Surface(shape = CircleShape) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.photo),
-                                        contentDescription = null
-                                    )
-                                }
-                                Text(content[0].fileName)
-                            }
-                        }
-                        // فایل به هر صورت یک خطی
-                        // متن طبق الگوریتم قبلی
-                    } else {
-                        Column(
-                            modifier = Modifier.padding(
-                                bottom = 24.dp
-                            ),
-                        ) {
-                            content.forEach { contentEntity ->
+                    Column {
+                        content.forEachIndexed { index, contentEntity ->
+                            if (index == content.size - 1) {
                                 when (contentEntity.type) {
                                     "text" -> {
                                         Text(
-                                            text = contentEntity.text.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
+                                            text = contentEntity.text.toRichAnnotatedString(
+                                                linkColor = MaterialTheme.colorScheme.onPrimary
+                                            ),
                                             modifier = Modifier.padding(
                                                 end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
                                                 bottom = if (lineCount > 1) 24.dp else 0.dp
@@ -2629,35 +2681,116 @@ fun Message(isMe: Boolean,content: List<ContentEntity> /*message: String*/, seen
                                             }
                                         )
                                     }
+
                                     "file" -> {
-                                        Row(modifier = Modifier.fillMaxSize()) {
-                                            Surface(shape = CircleShape) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(72.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.primary,
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .clickable { }
+                                                .padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(56.dp),
+                                                shape = CircleShape,
+                                                onClick = {
+                                                    if (hasStoragePermission(context)) {
+                                                        downloadFile(
+                                                            contentEntity.id,
+                                                            contentEntity.fileName
+                                                        )
+                                                    } else {
+                                                        storagePermissionLauncher.launch(
+                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                        )
+                                                    }
+                                                }
+                                            ) {
                                                 Icon(
                                                     painter = painterResource(R.drawable.photo),
-                                                    contentDescription = null
+                                                    contentDescription = null,
+                                                    modifier = Modifier.padding(12.dp)
                                                 )
                                             }
-                                            Text(contentEntity.fileName)
+
+                                            Spacer(Modifier.width(12.dp))
+
+                                            Text(
+                                                text = contentEntity.fileName + contentEntity.id,
+                                                modifier = Modifier.weight(1f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                when (contentEntity.type) {
+                                    "text" -> {
+                                        Text(
+                                            text = contentEntity.text.toRichAnnotatedString(
+                                                linkColor = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        )
+                                    }
+
+                                    "file" -> {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(72.dp)
+                                                .background(
+                                                    Color.Transparent,
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .clickable { }
+                                                .padding(horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                modifier = Modifier.size(56.dp),
+                                                shape = CircleShape,
+                                                onClick = {
+                                                    if (hasStoragePermission(context)) {
+                                                        downloadFile(
+                                                            contentEntity.id,
+                                                            contentEntity.fileName
+                                                        )
+                                                    } else {
+                                                        storagePermissionLauncher.launch(
+                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                        )
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.photo),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.padding(12.dp)
+                                                )
+                                            }
+
+                                            Spacer(Modifier.width(12.dp))
+
+                                            Text(
+                                                text = contentEntity.fileName + contentEntity.id,
+                                                modifier = Modifier.weight(1f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    //Text(
-                    //    text = message.toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
-                    //    modifier = Modifier.padding(
-                    //        end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
-                    //        bottom = if (lineCount > 1) 24.dp else 0.dp
-                    //    ),
-                    //    onTextLayout = {
-                    //        if (lineCount == 0) {
-                    //            lineCount = it.lineCount
-                    //        }
-                    //    }
-                    //)
                     Row(
-                        modifier = Modifier.align(if (lineCount == 1) Alignment.CenterEnd else Alignment.BottomEnd),
+                        modifier = Modifier.align(if (lineCount == 1 && content.size == 1) Alignment.CenterEnd else Alignment.BottomEnd),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -2995,4 +3128,15 @@ fun convertDigits(text: String, digits: CharArray): String {
 
 fun hash20(text: String): Int {
     return (text.hashCode() and Int.MAX_VALUE) % 19
+}
+
+fun hasStoragePermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        true
+    } else {
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
+    }
 }
