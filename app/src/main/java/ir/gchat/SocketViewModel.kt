@@ -301,7 +301,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             id = item.getString("username"),
                                             name = item.getString("username"),
                                             profilePicture = "",
-                                            lastMessageText = "",
+                                            lastMessageContent = emptyList<Content>(),
                                             lastMessageDate = "",
                                             unreadMessages = 0,
                                         )
@@ -360,14 +360,38 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 if (jsonObject.getString("status") == "success") {
                                     val results = jsonObject.getJSONArray("conversations")
                                     for (i in 0 until results.length()) {
-                                        val item = results.getJSONObject(i)
+                                        val chat = results.getJSONObject(i)
+                                        Log.d("val chat", chat.toString())
+
+                                        val lastMessage = chat.getJSONArray("last_message")
+                                        Log.d("val lastMessage", lastMessage.toString())
+                                        val lastMessageContent = mutableListOf<Content>()
+                                        for (j in 0 until lastMessage.length()) {
+                                            val item = lastMessage.getJSONObject(j)
+                                            Log.d("val item", item.toString())
+                                            when (item.getString("type")) {
+                                                "text" -> {
+                                                    lastMessageContent += Content.Text(
+                                                        text = item.getString("text")
+                                                    )
+                                                }
+
+                                                "file" -> {
+                                                    lastMessageContent += Content.File(
+                                                        id = item.getInt("file_id"),
+                                                        fileName = item.getString("name")
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         _chatList.value += Contact(
-                                            id = item.getString("with"),
-                                            name = item.getString("with"),
-                                            lastMessageText = item.getString("last_message"),
-                                            lastMessageDate = item.getString("last_timestamp"),
-                                            unreadMessages = item.getInt("unread_count"),
-                                            isOnline = item.getBoolean("online"),
+                                            id = chat.getString("with"),
+                                            name = chat.getString("with"),
+                                            lastMessageContent = lastMessageContent,
+                                            lastMessageDate = chat.getString("last_timestamp"),
+                                            unreadMessages = chat.getInt("unread_count"),
+                                            isOnline = chat.getBoolean("online"),
                                         )
                                     }
                                 } else {
@@ -538,7 +562,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                         _draft.update { files ->
                                                             files.map { currentFile ->
                                                                 if (currentFile.name == file.name) {
-                                                                    val roundedProgress = (uploaded.toFloat() / total.toFloat() * 100).toInt() / 100f
+                                                                    val roundedProgress =
+                                                                        (uploaded.toFloat() / total.toFloat() * 100).toInt() / 100f
                                                                     if (currentFile.progress != roundedProgress) {
                                                                         currentFile.copy(progress = roundedProgress)
                                                                     } else {
@@ -647,9 +672,13 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                                         files.map { currentFile ->
                                                                             if (currentFile.name == file.name) {
                                                                                 currentFile.copy(
-                                                                                    id = result.getInt("file_id"),
+                                                                                    id = result.getInt(
+                                                                                        "file_id"
+                                                                                    ),
                                                                                     progress = 1f,
-                                                                                    thumbUrl = result.optString("thumb_url")
+                                                                                    thumbUrl = result.optString(
+                                                                                        "thumb_url"
+                                                                                    )
                                                                                 )
                                                                             } else {
                                                                                 currentFile
@@ -727,7 +756,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                             }
                         }
-                    } catch (_: Exception) { }
+                    } catch (e: Exception) {
+                        Log.e("Error", e.toString())
+                    }
                 }
             }
 
@@ -1321,5 +1352,19 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearDraft() {
         _draft.update { emptyList() }
+    }
+
+    fun seenAll(id: String) {
+        viewModelScope.launch {
+            try {
+                webSocket?.send(
+                    JSONObject().apply {
+                        put("type", "mark_read")
+                        put("id", id)
+                    }.toString()
+                )
+            } catch (_: Exception) {
+            }
+        }
     }
 }

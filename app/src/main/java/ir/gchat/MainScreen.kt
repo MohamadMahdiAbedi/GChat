@@ -1,7 +1,12 @@
 package ir.gchat
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
 import android.view.SoundEffectConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -12,13 +17,16 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +35,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -37,6 +47,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,16 +55,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults.colors
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.ripple
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Compact
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Medium
@@ -75,15 +92,18 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
@@ -119,7 +139,8 @@ fun MainScreenContainer(
     draft: List<File>,
     downloadFile: (Int, String) -> Unit,
     removeFileFromDraft: (String) -> Unit,
-    clearDraft: () -> Unit
+    clearDraft: () -> Unit,
+    seenAll: (String) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -170,6 +191,13 @@ fun MainScreenContainer(
 
     val navController = rememberNavController()
 
+    val configuration = LocalConfiguration.current
+    val isLandscape =
+        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    var smsAlertHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -186,7 +214,7 @@ fun MainScreenContainer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16 / 9f)
-                        .background(MaterialTheme.colorScheme.primary)
+                        .background(backgroundColor)
                         .drawWithContent {
                             drawContent()
 
@@ -201,68 +229,47 @@ fun MainScreenContainer(
                             )
                         }
                 ) {
-                    Spacer(
+
+                    Icon(
+                        painter = painterResource(R.drawable.profile_black_content),
+                        contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.primary)
+                            .statusBarsPadding(),
+                        tint = iconColor.copy(alpha = 0.5f)
                     )
-
-                    Column(
-                        modifier = Modifier.padding(
-                            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .fillMaxHeight()
-                                    .aspectRatio(1f)
-                                    .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
-                                    .clip(CircleShape), shape = CircleShape, color = backgroundColor
+                    Row(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = ripple()
                             ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.profile_black_content),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    tint = iconColor.copy(alpha = 0.5f)
-                                )
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                //expanded = !expanded
                             }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .height(48.dp)
-                                .fillMaxWidth()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple()
-                                ) {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    //expanded = !expanded
-                                }
-                                .padding(start = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                modifier = Modifier.weight(1f),
-                                text = username,
-                                color = MaterialTheme.colorScheme.onPrimary,
+                            .padding(start = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            modifier = Modifier.weight(1f),
+                            text = username,
+                            color = iconColor,
+                        )
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                // بجاش بریم صفحه پروفایل
+                                //expanded = !expanded
+                            }) {
+                            Icon(
+                                //painter = painterResource(id = R.drawable.arrow_drop_down),
+                                painter = painterResource(id = R.drawable.account_circle),
+                                contentDescription = null,
+                                //modifier = Modifier.rotate((expansionHeight.value.value / 160) * 180f),
+                                tint = iconColor
                             )
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    // بجاش بریم صفحه پروفایل
-                                    //expanded = !expanded
-                                }) {
-                                Icon(
-                                    //painter = painterResource(id = R.drawable.arrow_drop_down),
-                                    painter = painterResource(id = R.drawable.account_circle),
-                                    contentDescription = null,
-                                    //modifier = Modifier.rotate((expansionHeight.value.value / 160) * 180f),
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
                         }
                     }
                 }
@@ -353,8 +360,29 @@ fun MainScreenContainer(
                 Scaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                     modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = if (isLandscape) {
+                        val density = LocalDensity.current
+
+                        WindowInsets(
+                            left = 0.dp,
+                            right = 0.dp,
+                            top = with(density) {
+                                ScaffoldDefaults.contentWindowInsets.getTop(this).toDp()
+                            },
+                            bottom = with(density) {
+                                ScaffoldDefaults.contentWindowInsets.getBottom(this).toDp()
+                            }
+                        )
+                    } else {
+                        ScaffoldDefaults.contentWindowInsets
+                    },
                     topBar = {
                         TopAppBar(
+                            windowInsets = if (isLandscape) {
+                                WindowInsets.statusBars
+                            } else {
+                                TopAppBarDefaults.windowInsets
+                            },
                             title = {
                                 Text("GChat")
                             }, navigationIcon = {
@@ -390,15 +418,18 @@ fun MainScreenContainer(
                                 actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                                 subtitleContentColor = MaterialTheme.colorScheme.onPrimary
                             ), modifier = Modifier.shadow(
-                                elevation = 4.dp, shape = RectangleShape, clip = false
+                                elevation = 4.dp, clip = false
                             )
                         )
                     }) { innerPadding ->
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)) {
                         LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(innerPadding)
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                bottom = smsAlertHeight + 8.dp
+                            )
                         ) {
                             items(
                                 items = chatList, key = { it.id }) { contact ->
@@ -429,6 +460,102 @@ fun MainScreenContainer(
                                             )
                                         }
                                     })
+                            }
+                        }
+
+                        if (isSmsApp) {
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
+                                    .onSizeChanged {
+                                        smsAlertHeight = with(density) {
+                                            it.height.toDp()
+                                        }
+                                    }
+                            ) {
+                                val compact = maxWidth < 512.dp
+
+                                val containerModifier = Modifier
+                                    .fillMaxWidth()
+                                    .shadow(elevation = 4.dp, clip = false)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.error,
+                                        shape = RoundedCornerShape(2.dp)
+                                    )
+                                    .padding(16.dp)
+
+                                if (compact) {
+                                    Column(modifier = containerModifier, horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "Restore your default messaging app to receive SMS messages.",
+                                            color = MaterialTheme.colorScheme.onError
+                                        )
+
+                                        TextButton(
+                                            modifier = Modifier.align(Alignment.End),
+                                            shape = RoundedCornerShape(2.dp),
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+
+                                                try {
+                                                    context.startActivity(
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                                                            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                                        else
+                                                            Intent(Settings.ACTION_SETTINGS)
+                                                    )
+                                                } catch (_: Exception) {
+                                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                                }
+                                            },
+                                            colors = ButtonDefaults.textButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) {
+                                            Text("Open Settings")
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = containerModifier,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Restore your default messaging app to receive SMS messages.",
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(end = 8.dp),
+                                            color = MaterialTheme.colorScheme.onError
+                                        )
+
+                                        TextButton(
+                                            shape = RoundedCornerShape(2.dp),
+                                            onClick = {
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+
+                                                try {
+                                                    context.startActivity(
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                                                            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                                        else
+                                                            Intent(Settings.ACTION_SETTINGS)
+                                                    )
+                                                } catch (_: Exception) {
+                                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                                }
+                                            },
+                                            colors = ButtonDefaults.textButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) {
+                                            Text("Open Settings")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -551,7 +678,6 @@ fun MainScreenContainer(
                             .fillMaxSize()
                             .shadow(
                                 elevation = 4.dp,
-                                shape = RoundedCornerShape(2.dp),
                                 clip = false
                             )
                             .background(
@@ -679,8 +805,178 @@ fun MainScreenContainer(
                                 draft = draft,
                                 downloadFile = downloadFile,
                                 removeFileFromDraft = removeFileFromDraft,
-                                clearDraft = clearDraft
+                                clearDraft = clearDraft,
+                                seenAll = seenAll
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ContactItem(
+    contact: Contact, onClick: () -> Unit
+) {
+    val backgroundColor = remember(contact.id) {
+        materialColors[hash20(contact.id)]
+    }
+
+    val iconColor = if (backgroundColor.luminance() >= 0.5f) Color.Black
+    else Color.White
+
+    val lastMessageText = remember(contact.lastMessageContent) {
+        buildString {
+            for ((index, content) in contact.lastMessageContent.withIndex()) {
+                when (content) {
+                    is Content.Text -> {
+                        append(content.text)
+                    }
+
+                    is Content.File -> {
+                        if (isNotEmpty()) append(" ")
+                        append("📁 ")
+                        append(content.fileName)
+                    }
+                }
+
+                if (index < contact.lastMessageContent.lastIndex) {
+                    append("\n")
+                }
+            }
+        }
+    }
+
+    Log.d("lastMessageText", lastMessageText)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        color = MaterialTheme.colorScheme.surface,
+        onClick = onClick
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Spacer(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 72.dp)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    )
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(backgroundColor), contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                R.drawable.profile_black_content
+                            ),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            tint = iconColor.copy(alpha = .5f)
+                        )
+                    }
+                    if (contact.isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(1.dp)
+                                .size(9.dp)
+                                .background(
+                                    Color(0xFF23A55A), CircleShape
+                                )
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = contact.name,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Text(
+                            text = formatMessageTime(contact.lastMessageDate),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(
+                                        text = lastMessageText.toRichAnnotatedString(
+                                            linkColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    )
+                                }
+                            },
+                            state = rememberTooltipState()
+                        ) {
+                            Text(
+                                text = lastMessageText
+                                    .replace("\n", " ")
+                                    .toRichAnnotatedString(
+                                        linkColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (contact.unreadMessages > 0) {
+
+                            Spacer(Modifier.width(8.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .height(20.dp)
+                                    .defaultMinSize(minWidth = 20.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.primary, RoundedCornerShape(50)
+                                    )
+                                    .padding(horizontal = 5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = contact.unreadMessages.toString(),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
                     }
                 }

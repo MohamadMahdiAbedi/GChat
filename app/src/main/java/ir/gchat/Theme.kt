@@ -53,22 +53,27 @@ val materialPalette = listOf(
         onPrimary = Color(0xFFFFFFFF)
     ), Palette(
         primary = Color(0xFF2196F3),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF03A9F4),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF00BCD4),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF009688),
         onPrimary = Color(0xFFFFFFFF)
     ), Palette(
         primary = Color(0xFF4CAF50),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF8BC34A),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFFCDDC39),
         onPrimary = Color(0xFF000000)
@@ -80,10 +85,12 @@ val materialPalette = listOf(
         onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFFFF9800),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFFFF5722),
-        onPrimary = Color(0xFF000000)
+        onPrimary = Color(0xFFFFFFFF)
+        //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF795548),
         onPrimary = Color(0xFFFFFFFF)

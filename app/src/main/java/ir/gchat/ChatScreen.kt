@@ -1,7 +1,9 @@
 package ir.gchat
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
@@ -15,6 +17,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -42,6 +45,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -57,6 +61,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -64,6 +69,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -82,6 +88,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -90,6 +97,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -111,8 +119,12 @@ fun ChatScreen(
     draft: List<File>,
     downloadFile: (Int, String) -> Unit,
     removeFileFromDraft: (String) -> Unit,
-    clearDraft: () -> Unit
+    clearDraft: () -> Unit,
+    seenAll: (String) -> Unit
 ) {
+
+    val context = LocalContext.current
+
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
             getMessagesList(id)
@@ -141,8 +153,6 @@ fun ChatScreen(
 
     var animate by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
-
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
 
     val launcher = rememberLauncherForActivityResult(
@@ -164,13 +174,34 @@ fun ChatScreen(
     val storagePermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    val configuration = LocalConfiguration.current
+    val isLandscape =
+        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = if (isLandscape) {
+                WindowInsets(
+                    left = 0.dp,
+                    right = 0.dp,
+                    top = ScaffoldDefaults.contentWindowInsets
+                        .getTop(LocalDensity.current).dp,
+                    bottom = ScaffoldDefaults.contentWindowInsets
+                        .getBottom(LocalDensity.current).dp
+                )
+            } else {
+                ScaffoldDefaults.contentWindowInsets
+            },
             topBar = {
                 if (id != "") {
                     TopAppBar(
+                        windowInsets = if (isLandscape) {
+                            WindowInsets.statusBars
+                        } else {
+                            TopAppBarDefaults.windowInsets
+                        },
                         title = {
                             Row(
                                 modifier = Modifier
@@ -267,15 +298,6 @@ fun ChatScreen(
                         }
                     }
 
-                    LaunchedEffect(shouldScrollToBottom, messageList.size) {
-                        if (shouldScrollToBottom && messageList.isNotEmpty()) {
-                            listState.animateScrollToItem(messageList.lastIndex)
-                        }
-                        if (shouldScrollToBottom) {
-                            onScrolledToBottom()
-                        }
-                    }
-
                     val modifier = if (showFileRow) {
                         Modifier
                             .weight(1f)
@@ -308,7 +330,6 @@ fun ChatScreen(
                                 bottom = if (showFileRow) 56.dp else 0.dp
                             )
                         ) {
-
                             items(items = messageList, key = { it.id }) { item ->
                                 LaunchedEffect(Unit) {
                                     if (!item.seen && !item.myMessage) {
@@ -326,7 +347,22 @@ fun ChatScreen(
                                     downloadFile = downloadFile
                                 )
                             }
+
+                            item {
+                                Spacer(Modifier.height(0.dp))
+                            }
                         }
+
+                        LaunchedEffect(shouldScrollToBottom, messageList.size) {
+                            if (shouldScrollToBottom && messageList.isNotEmpty()) {
+                                //listState.animateScrollToItem(messageList.lastIndex)
+                                listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                            }
+                            if (shouldScrollToBottom) {
+                                onScrolledToBottom()
+                            }
+                        }
+
                         this@Column.AnimatedVisibility(
                             visible = showButton,
                             modifier = Modifier
@@ -340,11 +376,8 @@ fun ChatScreen(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     scope.launch {
-                                        val last = listState.layoutInfo.totalItemsCount - 1
-                                        listState.scrollToItem(last)
-                                        listState.scrollBy(-listState.layoutInfo.viewportSize.height.toFloat())
-
-                                        listState.animateScrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                                        listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                                        seenAll(id)
                                     }
                                 },
                                 modifier = Modifier
@@ -559,7 +592,7 @@ fun ChatScreen(
                                 isExpandedAttachment = false
                             }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
                                 Icon(
-                                    painterResource(R.drawable.folder), contentDescription = null
+                                    painterResource(R.drawable.insert_text), contentDescription = null
                                 )
                             }, trailingIcon = { }, enabled = true
                         )
@@ -612,8 +645,9 @@ fun UploadList(
     if (showFileRow && draft.isNotEmpty()) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                //.fillMaxWidth()
                 //.background(MaterialTheme.colorScheme.primary)
+                .wrapContentWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,

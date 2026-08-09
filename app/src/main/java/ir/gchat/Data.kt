@@ -25,7 +25,7 @@ data class Contact(
     val id: String,
     val name: String,
     val profilePicture: String = "",
-    val lastMessageText: String,
+    val lastMessageContent: List<Content>,
     val lastMessageDate: String,
     val unreadMessages: Int,
     val isOnline: Boolean

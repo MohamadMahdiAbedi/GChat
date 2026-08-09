@@ -34,6 +34,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val _lightNavBar: MutableStateFlow<Boolean?> = MutableStateFlow(null)
+    val lightNavBar: StateFlow<Boolean?> = _lightNavBar.asStateFlow()
+
     fun setTheme() {
         _theme.value = when (_theme.value) {
             0 -> 1 // System -> Dark
@@ -80,5 +83,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 it[PALETTE_KEY] = index
             }
         }
+    }
+
+    fun setNavBarTheme(light: Boolean?) {
+        _lightNavBar.value = light
     }
 }

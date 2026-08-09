@@ -30,34 +30,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -90,7 +79,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -205,9 +193,14 @@ class MainActivity : ComponentActivity() {
                                     fileName
                                 )
                             },
-                            clearDraft = { socketViewModel.clearDraft() }
+                            clearDraft = { socketViewModel.clearDraft() },
+                            setNavBarTheme = { mode -> viewModel.setNavBarTheme(mode) },
+                            seenAll = { id -> socketViewModel.seenAll(id) }
                         )
-                        SetUpSystemBars(palette = palette)
+                        SetUpSystemBars(
+                            palette = palette,
+                            lightNavBar = viewModel.lightNavBar.collectAsState().value
+                        )
                     }
                     window.setBackgroundDrawableResource(android.R.color.transparent)
                 }
@@ -219,11 +212,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SetUpSystemBars(palette: Int) {
+fun SetUpSystemBars(palette: Int, lightNavBar: Boolean?) {
     val colorLuminance = remember(palette) {
         materialColors[palette].luminance()
     }
-    val darkTheme = remember(colorLuminance) {
+    val darkIcons = remember(colorLuminance) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             colorLuminance >= 0.7f
         } else {
@@ -260,16 +253,18 @@ fun SetUpSystemBars(palette: Int) {
         val controller = WindowCompat.getInsetsController(window, view)
 
         // Nav Bar
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             window.isNavigationBarContrastEnforced = false
+
+            controller.isAppearanceLightNavigationBars =
+                lightNavBar ?: !darkIcons
         }
 
-        controller.isAppearanceLightNavigationBars = !darkTheme
-
         // Status Bar
-        controller.isAppearanceLightStatusBars = darkTheme
+        controller.isAppearanceLightStatusBars = darkIcons
 
         @Suppress("DEPRECATION") if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            // 20%
             window.statusBarColor = Color(0x33000000).toArgb()
             window.navigationBarColor = navigationBarColor.toArgb()
         }
@@ -280,7 +275,7 @@ fun SetUpSystemBars(palette: Int) {
         apply()
     }
 
-    DisposableEffect(lifecycleOwner, darkTheme) {
+    DisposableEffect(lifecycleOwner, darkIcons, lightNavBar) {
 
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -337,15 +332,26 @@ fun MainNavigation(
     downloadFile: (Int, String) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,
-    clearDraft: () -> Unit
+    clearDraft: () -> Unit,
+    setNavBarTheme: (Boolean?) -> Unit,
+    seenAll: (String) -> Unit
 ) {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
+    val primaryLuminance = MaterialTheme.colorScheme.primary.luminance()
+    LaunchedEffect(currentRoute, primaryLuminance) {
+        if (currentRoute.toString().startsWith("chatScreen")) {
+            setNavBarTheme(primaryLuminance > 0.5f)
+        } else {
+            setNavBarTheme(null)
+        }
+    }
+
     LaunchedEffect(loggedIn, oldLoggedIn) {
         if (oldLoggedIn) {
             if (loggedIn) {
-                if (currentRoute != "mainScreen" && currentRoute != "chatScreen") {
+                if (currentRoute != "mainScreen" && !currentRoute.toString().startsWith("chatScreen")) {
                     navController.navigate("mainScreen") {
                         popUpTo(0) { inclusive = true }
                     }
@@ -497,7 +503,8 @@ fun MainNavigation(
                 draft = draft,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
-                clearDraft = clearDraft
+                clearDraft = clearDraft,
+                seenAll = seenAll
             )
         }
         composable(route = "appearanceSettings") {
@@ -514,6 +521,7 @@ fun MainNavigation(
         }
         composable(
             //route = "chatScreen?id={id}&type={type}&displayName={displayName}",
+            // چک شود
             route = "chatScreen?id={id}&displayName={displayName}&selectedChatUnreadCount={selectedChatUnreadCount}",
             arguments = listOf(
                 navArgument("id") {
@@ -550,7 +558,8 @@ fun MainNavigation(
                 draft = draft,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
-                clearDraft = clearDraft
+                clearDraft = clearDraft,
+                seenAll = seenAll
             )
         }
         //composable(route = "smsMainScreen") {
@@ -583,148 +592,6 @@ fun MainNavigation(
                 setDevice = setDevice,
                 setServerIP = setServerIP
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ContactItem(
-    contact: Contact, onClick: () -> Unit
-) {
-    val backgroundColor = remember(contact.id) {
-        materialColors[hash20(contact.id)]
-    }
-
-    val iconColor = if (backgroundColor.luminance() >= 0.5f) Color.Black
-    else Color.White
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp),
-        color = MaterialTheme.colorScheme.surface,
-        onClick = onClick
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Spacer(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 72.dp)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                    )
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(backgroundColor), contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(
-                                R.drawable.profile_black_content
-                            ),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            tint = iconColor.copy(alpha = .5f)
-                        )
-                    }
-                    if (contact.isOnline) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(1.dp)
-                                .size(9.dp)
-                                .background(
-                                    Color(0xFF23A55A), CircleShape
-                                )
-                        )
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(
-                    modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = contact.name,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Text(
-                            text = formatMessageTime(contact.lastMessageDate),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TooltipBox(
-                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                            tooltip = {
-                                PlainTooltip {
-                                    Text(
-                                        contact.lastMessageText.toRichAnnotatedString(
-                                            linkColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    )
-                                }
-                            },
-                            state = rememberTooltipState()
-                        ) {
-                            Text(
-                                text = contact.lastMessageText.replace("\n", " ")
-                                    .toRichAnnotatedString(linkColor = MaterialTheme.colorScheme.onPrimary),
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        if (contact.unreadMessages > 0) {
-
-                            Spacer(Modifier.width(8.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .height(20.dp)
-                                    .defaultMinSize(minWidth = 20.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.primary, RoundedCornerShape(50)
-                                    )
-                                    .padding(horizontal = 5.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = contact.unreadMessages.toString(),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }
