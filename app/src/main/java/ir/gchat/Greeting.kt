@@ -124,7 +124,7 @@ fun Greeting(
     signUp: (String, String, String) -> Unit,
     ipConfig: () -> Unit,
     getRules: () -> String,
-    loginError: Int
+    loginResponse: Boolean
 ) {
     val context = LocalContext.current
 
@@ -213,7 +213,7 @@ fun Greeting(
         }
     }
 
-    LaunchedEffect(loginError) {
+    LaunchedEffect(loginResponse) {
         isLoading = false
     }
 

@@ -2,94 +2,60 @@ package ir.gchat
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 fun getCurrentUtcTimestamp(): String {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")//.ofPattern("yyyy-MM-dd HH:mm:ss")
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
     return LocalDateTime.now(ZoneOffset.UTC).format(formatter)
 }
 
 fun formatMessageTime(timestamp: String): String {
-    try {
-        //val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    return try {
         val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+        val phoneZone = ZoneId.systemDefault()
 
-        val dateTime = LocalDateTime.parse(timestamp, inputFormatter)
-            .atZone(ZoneOffset.UTC)
+        val dateTime = LocalDateTime
+            .parse(timestamp, inputFormatter)
+            .toInstant(ZoneOffset.UTC)
+            .atZone(phoneZone)
 
-        val today = LocalDate.now(ZoneOffset.UTC)
+        val today = LocalDate.now(phoneZone)
         val date = dateTime.toLocalDate()
 
-        return when {
-            date == today -> {
+        when {
+            date == today ->
                 dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-            }
 
-            date == today.minusDays(1) -> {
+            date == today.minusDays(1) ->
                 "Yesterday, ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
-            }
 
             date.isAfter(today.minusDays(7)) -> {
-                val dayName = when (date.dayOfWeek.value) {
-                    1 -> "Monday"
-                    2 -> "Tuesday"
-                    3 -> "Wednesday"
-                    4 -> "Thursday"
-                    5 -> "Friday"
-                    6 -> "Saturday"
-                    7 -> "Sunday"
-                    else -> ""
-                }
+                val dayName = date.dayOfWeek.name.lowercase()
+                    .replaceFirstChar { it.uppercase() }
+
                 "$dayName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
             }
 
             date.year == today.year -> {
-                val monthName = when (date.monthValue) {
-                    1 -> "January"
-                    2 -> "February"
-                    3 -> "March"
-                    4 -> "April"
-                    5 -> "May"
-                    6 -> "June"
-                    7 -> "July"
-                    8 -> "August"
-                    9 -> "September"
-                    10 -> "October"
-                    11 -> "November"
-                    12 -> "December"
-                    else -> ""
-                }
+                val monthName = date.month.name.lowercase()
+                    .replaceFirstChar { it.uppercase() }
+
                 "${date.dayOfMonth} $monthName، ${dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
             }
 
             else -> {
-                val monthName = when (date.monthValue) {
-                    1 -> "January"
-                    2 -> "February"
-                    3 -> "March"
-                    4 -> "April"
-                    5 -> "May"
-                    6 -> "June"
-                    7 -> "July"
-                    8 -> "August"
-                    9 -> "September"
-                    10 -> "October"
-                    11 -> "November"
-                    12 -> "December"
-                    else -> ""
-                }
+                val monthName = date.month.name.lowercase()
+                    .replaceFirstChar { it.uppercase() }
+
                 "${date.dayOfMonth} $monthName ${date.year}, ${
-                    dateTime.format(
-                        DateTimeFormatter.ofPattern(
-                            "HH:mm"
-                        )
-                    )
+                    dateTime.format(DateTimeFormatter.ofPattern("HH:mm"))
                 }"
             }
         }
-    }  catch (_: Exception) {
-         return timestamp
+    } catch (_: Exception) {
+        timestamp
     }
 }
 

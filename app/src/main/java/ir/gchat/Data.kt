@@ -1,16 +1,14 @@
 package ir.gchat
 
-import android.R
 import android.content.Context
 import android.net.Uri
+import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.compose.ui.graphics.Color
-import org.jetbrains.annotations.ApiStatus
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
 
@@ -34,7 +32,6 @@ data class Contact(
 )
 
 data class MessageItem(
-    //val text: String,
     val content: List<ContentEntity>,
     val id: Int,
     val date: String,
@@ -59,8 +56,30 @@ data class Palette(
 
 data class File(
     val name: String,
-    var id: Int = 0,
+    val id: Int = 0,
     val localUri: Uri?,
-    var thumbUrl: String = "",
-    var progress: Float = 0f
+    val thumbUrl: String = "",
+    val progress: Float = 0f
 )
+
+sealed class Draft {
+    data class File(
+        val name: String,
+        val id: Int,
+        val localUri: Uri?,
+        val thumbUrl: String = "",
+        val progress: Float = 0f
+    ) : Draft()
+
+    data class Text(val text: String) : Draft()
+}
+
+sealed class Content {
+    data class Text(val text: String) : Content()
+
+    data class File(
+        val id: Int,
+        val fileName: String,
+        var progress: Float = 0f
+    ) : Content()
+}

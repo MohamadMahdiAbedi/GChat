@@ -210,7 +210,6 @@ fun GChatTheme(
                 context
             )
         }
-
         darkTheme -> darkScheme
         else -> lightScheme
     }
