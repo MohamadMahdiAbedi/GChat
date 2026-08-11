@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -96,6 +97,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.ImageLoader
+import okhttp3.OkHttpClient
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
@@ -181,10 +184,14 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                             draft = socketViewModel.draft.collectAsState().value,
-                            downloadFile = { fileId, fileName ->
+                            downloadFile = { fileId, fileName, fileSize, setProgress, setPending, setDownloadedBytes ->
                                 socketViewModel.downloadFile(
                                     fileId,
-                                    fileName
+                                    fileName,
+                                    fileSize,
+                                    setProgress,
+                                    setPending,
+                                    setDownloadedBytes
                                 )
                             },
                             loginResponse = socketViewModel.loginResponse.collectAsState().value,
@@ -195,7 +202,9 @@ class MainActivity : ComponentActivity() {
                             },
                             clearDraft = { socketViewModel.clearDraft() },
                             setNavBarTheme = { mode -> viewModel.setNavBarTheme(mode) },
-                            seenAll = { id -> socketViewModel.seenAll(id) }
+                            seenAll = { id -> socketViewModel.seenAll(id) },
+                            token = socketViewModel.token.collectAsState().value,
+                            isFileDownloaded = { fileName -> socketViewModel.isFileDownloaded(fileName) }
                         )
                         SetUpSystemBars(
                             palette = palette,
@@ -253,7 +262,7 @@ fun SetUpSystemBars(palette: Int, lightNavBar: Boolean?) {
         val controller = WindowCompat.getInsetsController(window, view)
 
         // Nav Bar
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
 
             controller.isAppearanceLightNavigationBars =
@@ -317,7 +326,7 @@ fun MainNavigation(
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
-    sendMessage: (String, List<ContentEntity>) -> Unit,
+    sendMessage: (String, List<Content>) -> Unit,
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
@@ -328,13 +337,15 @@ fun MainNavigation(
     setColor: (Int) -> Unit,
     paletteIndex: Int,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<File>,
-    downloadFile: (Int, String) -> Unit,
+    draft: List<Draft.File>,
+    downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
     setNavBarTheme: (Boolean?) -> Unit,
-    seenAll: (String) -> Unit
+    seenAll: (String) -> Unit,
+    token: String,
+    isFileDownloaded: (String) -> Boolean
 ) {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -367,6 +378,27 @@ fun MainNavigation(
             }
         }
     }
+
+    val context = LocalContext.current
+
+    val imageLoader = remember(context, token) {
+        ImageLoader.Builder(context)
+            .okHttpClient {
+                OkHttpClient.Builder()
+                    .addInterceptor { chain ->
+                        val original = chain.request()
+
+                        val request = original.newBuilder()
+                            .addHeader("Authorization", "Bearer $token")
+                            .build()
+
+                        chain.proceed(request)
+                    }
+                    .build()
+            }
+            .build()
+    }
+
     NavHost(
         modifier = Modifier
             .fillMaxSize()
@@ -504,7 +536,10 @@ fun MainNavigation(
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
-                seenAll = seenAll
+                seenAll = seenAll,
+                serverUrl = serverIP,
+                imageLoader = imageLoader,
+                isFileDownloaded = isFileDownloaded
             )
         }
         composable(route = "appearanceSettings") {
@@ -559,7 +594,10 @@ fun MainNavigation(
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
-                seenAll = seenAll
+                seenAll = seenAll,
+                serverUrl = serverIP,
+                imageLoader = imageLoader,
+                isFileDownloaded = isFileDownloaded
             )
         }
         //composable(route = "smsMainScreen") {

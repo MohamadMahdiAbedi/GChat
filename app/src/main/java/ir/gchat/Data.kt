@@ -32,21 +32,11 @@ data class Contact(
 )
 
 data class MessageItem(
-    val content: List<ContentEntity>,
+    val content: List<Content>,
     val id: Int,
     val date: String,
     val myMessage: Boolean,
     val seen: Boolean
-)
-
-data class ContentEntity(
-    val type: String,
-    //text content
-    val text: String = "",
-    // file content
-    val id: Int = 0,
-    val fileName: String = "",
-    var progress: Float = 0f
 )
 
 data class Palette(
@@ -54,21 +44,14 @@ data class Palette(
     val onPrimary: Color
 )
 
-data class File(
-    val name: String,
-    val id: Int = 0,
-    val localUri: Uri?,
-    val thumbUrl: String = "",
-    val progress: Float = 0f
-)
-
 sealed class Draft {
     data class File(
         val name: String,
-        val id: Int,
+        val id: Int = 0,
         val localUri: Uri?,
         val thumbUrl: String = "",
-        val progress: Float = 0f
+        val progress: Float = 0f,
+        val size: Long
     ) : Draft()
 
     data class Text(val text: String) : Draft()
@@ -80,6 +63,7 @@ sealed class Content {
     data class File(
         val id: Int,
         val fileName: String,
-        var progress: Float = 0f
+        var progress: Float = 0f,
+        var fileSize: Long
     ) : Content()
 }

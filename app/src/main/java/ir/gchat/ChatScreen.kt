@@ -1,12 +1,14 @@
 package ir.gchat
 
 import android.Manifest
-import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.SoundEffectConstants
 import android.widget.EditText
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -17,8 +19,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -69,10 +68,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -83,10 +83,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -97,17 +99,93 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
+import androidx.core.content.FileProvider
+import coil.ImageLoader
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
+import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
+
+fun formatFileSize(bytes: Long): String {
+    if (bytes < 1024) {
+        return "$bytes B"
+    }
+
+    val units = arrayOf("KB", "MB", "GB", "TB", "PB")
+
+    var size = bytes.toDouble()
+    var unitIndex = -1
+
+    while (size >= 1024 && unitIndex < units.lastIndex) {
+        size /= 1024
+        unitIndex++
+    }
+
+    return if (size % 1.0 == 0.0) {
+        "${size.toInt()} ${units[unitIndex]}"
+    } else {
+        "%.1f %s".format(size, units[unitIndex])
+    }
+}
+
+fun openDownloadedFile(
+    context: Context,
+    fileName: String
+) {
+    try {
+        val file = File(
+            context.filesDir,
+            "downloads/$fileName"
+        )
+
+        if (!file.exists() || !file.isFile) {
+            Log.e(
+                "OpenFile",
+                "File does not exist: ${file.absolutePath}"
+            )
+            return
+        }
+
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        val mimeType =
+            URLConnection.guessContentTypeFromName(file.name)
+                ?: "application/octet-stream"
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        context.startActivity(intent)
+
+    } catch (e: ActivityNotFoundException) {
+        Log.e(
+            "OpenFile",
+            "No application found to open $fileName",
+            e
+        )
+    } catch (e: Exception) {
+        Log.e(
+            "OpenFile",
+            "Failed to open $fileName",
+            e
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     back: () -> Boolean,
     id: String,
-    sendMessage: (String, List<ContentEntity>) -> Unit,
+    sendMessage: (String, List<Content>) -> Unit,
     messageList: List<MessageItem>,
     seenMessage: (String, Int) -> Unit,
     getMessagesList: (String) -> Unit,
@@ -116,13 +194,15 @@ fun ChatScreen(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<File>,
-    downloadFile: (Int, String) -> Unit,
+    draft: List<Draft.File>,
+    downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
-    seenAll: (String) -> Unit
+    seenAll: (String) -> Unit,
+    serverUrl: String,
+    imageLoader: ImageLoader,
+    isFileDownloaded: (String) -> Boolean
 ) {
-
     val context = LocalContext.current
 
     LaunchedEffect(id) {
@@ -344,7 +424,10 @@ fun ChatScreen(
                                     timestamp = item.date,
                                     storagePermissionLauncher = storagePermissionLauncher,
                                     context = context,
-                                    downloadFile = downloadFile
+                                    downloadFile = downloadFile,
+                                    imageLoader = imageLoader,
+                                    serverUrl = serverUrl,
+                                    isFileDownloaded = isFileDownloaded
                                 )
                             }
 
@@ -369,8 +452,8 @@ fun ChatScreen(
                                 .align(Alignment.BottomEnd)
                                 .padding(8.dp)
                                 .padding(bottom = if (showFileRow) 56.dp else 0.dp),
-                            enter = slideInVertically { if (showFileRow) 2*it else it },// + fadeIn() + scaleIn(initialScale = 0.8f),
-                            exit = slideOutVertically { if (showFileRow) 2*it else it }// + fadeOut() + scaleOut(targetScale = 0.8f)
+                            enter = slideInVertically { if (showFileRow) 2 * it else it },// + fadeIn() + scaleIn(initialScale = 0.8f),
+                            exit = slideOutVertically { if (showFileRow) 2 * it else it }// + fadeOut() + scaleOut(targetScale = 0.8f)
                         ) {
                             Button(
                                 onClick = {
@@ -507,17 +590,18 @@ fun ChatScreen(
                                         delay(1000.milliseconds)
                                         animate = false
                                     }
-                                    val content = mutableListOf<ContentEntity>()
+                                    val content = mutableListOf<Content>()
                                     draft.forEach { file ->
-                                        content += ContentEntity(
-                                            type = "file",
+                                        content += Content.File(
+                                            //type = "file",
                                             id = file.id,
+                                            fileSize = file.size,
                                             fileName = file.name
                                         )
                                     }
                                     if (message.isNotBlank()) {
-                                        content += ContentEntity(
-                                            type = "text",
+                                        content += Content.Text(
+                                            //type = "text",
                                             text = message
                                         )
                                     }
@@ -592,7 +676,8 @@ fun ChatScreen(
                                 isExpandedAttachment = false
                             }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
                                 Icon(
-                                    painterResource(R.drawable.insert_text), contentDescription = null
+                                    painterResource(R.drawable.insert_text),
+                                    contentDescription = null
                                 )
                             }, trailingIcon = { }, enabled = true
                         )
@@ -638,7 +723,7 @@ fun ChatScreen(
 
 @Composable
 fun UploadList(
-    showFileRow: Boolean, draft: List<File>,
+    showFileRow: Boolean, draft: List<Draft.File>,
     removeFileFromDraft: (String) -> Unit
 ) {
     val view = LocalView.current
@@ -699,12 +784,15 @@ fun UploadList(
 @Composable
 fun Message(
     isMe: Boolean,
-    content: List<ContentEntity>,
+    content: List<Content>,
     seen: Boolean,
     timestamp: String,
     storagePermissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
     context: Context,
-    downloadFile: (Int, String) -> Unit
+    downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
+    imageLoader: ImageLoader,
+    serverUrl: String,
+    isFileDownloaded: (String) -> Boolean
 ) {
     Box(
         modifier = Modifier.fillMaxWidth()
@@ -731,8 +819,8 @@ fun Message(
                     Column {
                         content.forEachIndexed { index, contentEntity ->
                             if (index == content.size - 1) {
-                                when (contentEntity.type) {
-                                    "text" -> {
+                                when (contentEntity) {
+                                    is Content.Text -> {
                                         Text(
                                             text = contentEntity.text.toRichAnnotatedString(
                                                 linkColor = MaterialTheme.colorScheme.onPrimary
@@ -751,28 +839,76 @@ fun Message(
                                         )
                                     }
 
-                                    "file" -> {
+                                    is Content.File -> {
+                                        val extension = contentEntity.fileName
+                                            .substringAfterLast(".", "")
+                                            .takeIf { it.isNotEmpty() }
+
+                                        val downloadName = if (extension != null) {
+                                            "${contentEntity.id}.$extension"
+                                        } else {
+                                            contentEntity.id.toString()
+                                        }
+                                        var downloadProgress by remember { mutableFloatStateOf(0f) }
+                                        var pending by remember { mutableStateOf(false) }
+                                        val progressColor =
+                                            if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                        var downloaded by remember { mutableLongStateOf(0L) }
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(72.dp)
+                                                //.background(
+                                                //    if (isMe)
+                                                //        MaterialTheme.colorScheme.primary
+                                                //    else
+                                                //        MaterialTheme.colorScheme.surface,
+                                                //    RoundedCornerShape(8.dp)
+                                                //)
                                                 .background(
-                                                    if (isMe)
-                                                        MaterialTheme.colorScheme.primary
-                                                    else
-                                                        MaterialTheme.colorScheme.surface,
-                                                    RoundedCornerShape(8.dp)
+                                                    brush = Brush.horizontalGradient(
+                                                        colorStops = arrayOf(
+                                                            0f to progressColor.copy(alpha = 0.2f),
+                                                            downloadProgress to progressColor.copy(
+                                                                alpha = 0.2f
+                                                            ),
+                                                            downloadProgress to Color.Transparent,
+                                                            1f to Color.Transparent
+                                                        )
+                                                    )
                                                 )
                                                 .clickable {
-                                                    if (hasStoragePermission(context)) {
-                                                        downloadFile(
-                                                            contentEntity.id,
-                                                            contentEntity.fileName
-                                                        )
+                                                    if (isFileDownloaded(downloadName)) {
+                                                        openDownloadedFile(context = context, fileName = downloadName)
                                                     } else {
-                                                        storagePermissionLauncher.launch(
-                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                                        )
+                                                        if (!pending) {
+                                                            val extension =
+                                                                contentEntity.fileName
+                                                                    .substringAfterLast(".", "")
+                                                                    .takeIf { it.isNotEmpty() }
+
+                                                            val downloadName =
+                                                                if (extension != null) {
+                                                                    "${contentEntity.id}.$extension"
+                                                                } else {
+                                                                    contentEntity.id.toString()
+                                                                }
+
+                                                            downloadFile(
+                                                                contentEntity.id,
+                                                                downloadName,
+                                                                contentEntity.fileSize,
+                                                                { progress ->
+                                                                    downloadProgress = progress
+                                                                },
+                                                                { newPending ->
+                                                                    pending = newPending
+                                                                },
+                                                                { downloadedBytes ->
+                                                                    downloaded = downloadedBytes
+                                                                }
+                                                            )
+                                                        }
                                                     }
                                                 }
                                                 .padding(horizontal = 8.dp),
@@ -782,39 +918,97 @@ fun Message(
                                                 modifier = Modifier.size(56.dp),
                                                 shape = CircleShape,
                                                 onClick = {
-                                                    if (hasStoragePermission(context)) {
-                                                        downloadFile(
-                                                            contentEntity.id,
-                                                            contentEntity.fileName
-                                                        )
+                                                    if (isFileDownloaded(downloadName)) {
+                                                        openDownloadedFile(context = context, fileName = downloadName)
                                                     } else {
-                                                        storagePermissionLauncher.launch(
-                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                        if (!pending) {
+                                                            val extension =
+                                                                contentEntity.fileName
+                                                                    .substringAfterLast(".", "")
+                                                                    .takeIf { it.isNotEmpty() }
+
+                                                            val downloadName =
+                                                                if (extension != null) {
+                                                                    "${contentEntity.id}.$extension"
+                                                                } else {
+                                                                    contentEntity.id.toString()
+                                                                }
+
+                                                            downloadFile(
+                                                                contentEntity.id,
+                                                                downloadName,
+                                                                contentEntity.fileSize,
+                                                                { progress ->
+                                                                    downloadProgress = progress
+                                                                },
+                                                                { newPending ->
+                                                                    pending = newPending
+                                                                },
+                                                                { downloadedBytes ->
+                                                                    downloaded = downloadedBytes
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                enabled = !pending
+                                            ) {
+                                                val thumbnailUrl =
+                                                    "http://${serverUrl.substringBefore(":")}:8080/thumb/${contentEntity.id}"
+
+                                                Log.d(
+                                                    "THUMB",
+                                                    "id=${contentEntity.id}, " +
+                                                            "serverUrl=$serverUrl, " +
+                                                            "url=$thumbnailUrl"
+                                                )
+
+                                                AsyncImage(
+                                                    model = thumbnailUrl,
+                                                    imageLoader = imageLoader,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop,
+                                                    onLoading = {
+                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                                    },
+                                                    onSuccess = {
+                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                                    },
+                                                    onError = {
+                                                        Log.e(
+                                                            "THUMB",
+                                                            "ERROR: $thumbnailUrl",
+                                                            it.result.throwable
                                                         )
                                                     }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.photo),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.padding(12.dp)
                                                 )
                                             }
 
                                             Spacer(Modifier.width(12.dp))
 
-                                            Text(
-                                                text = contentEntity.fileName,
-                                                modifier = Modifier.weight(1f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            Column {
+                                                Text(
+                                                    text = contentEntity.fileName,
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = formatFileSize(downloaded) + " / " + formatFileSize(
+                                                        contentEntity.fileSize
+                                                    ),
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             } else {
-                                when (contentEntity.type) {
-                                    "text" -> {
+                                when (contentEntity) {
+                                    is Content.Text -> {
                                         Text(
                                             modifier = Modifier.padding(8.dp),
                                             text = contentEntity.text.toRichAnnotatedString(
@@ -823,25 +1017,73 @@ fun Message(
                                         )
                                     }
 
-                                    "file" -> {
+                                    is Content.File -> {
+                                        val extension = contentEntity.fileName
+                                            .substringAfterLast(".", "")
+                                            .takeIf { it.isNotEmpty() }
+
+                                        val downloadName = if (extension != null) {
+                                            "${contentEntity.id}.$extension"
+                                        } else {
+                                            contentEntity.id.toString()
+                                        }
+                                        var downloadProgress by remember { mutableFloatStateOf(0f) }
+                                        var pending by remember { mutableStateOf(false) }
+                                        val progressColor =
+                                            if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                        var downloaded by remember { mutableLongStateOf(0L) }
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(72.dp)
+                                                //.background(
+                                                //    Color.Transparent,
+                                                //    RoundedCornerShape(8.dp)
+                                                //)
                                                 .background(
-                                                    Color.Transparent,
-                                                    RoundedCornerShape(8.dp)
+                                                    brush = Brush.horizontalGradient(
+                                                        colorStops = arrayOf(
+                                                            0f to progressColor.copy(alpha = 0.2f),
+                                                            downloadProgress to progressColor.copy(
+                                                                alpha = 0.2f
+                                                            ),
+                                                            downloadProgress to Color.Transparent,
+                                                            1f to Color.Transparent
+                                                        )
+                                                    )
                                                 )
                                                 .clickable {
-                                                    if (hasStoragePermission(context)) {
-                                                        downloadFile(
-                                                            contentEntity.id,
-                                                            contentEntity.fileName
-                                                        )
+                                                    if (isFileDownloaded(downloadName)) {
+                                                        openDownloadedFile(context = context, fileName = downloadName)
                                                     } else {
-                                                        storagePermissionLauncher.launch(
-                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                                                        )
+                                                        if (!pending) {
+                                                            val extension =
+                                                                contentEntity.fileName
+                                                                    .substringAfterLast(".", "")
+                                                                    .takeIf { it.isNotEmpty() }
+
+                                                            val downloadName =
+                                                                if (extension != null) {
+                                                                    "${contentEntity.id}.$extension"
+                                                                } else {
+                                                                    contentEntity.id.toString()
+                                                                }
+
+                                                            downloadFile(
+                                                                contentEntity.id,
+                                                                downloadName,
+                                                                contentEntity.fileSize,
+                                                                { progress ->
+                                                                    downloadProgress = progress
+                                                                },
+                                                                { newPending ->
+                                                                    pending = newPending
+                                                                },
+                                                                { downloadedBytes ->
+                                                                    downloaded = downloadedBytes
+                                                                }
+                                                            )
+                                                        }
                                                     }
                                                 }
                                                 .padding(horizontal = 8.dp),
@@ -851,33 +1093,96 @@ fun Message(
                                                 modifier = Modifier.size(56.dp),
                                                 shape = CircleShape,
                                                 onClick = {
-                                                    if (hasStoragePermission(context)) {
-                                                        downloadFile(
-                                                            contentEntity.id,
-                                                            contentEntity.fileName
-                                                        )
+                                                    if (isFileDownloaded(downloadName)) {
+                                                        openDownloadedFile(context = context, fileName = downloadName)
                                                     } else {
-                                                        storagePermissionLauncher.launch(
-                                                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                        if (!pending) {
+                                                            val extension =
+                                                                contentEntity.fileName
+                                                                    .substringAfterLast(".", "")
+                                                                    .takeIf { it.isNotEmpty() }
+
+                                                            val downloadName =
+                                                                if (extension != null) {
+                                                                    "${contentEntity.id}.$extension"
+                                                                } else {
+                                                                    contentEntity.id.toString()
+                                                                }
+
+                                                            downloadFile(
+                                                                contentEntity.id,
+                                                                downloadName,
+                                                                contentEntity.fileSize,
+                                                                { progress ->
+                                                                    downloadProgress = progress
+                                                                },
+                                                                { newPending ->
+                                                                    pending = newPending
+                                                                },
+                                                                { downloadedBytes ->
+                                                                    downloaded = downloadedBytes
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                enabled = !pending
+                                            ) {
+                                                val thumbnailUrl =
+                                                    "http://${serverUrl.substringBefore(":")}:8080/thumb/${contentEntity.id}"
+
+                                                Log.d(
+                                                    "THUMB",
+                                                    "id=${contentEntity.id}, " +
+                                                            "serverUrl=$serverUrl, " +
+                                                            "url=$thumbnailUrl"
+                                                )
+
+                                                AsyncImage(
+                                                    model = thumbnailUrl,
+                                                    imageLoader = imageLoader,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop,
+                                                    onLoading = {
+                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                                    },
+                                                    onSuccess = {
+                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                                    },
+                                                    onError = {
+                                                        Log.e(
+                                                            "THUMB",
+                                                            "ERROR: $thumbnailUrl",
+                                                            it.result.throwable
                                                         )
                                                     }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.photo),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.padding(12.dp)
                                                 )
+                                                //Icon(
+                                                //    painter = painterResource(R.drawable.photo),
+                                                //    contentDescription = null,
+                                                //    modifier = Modifier.padding(12.dp)
+                                                //)
                                             }
 
                                             Spacer(Modifier.width(12.dp))
 
-                                            Text(
-                                                text = contentEntity.fileName,
-                                                modifier = Modifier.weight(1f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
+                                            Column {
+                                                Text(
+                                                    text = contentEntity.fileName,
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = formatFileSize(downloaded) + " / " + formatFileSize(
+                                                        contentEntity.fileSize
+                                                    ),
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }

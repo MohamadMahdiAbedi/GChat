@@ -56,6 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
@@ -93,6 +94,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -102,6 +104,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,6 +118,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.ImageLoader
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -127,7 +132,7 @@ fun MainScreenContainer(
     searchContact: (String) -> Unit,
     clearSearchList: () -> Unit,
     logout: () -> Unit,
-    sendMessage: (String, List<ContentEntity>) -> Unit,
+    sendMessage: (String, List<Content>) -> Unit,
     messageList: List<MessageItem>,
     getMessagesList: (String) -> Unit,
     getConversations: () -> Unit,
@@ -136,11 +141,14 @@ fun MainScreenContainer(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<File>,
-    downloadFile: (Int, String) -> Unit,
+    draft: List<Draft.File>,
+    downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
-    seenAll: (String) -> Unit
+    seenAll: (String) -> Unit,
+    serverUrl: String,
+    imageLoader: ImageLoader,
+    isFileDownloaded: (String) -> Boolean
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -422,9 +430,11 @@ fun MainScreenContainer(
                             )
                         )
                     }) { innerPadding ->
-                    Box(modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(
@@ -459,7 +469,8 @@ fun MainScreenContainer(
                                                 }&selectedChatUnreadCount=${selectedChatUnreadCount}"
                                             )
                                         }
-                                    })
+                                    }, serverUrl = serverUrl, imageLoader = imageLoader
+                                )
                             }
                         }
 
@@ -487,7 +498,10 @@ fun MainScreenContainer(
                                     .padding(16.dp)
 
                                 if (compact) {
-                                    Column(modifier = containerModifier, horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Column(
+                                        modifier = containerModifier,
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
                                         Text(
                                             text = "Restore your default messaging app to receive SMS messages.",
                                             color = MaterialTheme.colorScheme.onError
@@ -706,7 +720,10 @@ fun MainScreenContainer(
                                             }&selectedChatUnreadCount=${selectedChatUnreadCount}"
                                         )
                                     }
-                                })
+                                },
+                                serverUrl = serverUrl,
+                                imageLoader = imageLoader
+                            )
                         }
                     }
                 }
@@ -806,7 +823,10 @@ fun MainScreenContainer(
                                 downloadFile = downloadFile,
                                 removeFileFromDraft = removeFileFromDraft,
                                 clearDraft = clearDraft,
-                                seenAll = seenAll
+                                seenAll = seenAll,
+                                serverUrl = serverUrl,
+                                imageLoader = imageLoader,
+                                isFileDownloaded = isFileDownloaded
                             )
                         }
                     }
@@ -819,7 +839,7 @@ fun MainScreenContainer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactItem(
-    contact: Contact, onClick: () -> Unit
+    contact: Contact, onClick: () -> Unit, serverUrl: String, imageLoader: ImageLoader
 ) {
     val backgroundColor = remember(contact.id) {
         materialColors[hash20(contact.id)]
@@ -935,27 +955,227 @@ fun ContactItem(
                             positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
                             tooltip = {
                                 PlainTooltip {
-                                    Text(
-                                        text = lastMessageText.toRichAnnotatedString(
-                                            linkColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        for (content in contact.lastMessageContent) {
+                                            when (content) {
+                                                is Content.Text -> {
+                                                    Text(
+                                                        text = content.text.toRichAnnotatedString(
+                                                            linkColor = MaterialTheme.colorScheme.onPrimary
+                                                        )
+                                                    )
+                                                }
+
+                                                is Content.File -> {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(2.dp),
+                                                        modifier = Modifier.height(56.dp)
+                                                    ) {
+                                                        val thumbnailUrl =
+                                                            "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+                                                        Log.d(
+                                                            "THUMB",
+                                                            "id=${content.id}, " +
+                                                                    "serverUrl=$serverUrl, " +
+                                                                    "url=$thumbnailUrl"
+                                                        )
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            AsyncImage(
+                                                                model = thumbnailUrl,
+                                                                imageLoader = imageLoader,
+                                                                contentDescription = null,
+                                                                modifier = Modifier
+                                                                    .aspectRatio(1f)
+                                                                    .fillMaxSize(),
+                                                                contentScale = ContentScale.Crop,
+                                                                onLoading = {
+                                                                    Log.d(
+                                                                        "THUMB",
+                                                                        "LOADING: $thumbnailUrl"
+                                                                    )
+                                                                },
+                                                                onSuccess = {
+                                                                    Log.d(
+                                                                        "THUMB",
+                                                                        "SUCCESS: $thumbnailUrl"
+                                                                    )
+                                                                },
+                                                                onError = {
+                                                                    Log.e(
+                                                                        "THUMB",
+                                                                        "ERROR: $thumbnailUrl",
+                                                                        it.result.throwable
+                                                                    )
+                                                                }
+                                                            )
+                                                            Text(
+                                                                text = content.fileName,
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .background(
+                                                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                                                                    )
+                                                                    .padding(
+                                                                        horizontal = 4.dp,
+                                                                        vertical = 2.dp
+                                                                    ),
+                                                                textAlign = TextAlign.Center,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             },
                             state = rememberTooltipState()
                         ) {
-                            Text(
-                                text = lastMessageText
-                                    .replace("\n", " ")
-                                    .toRichAnnotatedString(
-                                        linkColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
+//                            Row(modifier = Modifier.weight(1f))
+//                            {
+//                                for (content in contact.lastMessageContent) {
+//                                    if (content is Content.File) {
+//                                            Surface(
+//                                                shape = CircleShape,
+//                                                modifier = Modifier.size(8.dp)
+//                                            ) {
+//                                                val thumbnailUrl =
+//                                                    "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+//                                                Log.d(
+//                                                    "THUMB",
+//                                                    "id=${content.id}, " +
+//                                                            "serverUrl=$serverUrl, " +
+//                                                            "url=$thumbnailUrl"
+//                                                )
+//                                                AsyncImage(
+//                                                    model = thumbnailUrl,
+//                                                    imageLoader = imageLoader,
+//                                                    contentDescription = null,
+//                                                    modifier = Modifier.fillMaxSize(),
+//                                                    contentScale = ContentScale.Crop,
+//                                                    onLoading = {
+//                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
+//                                                    },
+//                                                    onSuccess = {
+//                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+//                                                    },
+//                                                    onError = {
+//                                                        Log.e(
+//                                                            "THUMB",
+//                                                            "ERROR: $thumbnailUrl",
+//                                                            it.result.throwable
+//                                                        )
+//                                                    }
+//                                                )
+//                                            }
+//                                        }
+//                                }
+//                                for (content in contact.lastMessageContent) {
+//                                    if (content is Content.Text) {
+//                                        Text(
+//                                            text = content.text.replace("\n", " ")
+//                                                .toRichAnnotatedString(
+//                                                    linkColor = MaterialTheme.colorScheme.onPrimary
+//                                                ),
+//                                            style = MaterialTheme.typography.bodySmall,
+//                                            color = MaterialTheme.colorScheme.onSurface.copy(
+//                                                alpha = .6f
+//                                            ),
+//                                            maxLines = 1,
+//                                            overflow = TextOverflow.Ellipsis
+//                                        )
+//                                    }
+//                                }
+//                            }
+                            Row(
                                 modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                val files =
+                                    contact.lastMessageContent.filterIsInstance<Content.File>()
+                                val texts =
+                                    contact.lastMessageContent.filterIsInstance<Content.Text>()
+
+                                // Files — always shown first
+                                if (files.isNotEmpty()) {
+                                    val visibleFiles = if (files.size > 3) {
+                                        files.take(2)
+                                    } else {
+                                        files
+                                    }
+
+                                    visibleFiles.forEach { content ->
+                                        Surface(
+                                            shape = CircleShape,
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                        ) {
+                                            val thumbnailUrl =
+                                                "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+
+                                            AsyncImage(
+                                                model = thumbnailUrl,
+                                                imageLoader = imageLoader,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                onLoading = {
+                                                    Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                                },
+                                                onSuccess = {
+                                                    Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                                },
+                                                onError = {
+                                                    Log.e(
+                                                        "THUMB",
+                                                        "ERROR: $thumbnailUrl",
+                                                        it.result.throwable
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    // +N
+                                    if (files.size > 3) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            modifier = Modifier
+                                                .size(16.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        ) {
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Text(
+                                                    text = "+${files.size - 2}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Texts — after files
+                                texts.forEach { content ->
+                                    Text(
+                                        text = content.text
+                                            .replace("\n", " ")
+                                            .toRichAnnotatedString(
+                                                linkColor = MaterialTheme.colorScheme.onPrimary
+                                            ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
                         }
                         if (contact.unreadMessages > 0) {
 

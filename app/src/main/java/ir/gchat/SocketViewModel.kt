@@ -1,11 +1,7 @@
 package ir.gchat
 
 import android.app.Application
-import android.content.ContentValues
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
@@ -33,16 +29,16 @@ import okhttp3.WebSocketListener
 import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.FileOutputStream
 import java.io.IOException
-import java.net.URLConnection
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
 class SocketViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     var webSocket: WebSocket? = null
-    /*private*/ val client = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
+    /*private*/ val client = OkHttpClient.Builder().connectTimeout(3, TimeUnit.SECONDS)
         //.readTimeout(3, TimeUnit.SECONDS)
         //.writeTimeout(3, TimeUnit.SECONDS)
         //.retryOnConnectionFailure(true)
@@ -102,10 +98,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _shouldScrollToBottom = MutableStateFlow(false)
     val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
 
-    private var _draft = MutableStateFlow(emptyList<File>())
-    val draft: StateFlow<List<File>> = _draft.asStateFlow()
+    private var _draft = MutableStateFlow(emptyList<Draft.File>())
+    val draft: StateFlow<List<Draft.File>> = _draft.asStateFlow()
 
-    private var uploadToken = ""
+    private var _token = MutableStateFlow("")
+    val token: StateFlow<String> = _token.asStateFlow()
 
     fun connect() {
         if (webSocket != null) {
@@ -143,7 +140,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         _loginResponse.value = !_loginResponse.value
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
-                                        uploadToken = jsonObject.getString("token")
+                                        _token.value = jsonObject.getString("token")
                                         context.dataStore.edit { preferences ->
                                             preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
@@ -218,7 +215,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         _loginResponse.value = !_loginResponse.value
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
-                                        uploadToken = jsonObject.getString("token")
+                                        _token.value = jsonObject.getString("token")
                                         context.dataStore.edit { preferences ->
                                             preferences[LOGGED_IN_STATUS_KEY] = true
                                         }
@@ -322,19 +319,25 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         val item = results.getJSONObject(i)
 
                                         val contentArray = item.getJSONArray("content")
-
                                         val content = buildList {
                                             for (j in 0 until contentArray.length()) {
                                                 val obj = contentArray.getJSONObject(j)
 
-                                                add(
-                                                    ContentEntity(
-                                                        type = obj.getString("type"),
-                                                        text = obj.optString("text"),
-                                                        id = obj.optInt("file_id"),
-                                                        fileName = obj.optString("name")
+                                                when (obj.getString("type")) {
+                                                    "text" -> add(
+                                                        Content.Text(
+                                                            text = obj.optString("text")
+                                                        )
                                                     )
-                                                )
+
+                                                    "file" -> add(
+                                                        Content.File(
+                                                            id = obj.optInt("file_id"),
+                                                            fileName = obj.optString("name"),
+                                                            fileSize = obj.optLong("size")
+                                                        )
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -348,9 +351,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
                                 } else {
                                     Toast.makeText(
-                                        context,
-                                        "Error Receiving messages",
-                                        Toast.LENGTH_SHORT
+                                        context, "Error Receiving messages", Toast.LENGTH_SHORT
                                     ).show()
                                 }
                             }
@@ -361,14 +362,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     val results = jsonObject.getJSONArray("conversations")
                                     for (i in 0 until results.length()) {
                                         val chat = results.getJSONObject(i)
-                                        Log.d("val chat", chat.toString())
 
                                         val lastMessage = chat.getJSONArray("last_message")
-                                        Log.d("val lastMessage", lastMessage.toString())
                                         val lastMessageContent = mutableListOf<Content>()
                                         for (j in 0 until lastMessage.length()) {
                                             val item = lastMessage.getJSONObject(j)
-                                            Log.d("val item", item.toString())
                                             when (item.getString("type")) {
                                                 "text" -> {
                                                     lastMessageContent += Content.Text(
@@ -379,7 +377,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                 "file" -> {
                                                     lastMessageContent += Content.File(
                                                         id = item.getInt("file_id"),
-                                                        fileName = item.getString("name")
+                                                        fileName = item.getString("name"),
+                                                        fileSize = item.getLong("size")
                                                     )
                                                 }
                                             }
@@ -436,12 +435,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                         val name = jsonObject.getString("name")
                                         val fileId = jsonObject.getInt("file_id")
 
-                                        val thumbUrl =
-                                            if (jsonObject.has("thumb_url")) {
-                                                jsonObject.getString("thumb_url")
-                                            } else {
-                                                null
-                                            }
+                                        val thumbUrl = if (jsonObject.has("thumb_url")) {
+                                            jsonObject.getString("thumb_url")
+                                        } else {
+                                            null
+                                        }
 
                                         _draft.update { files ->
                                             files.map { file ->
@@ -497,21 +495,19 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                 "حجم فایل خوانده شده: $fileSize بایت (${fileSize / 1024 / 1024f} مگابایت)"
                                             )
 
-                                            val mimeType = context.contentResolver.getType(uri)
-                                                ?: run {
-                                                    val extension = file.name
-                                                        .substringAfterLast('.', "")
-                                                        .lowercase()
+                                            val mimeType =
+                                                context.contentResolver.getType(uri) ?: run {
+                                                    val extension =
+                                                        file.name.substringAfterLast('.', "")
+                                                            .lowercase()
 
-                                                    android.webkit.MimeTypeMap
-                                                        .getSingleton()
+                                                    android.webkit.MimeTypeMap.getSingleton()
                                                         .getMimeTypeFromExtension(extension)
                                                         ?: "application/octet-stream"
                                                 }
 
                                             Log.d(
-                                                "FileUpload",
-                                                "MIME Type تشخیص داده شده: $mimeType"
+                                                "FileUpload", "MIME Type تشخیص داده شده: $mimeType"
                                             )
 
                                             _draft.update { files ->
@@ -546,14 +542,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                                     while (offset < fileBytes.size) {
                                                         val count = minOf(
-                                                            bufferSize,
-                                                            fileBytes.size - offset
+                                                            bufferSize, fileBytes.size - offset
                                                         )
 
                                                         sink.write(
-                                                            fileBytes,
-                                                            offset,
-                                                            count
+                                                            fileBytes, offset, count
                                                         )
 
                                                         offset += count
@@ -578,52 +571,40 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                 }
                                             }
 
-                                            val requestBody = MultipartBody.Builder()
-                                                .setType(MultipartBody.FORM)
-                                                .addFormDataPart(
-                                                    "file",
-                                                    file.name,
-                                                    progressRequestBody
-                                                )
-                                                .build()
+                                            val requestBody =
+                                                MultipartBody.Builder().setType(MultipartBody.FORM)
+                                                    .addFormDataPart(
+                                                        "file", file.name, progressRequestBody
+                                                    ).build()
 
                                             val originalUrl = jsonObject.getString("upload_url")
 
                                             val finalUrl = originalUrl.replace(
-                                                "0.0.0.0",
-                                                serverIP.value.split(":")[0]
+                                                "0.0.0.0", serverIP.value.split(":")[0]
                                             )
 
                                             Log.d(
-                                                "FileUpload",
-                                                "URL اصلی: $originalUrl"
+                                                "FileUpload", "URL اصلی: $originalUrl"
                                             )
 
                                             Log.d(
-                                                "FileUpload",
-                                                "URL نهایی: $finalUrl"
+                                                "FileUpload", "URL نهایی: $finalUrl"
                                             )
 
-                                            val request = Request.Builder()
-                                                .url(finalUrl)
-                                                .header(
-                                                    "Authorization",
-                                                    "Bearer $uploadToken"
-                                                )
-                                                .post(requestBody)
-                                                .build()
+                                            val request = Request.Builder().url(finalUrl).header(
+                                                "Authorization", "Bearer ${_token.value}"
+                                            ).post(requestBody).build()
 
                                             Log.d(
                                                 "FileUpload",
                                                 "درخواست آپلود ساخته شد، شروع ارسال..."
                                             )
 
-                                            /*OkHttpClient()*/client.newCall(request).enqueue(
-                                                object : Callback {
+                                            /*OkHttpClient()*/client.newCall(request)
+                                                .enqueue(object : Callback {
 
                                                     override fun onFailure(
-                                                        call: Call,
-                                                        e: IOException
+                                                        call: Call, e: IOException
                                                     ) {
                                                         Log.e(
                                                             "FileUpload",
@@ -633,14 +614,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                     }
 
                                                     override fun onResponse(
-                                                        call: Call,
-                                                        response: Response
+                                                        call: Call, response: Response
                                                     ) {
                                                         response.use {
 
                                                             val code = it.code
-                                                            val bodyString =
-                                                                it.body.string()
+                                                            val bodyString = it.body.string()
 
                                                             Log.d(
                                                                 "FileUpload",
@@ -661,13 +640,9 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                             }
 
                                                             try {
-                                                                val result =
-                                                                    JSONObject(bodyString)
+                                                                val result = JSONObject(bodyString)
 
-                                                                if (
-                                                                    result.getString("status")
-                                                                    == "success"
-                                                                ) {
+                                                                if (result.getString("status") == "success") {
                                                                     _draft.update { files ->
                                                                         files.map { currentFile ->
                                                                             if (currentFile.name == file.name) {
@@ -709,8 +684,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                             }
                                                         }
                                                     }
-                                                }
-                                            )
+                                                })
 
                                         } catch (e: Exception) {
                                             Log.e(
@@ -722,8 +696,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             input.close()
 
                                             Log.d(
-                                                "FileUpload",
-                                                "InputStream بسته شد"
+                                                "FileUpload", "InputStream بسته شد"
                                             )
                                         }
                                     }
@@ -887,22 +860,29 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun sendMessage(contact: String, message: List<ContentEntity>/*message: String*/) {
+    fun sendMessage(contact: String, message: List<Content>/*message: String*/) {
         // id رو باید درست هندل کنیم که با دوتا پیام بدون نت کرش نکنه
         val contentArray = JSONArray()
 
         message.forEach { content ->
-            contentArray.put(
-                JSONObject().apply {
-                    put("type", content.type)
-                    if (content.type == "text") {
-                        put("text", content.text)
-                    } else {
-                        put("file_id", content.id)
-                        put("file_name", content.fileName)
-                    }
+            when (content) {
+                is Content.Text -> {
+                    contentArray.put(
+                        JSONObject().apply {
+                            put("type", "text")
+                            put("text", content.text)
+                        })
                 }
-            )
+
+                is Content.File -> {
+                    contentArray.put(
+                        JSONObject().apply {
+                            put("type", "file")
+                            put("file_id", content.id)
+                            put("file_name", content.fileName)
+                        })
+                }
+            }
         }
         _messageList.value += MessageItem(
             //text = message,
@@ -988,360 +968,249 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         put("hash", hash)
                     }.toString()
                 )
-                _draft.value += File(
-                    name = name,
-                    localUri = uri
+                _draft.value += Draft.File(
+                    name = name, localUri = uri, size = size
                 )
             } catch (_: Exception) {
             }
         }
     }
 
-//    fun downloadFile(
-//        fileId: Int,
-//        fileName: String
-//    ) {
-//        viewModelScope.launch(Dispatchers.IO) {
-//
-//            try {
-//
-//                val url = "http://${serverIP.value.split(":")[0]+":8080"}/files/$fileId"
-//                Log.d("Download", "URL = $url")
-//                Log.d("Download", "TOKEN = $uploadToken")
-//                val request = Request.Builder()
-//                    .url(url)
-//                    .header("Authorization", "Bearer $uploadToken")
-//                    .build()
-//
-//                client.newCall(request).execute().use { response ->
-//
-//                    if (!response.isSuccessful) {
-//                        Log.e("Download", "HTTP ${response.code}")
-//                        return@launch
-//                    }
-//
-//                    val body = response.body
-//
-//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-//
-//                        val values = ContentValues().apply {
-//                            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-//                            put(
-//                                MediaStore.Downloads.MIME_TYPE,
-//                                URLConnection.guessContentTypeFromName(fileName)
-//                                    ?: "application/octet-stream"
-//                            )
-//                            put(
-//                                MediaStore.Downloads.RELATIVE_PATH,
-//                                Environment.DIRECTORY_DOWNLOADS
-//                            )
-//                            put(MediaStore.Downloads.IS_PENDING, 1)
-//                        }
-//
-//                        val uri = context.contentResolver.insert(
-//                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-//                            values
-//                        ) ?: return@launch
-//
-//                        context.contentResolver.openOutputStream(uri)?.use { output ->
-//                            body.byteStream().use { input ->
-//                                input.copyTo(output)
-//                            }
-//                        }
-//
-//                        values.clear()
-//                        values.put(MediaStore.Downloads.IS_PENDING, 0)
-//                        context.contentResolver.update(uri, values, null, null)
-//
-//                    } else {
-//
-//                        val downloads =
-//                            Environment.getExternalStoragePublicDirectory(
-//                                Environment.DIRECTORY_DOWNLOADS
-//                            )
-//
-//                        if (!downloads.exists()) {
-//                            downloads.mkdirs()
-//                        }
-//
-//                        val file = java.io.File(downloads, fileName)
-//
-//                        file.outputStream().use { output ->
-//                            body.byteStream().use { input ->
-//                                input.copyTo(output)
-//                            }
-//                        }
-//                    }
-//
-//                    Log.d("Download", "Download finished")
-//                }
-//
-//            } catch (e: Exception) {
-//                Log.e("Download", "Download failed", e)
-//            }
-//        }
-//    }
-
     fun downloadFile(
         fileId: Int,
-        fileName: String
+        fileName: String,
+        fileSize: Long,
+        setProgress: (Float) -> Unit,
+        setPending: (Boolean) -> Unit,
+        setDownloadedBytes: (Long) -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
+
+            setPending(true)
+            setProgress(0f)
+
             try {
                 val host = serverIP.value.substringBefore(":")
-
                 val url = "http://$host:8080/files/$fileId"
 
-                Log.d("Download", "URL = $url")
-                Log.d("Download", "TOKEN = $uploadToken")
+                val token = _token.value
 
-                val request = Request.Builder()
-                    .url(url)
-                    .header(
-                        "Authorization",
-                        "Bearer $uploadToken"
-                    )
-                    .build()
+                Log.d("Download", "URL = $url")
+                Log.d("Download", "TOKEN = $token")
+
+                val request =
+                    Request.Builder()
+                        .url(url)
+                        .header("Authorization", "Bearer $token")
+                        .build()
 
                 client.newCall(request).execute().use { response ->
 
                     if (!response.isSuccessful) {
                         Log.e(
                             "Download",
-                            "HTTP ${response.code}"
+                            "HTTP ${response.code}: ${response.message}"
                         )
                         return@launch
                     }
 
                     val body = response.body
 
-                    Log.d(
-                        "Download",
-                        "Content-Length = ${body.contentLength()}"
-                    )
+                    val contentLength = body.contentLength()
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-                        // Android 10+
-                        val values = ContentValues().apply {
-                            put(
-                                MediaStore.Downloads.DISPLAY_NAME,
-                                fileName
-                            )
-
-                            put(
-                                MediaStore.Downloads.MIME_TYPE,
-                                URLConnection.guessContentTypeFromName(
-                                    fileName
-                                ) ?: "application/octet-stream"
-                            )
-
-                            put(
-                                MediaStore.Downloads.RELATIVE_PATH,
-                                Environment.DIRECTORY_DOWNLOADS
-                            )
-
-                            put(
-                                MediaStore.Downloads.IS_PENDING,
-                                1
-                            )
-                        }
-
-                        val uri = context.contentResolver.insert(
-                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                            values
-                        )
-
-                        if (uri == null) {
-                            Log.e(
-                                "Download",
-                                "Failed to create MediaStore entry"
-                            )
-                            return@launch
-                        }
-
-                        try {
-
-                            context.contentResolver
-                                .openOutputStream(uri)
-                                ?.use { output ->
-
-                                    body.byteStream().use { input ->
-                                        input.copyTo(output)
-                                    }
-                                }
-                                ?: throw IOException(
-                                    "Could not open output stream"
-                                )
-
-                            // انتشار فایل در Downloads
-                            val updateValues = ContentValues().apply {
-                                put(
-                                    MediaStore.Downloads.IS_PENDING,
-                                    0
-                                )
-                            }
-
-                            context.contentResolver.update(
-                                uri,
-                                updateValues,
-                                null,
-                                null
-                            )
-
-                            Log.d(
-                                "Download",
-                                "Download finished: $uri"
-                            )
-
-                        } catch (e: Exception) {
-
-                            // اگر دانلود خراب شد، فایل ناقص را پاک کن
-                            context.contentResolver.delete(
-                                uri,
-                                null,
-                                null
-                            )
-
-                            throw e
-                        }
-
-                    } else {
-
-                        // Android 9 و پایین‌تر
-                        val downloads =
-                            Environment.getExternalStoragePublicDirectory(
-                                Environment.DIRECTORY_DOWNLOADS
-                            )
-
-                        if (!downloads.exists()) {
-                            downloads.mkdirs()
-                        }
-
-                        val file = java.io.File(
-                            downloads,
-                            fileName
-                        )
-
-                        Log.d(
-                            "Download",
-                            "Saving to ${file.absolutePath}"
-                        )
-
-                        body.byteStream().use { input ->
-                            file.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-
-                        Log.d(
-                            "Download",
-                            "Download finished: ${file.absolutePath}"
-                        )
+                    // بعضی سرورها Content-Length را ارسال نمی‌کنند
+                    val totalBytes = when {
+                        contentLength > 0L -> contentLength
+                        fileSize > 0L -> fileSize
+                        else -> -1L
                     }
-                }
-
-            } catch (e: Exception) {
-
-                Log.e(
-                    "Download",
-                    "Download failed",
-                    e
-                )
-            }
-        }
-    }
-
-    fun downloadFileToInternal(
-        fileId: Int,
-        fileName: String
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val host = serverIP.value.substringBefore(":")
-
-                val url = "http://$host:8080/files/$fileId"
-
-                Log.d("Download", "URL = $url")
-                Log.d("Download", "TOKEN = $uploadToken")
-
-                val request = Request.Builder()
-                    .url(url)
-                    .header(
-                        "Authorization",
-                        "Bearer $uploadToken"
-                    )
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-
-                    if (!response.isSuccessful) {
-                        Log.e(
-                            "Download",
-                            "HTTP ${response.code}"
-                        )
-                        return@launch
-                    }
-
-                    val body = response.body
 
                     Log.d(
                         "Download",
-                        "Content-Length = ${body.contentLength()}"
+                        "Content-Length=$contentLength, fileSize=$fileSize, total=$totalBytes"
                     )
 
-                    // پوشه اختصاصی اپ
-                    val downloadDirectory = java.io.File(
+                    // =========================================================
+                    // Internal Storage
+                    // =========================================================
+
+                    val downloadsDirectory = java.io.File(
                         context.filesDir,
                         "downloads"
                     )
 
-                    if (!downloadDirectory.exists()) {
-                        downloadDirectory.mkdirs()
+                    if (!downloadsDirectory.exists()) {
+                        if (!downloadsDirectory.mkdirs() &&
+                            !downloadsDirectory.exists()
+                        ) {
+                            throw IOException(
+                                "Could not create internal downloads directory"
+                            )
+                        }
                     }
 
-                    // فایل مقصد
-                    val file = java.io.File(
-                        downloadDirectory,
+                    var targetFile = java.io.File(
+                        downloadsDirectory,
                         fileName
                     )
 
+                    /*
+                     * اگر فایل همنام وجود داشت، اسم جدید بساز.
+                     */
+                    if (targetFile.exists()) {
+
+                        val baseName = targetFile.nameWithoutExtension
+                        val extension = targetFile.extension
+
+                        var index = 1
+
+                        do {
+                            val newName = if (extension.isEmpty()) {
+                                "$baseName ($index)"
+                            } else {
+                                "$baseName ($index).$extension"
+                            }
+
+                            targetFile = java.io.File(
+                                downloadsDirectory,
+                                newName
+                            )
+
+                            index++
+
+                        } while (targetFile.exists())
+                    }
+
                     Log.d(
                         "Download",
-                        "Saving to ${file.absolutePath}"
+                        "Saving to ${targetFile.absolutePath}"
                     )
 
                     try {
 
-                        body.byteStream().use { input ->
-                            file.outputStream().use { output ->
-                                input.copyTo(output)
+                        FileOutputStream(targetFile).use { outputStream ->
+
+                            body.byteStream().use { inputStream ->
+
+                                val buffer = ByteArray(32 * 1024)
+
+                                var downloadedBytes = 0L
+                                setDownloadedBytes(downloadedBytes)
+
+                                var lastProgress = -1f
+
+                                while (true) {
+
+                                    val read = inputStream.read(buffer)
+
+                                    if (read == -1) {
+                                        break
+                                    }
+
+                                    outputStream.write(
+                                        buffer,
+                                        0,
+                                        read
+                                    )
+
+                                    downloadedBytes += read
+                                    setDownloadedBytes(downloadedBytes)
+
+                                    if (totalBytes > 0L) {
+
+                                        val progress =
+                                            (
+                                                    downloadedBytes.toDouble() /
+                                                            totalBytes.toDouble()
+                                                    )
+                                                .toFloat()
+                                                .coerceIn(0f, 1f)
+
+                                        /*
+                                         * فقط زمانی UI را آپدیت می‌کنیم
+                                         * که حداقل 1 درصد تغییر کرده باشد.
+                                         */
+                                        if (
+                                            progress >= 1f ||
+                                            progress - lastProgress >= 0.01f
+                                        ) {
+                                            lastProgress = progress
+
+                                            Log.d(
+                                                "Download",
+                                                "progress=${(progress * 100).toInt()}% " +
+                                                        "($downloadedBytes/$totalBytes)"
+                                            )
+
+                                            setProgress(progress)
+                                        }
+
+                                    } else {
+
+                                        // اندازه فایل مشخص نیست
+                                        Log.d(
+                                            "Download",
+                                            "Downloaded=$downloadedBytes bytes"
+                                        )
+                                    }
+                                }
+
+                                outputStream.flush()
                             }
                         }
 
+                        // دانلود کامل شده
+                        setProgress(1f)
+
                         Log.d(
                             "Download",
-                            "Download finished: ${file.absolutePath}"
+                            "Download finished: ${targetFile.absolutePath}"
                         )
 
                     } catch (e: Exception) {
 
                         // حذف فایل ناقص
-                        file.delete()
+                        if (targetFile.exists()) {
+                            targetFile.delete()
+                        }
 
                         throw e
                     }
                 }
 
+            } catch (e: CancellationException) {
+
+                Log.d(
+                    "Download",
+                    "Download cancelled: fileId=$fileId"
+                )
+
+                throw e
+
             } catch (e: Exception) {
 
                 Log.e(
                     "Download",
-                    "Download failed",
+                    "Download failed: fileId=$fileId",
                     e
                 )
+
+                setProgress(0f)
+
+            } finally {
+
+                setPending(false)
             }
         }
+    }
+
+    fun isFileDownloaded(fileName: String): Boolean {
+        val file = java.io.File(
+            context.filesDir,
+            "downloads/$fileName"
+        )
+
+        return file.exists() && file.isFile
     }
 
     fun removeFileFromDraft(fileName: String) {
