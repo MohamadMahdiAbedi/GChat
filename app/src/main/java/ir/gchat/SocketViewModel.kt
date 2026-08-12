@@ -32,6 +32,7 @@ import org.json.JSONObject
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.collections.emptyMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -81,11 +82,14 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private val _loginResponse = MutableStateFlow(false)
-    val loginResponse: StateFlow<Boolean> = _loginResponse.asStateFlow()
+    private val _loginResponded = MutableStateFlow(false)
+    val loginResponse: StateFlow<Boolean> = _loginResponded.asStateFlow()
 
     private val _chatList = MutableStateFlow(emptyList<Contact>())
     val chatList: StateFlow<List<Contact>> = _chatList.asStateFlow()
+
+    private var _token = MutableStateFlow("")
+    val token: StateFlow<String> = _token.asStateFlow()
 
     private val _contactSearchList = MutableStateFlow(emptyList<Contact>())
     val contactSearchList: StateFlow<List<Contact>> = _contactSearchList.asStateFlow()
@@ -98,11 +102,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _shouldScrollToBottom = MutableStateFlow(false)
     val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
 
-    private var _draft = MutableStateFlow(emptyList<Draft.File>())
-    val draft: StateFlow<List<Draft.File>> = _draft.asStateFlow()
+    //private var _drafts = MutableStateFlow(emptyList<Draft.File>())
+    private var _drafts = MutableStateFlow<Map<String, List<Draft>>>(emptyMap())
+    val drafts: StateFlow<Map<String, List<Draft>>> = _drafts.asStateFlow()
 
-    private var _token = MutableStateFlow("")
-    val token: StateFlow<String> = _token.asStateFlow()
+    private var _savedText = MutableStateFlow<Map<String, String>>(emptyMap())
+    val savedText: StateFlow<Map<String, String>> = _savedText.asStateFlow()
 
     fun connect() {
         if (webSocket != null) {
@@ -137,7 +142,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 val message = jsonObject.getString("status")
                                 when (message) {
                                     "success" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
                                         _token.value = jsonObject.getString("token")
@@ -147,7 +152,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "iccid_error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "ICCID already exists", Toast.LENGTH_SHORT
                                         ).show()
@@ -159,7 +164,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "username_error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Username already exists", Toast.LENGTH_SHORT
                                         ).show()
@@ -171,7 +176,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Untitled error", Toast.LENGTH_SHORT
                                         ).show()
@@ -183,7 +188,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "invalid_input" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Invalid input size", Toast.LENGTH_SHORT
                                         ).show()
@@ -195,7 +200,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "iccid_invalid" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Invalid ICCID", Toast.LENGTH_SHORT
                                         ).show()
@@ -212,7 +217,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 val message = jsonObject.getString("status")
                                 when (message) {
                                     "success" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         _oldLoggedIn.value = true
                                         _loggedIn.value = true
                                         _token.value = jsonObject.getString("token")
@@ -222,7 +227,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "password_error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Password is incorrect", Toast.LENGTH_SHORT
                                         ).show()
@@ -234,7 +239,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Untitled error", Toast.LENGTH_SHORT
                                         ).show()
@@ -246,7 +251,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "username_error" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Username not found", Toast.LENGTH_SHORT
                                         ).show()
@@ -258,7 +263,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "invalid_input" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Invalid input size", Toast.LENGTH_SHORT
                                         ).show()
@@ -270,7 +275,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     "iccid_invalid" -> {
-                                        _loginResponse.value = !_loginResponse.value
+                                        _loginResponded.value = !_loginResponded.value
                                         Toast.makeText(
                                             context, "Invalid ICCID", Toast.LENGTH_SHORT
                                         ).show()
@@ -441,25 +446,30 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             null
                                         }
 
-                                        _draft.update { files ->
-                                            files.map { file ->
-                                                if (file.name == name) {
-                                                    file.copy(
+                                        _drafts.update { draftsMap ->
+                                            val drafts = draftsMap[openedChat.value]
+                                                ?: return@update draftsMap
+
+                                            draftsMap + (openedChat.value to drafts.map { draft ->
+                                                if (draft is Draft.File && draft.name == name) {
+                                                    draft.copy(
                                                         id = fileId,
                                                         progress = 1f,
-                                                        thumbUrl = thumbUrl ?: file.thumbUrl
+                                                        thumbUrl = thumbUrl ?: draft.thumbUrl
                                                     )
                                                 } else {
-                                                    file
+                                                    draft
                                                 }
-                                            }
+                                            })
                                         }
                                     }
 
                                     "new" -> {
-                                        val file = _draft.value.find {
-                                            it.name == jsonObject.getString("name")
-                                        }
+                                        val file =
+                                            _drafts.value[openedChat.value]?.filterIsInstance<Draft.File>()
+                                                ?.find {
+                                                    it.name == jsonObject.getString("name")
+                                                }
 
                                         if (file == null) {
                                             Log.e(
@@ -510,14 +520,18 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                 "FileUpload", "MIME Type تشخیص داده شده: $mimeType"
                                             )
 
-                                            _draft.update { files ->
-                                                files.map { currentFile ->
-                                                    if (currentFile.name == file.name) {
-                                                        currentFile.copy(progress = 0f)
+                                            _drafts.update { draftsMap ->
+                                                val drafts = draftsMap[openedChat.value]
+                                                    ?: return@update draftsMap
+
+                                                draftsMap + (openedChat.value to drafts.map { draft ->
+                                                    if (draft is Draft.File && draft.name == file.name) {
+                                                        draft.copy(progress = 0f)
                                                     } else {
-                                                        currentFile
+                                                        draft
                                                     }
-                                                }
+
+                                                })
                                             }
                                             val progressRequestBody = object : RequestBody() {
 
@@ -552,20 +566,23 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                         offset += count
                                                         uploaded += count
 
-                                                        _draft.update { files ->
-                                                            files.map { currentFile ->
-                                                                if (currentFile.name == file.name) {
+                                                        _drafts.update { draftsMap ->
+                                                            val drafts = draftsMap[openedChat.value]
+                                                                ?: return@update draftsMap
+
+                                                            draftsMap + (openedChat.value to drafts.map { draft ->
+                                                                if (draft is Draft.File && draft.name == file.name) {
                                                                     val roundedProgress =
                                                                         (uploaded.toFloat() / total.toFloat() * 100).toInt() / 100f
-                                                                    if (currentFile.progress != roundedProgress) {
-                                                                        currentFile.copy(progress = roundedProgress)
+                                                                    if (draft.progress != roundedProgress) {
+                                                                        draft.copy(progress = roundedProgress)
                                                                     } else {
-                                                                        currentFile
+                                                                        draft
                                                                     }
                                                                 } else {
-                                                                    currentFile
+                                                                    draft
                                                                 }
-                                                            }
+                                                            })
                                                         }
                                                     }
                                                 }
@@ -643,10 +660,14 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                                 val result = JSONObject(bodyString)
 
                                                                 if (result.getString("status") == "success") {
-                                                                    _draft.update { files ->
-                                                                        files.map { currentFile ->
-                                                                            if (currentFile.name == file.name) {
-                                                                                currentFile.copy(
+                                                                    _drafts.update { draftsMap ->
+                                                                        val drafts =
+                                                                            draftsMap[openedChat.value]
+                                                                                ?: return@update draftsMap
+
+                                                                        draftsMap + (openedChat.value to drafts.map { draft ->
+                                                                            if (draft is Draft.File && draft.name == file.name) {
+                                                                                draft.copy(
                                                                                     id = result.getInt(
                                                                                         "file_id"
                                                                                     ),
@@ -656,13 +677,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                                                     )
                                                                                 )
                                                                             } else {
-                                                                                currentFile
+                                                                                draft
                                                                             }
-                                                                        }
+                                                                        })
                                                                     }
-
-                                                                    _draft.value =
-                                                                        _draft.value.toList()
 
                                                                     Log.d(
                                                                         "FileUpload",
@@ -968,9 +986,14 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         put("hash", hash)
                     }.toString()
                 )
-                _draft.value += Draft.File(
-                    name = name, localUri = uri, size = size
-                )
+                _drafts.update { draftsMap ->
+                    val chatId = openedChat.value
+                    val drafts = draftsMap[chatId].orEmpty()
+
+                    draftsMap + (chatId to (drafts + Draft.File(
+                        name = name, localUri = uri, size = size
+                    )))
+                }
             } catch (_: Exception) {
             }
         }
@@ -999,17 +1022,13 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d("Download", "TOKEN = $token")
 
                 val request =
-                    Request.Builder()
-                        .url(url)
-                        .header("Authorization", "Bearer $token")
-                        .build()
+                    Request.Builder().url(url).header("Authorization", "Bearer $token").build()
 
                 client.newCall(request).execute().use { response ->
 
                     if (!response.isSuccessful) {
                         Log.e(
-                            "Download",
-                            "HTTP ${response.code}: ${response.message}"
+                            "Download", "HTTP ${response.code}: ${response.message}"
                         )
                         return@launch
                     }
@@ -1035,14 +1054,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     // =========================================================
 
                     val downloadsDirectory = java.io.File(
-                        context.filesDir,
-                        "downloads"
+                        context.filesDir, "downloads"
                     )
 
                     if (!downloadsDirectory.exists()) {
-                        if (!downloadsDirectory.mkdirs() &&
-                            !downloadsDirectory.exists()
-                        ) {
+                        if (!downloadsDirectory.mkdirs() && !downloadsDirectory.exists()) {
                             throw IOException(
                                 "Could not create internal downloads directory"
                             )
@@ -1050,8 +1066,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     }
 
                     var targetFile = java.io.File(
-                        downloadsDirectory,
-                        fileName
+                        downloadsDirectory, fileName
                     )
 
                     /*
@@ -1072,8 +1087,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                             }
 
                             targetFile = java.io.File(
-                                downloadsDirectory,
-                                newName
+                                downloadsDirectory, newName
                             )
 
                             index++
@@ -1082,8 +1096,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     }
 
                     Log.d(
-                        "Download",
-                        "Saving to ${targetFile.absolutePath}"
+                        "Download", "Saving to ${targetFile.absolutePath}"
                     )
 
                     try {
@@ -1108,9 +1121,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     }
 
                                     outputStream.write(
-                                        buffer,
-                                        0,
-                                        read
+                                        buffer, 0, read
                                     )
 
                                     downloadedBytes += read
@@ -1119,27 +1130,19 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     if (totalBytes > 0L) {
 
                                         val progress =
-                                            (
-                                                    downloadedBytes.toDouble() /
-                                                            totalBytes.toDouble()
-                                                    )
-                                                .toFloat()
+                                            (downloadedBytes.toDouble() / totalBytes.toDouble()).toFloat()
                                                 .coerceIn(0f, 1f)
 
                                         /*
                                          * فقط زمانی UI را آپدیت می‌کنیم
                                          * که حداقل 1 درصد تغییر کرده باشد.
                                          */
-                                        if (
-                                            progress >= 1f ||
-                                            progress - lastProgress >= 0.01f
-                                        ) {
+                                        if (progress >= 1f || progress - lastProgress >= 0.01f) {
                                             lastProgress = progress
 
                                             Log.d(
                                                 "Download",
-                                                "progress=${(progress * 100).toInt()}% " +
-                                                        "($downloadedBytes/$totalBytes)"
+                                                "progress=${(progress * 100).toInt()}% " + "($downloadedBytes/$totalBytes)"
                                             )
 
                                             setProgress(progress)
@@ -1149,8 +1152,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                         // اندازه فایل مشخص نیست
                                         Log.d(
-                                            "Download",
-                                            "Downloaded=$downloadedBytes bytes"
+                                            "Download", "Downloaded=$downloadedBytes bytes"
                                         )
                                     }
                                 }
@@ -1163,8 +1165,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         setProgress(1f)
 
                         Log.d(
-                            "Download",
-                            "Download finished: ${targetFile.absolutePath}"
+                            "Download", "Download finished: ${targetFile.absolutePath}"
                         )
 
                     } catch (e: Exception) {
@@ -1181,8 +1182,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: CancellationException) {
 
                 Log.d(
-                    "Download",
-                    "Download cancelled: fileId=$fileId"
+                    "Download", "Download cancelled: fileId=$fileId"
                 )
 
                 throw e
@@ -1190,9 +1190,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: Exception) {
 
                 Log.e(
-                    "Download",
-                    "Download failed: fileId=$fileId",
-                    e
+                    "Download", "Download failed: fileId=$fileId", e
                 )
 
                 setProgress(0f)
@@ -1206,21 +1204,30 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
     fun isFileDownloaded(fileName: String): Boolean {
         val file = java.io.File(
-            context.filesDir,
-            "downloads/$fileName"
+            context.filesDir, "downloads/$fileName"
         )
 
         return file.exists() && file.isFile
     }
 
     fun removeFileFromDraft(fileName: String) {
-        _draft.update { files ->
-            files.filter { it.name != fileName }
+        val chatId = openedChat.value
+
+        _drafts.update { draftsMap ->
+            val drafts = draftsMap[chatId] ?: return@update draftsMap
+
+            draftsMap + (chatId to drafts.filter { draft ->
+                draft !is Draft.File || draft.name != fileName
+            })
         }
     }
 
     fun clearDraft() {
-        _draft.update { emptyList() }
+        val chatId = openedChat.value
+
+        _drafts.update { draftsMap ->
+            draftsMap + (chatId to emptyList())
+        }
     }
 
     fun seenAll(id: String) {

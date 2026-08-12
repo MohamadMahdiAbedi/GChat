@@ -1,6 +1,5 @@
 package ir.gchat
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -11,7 +10,6 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.SoundEffectConstants
 import android.widget.EditText
-import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -86,6 +84,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -131,32 +130,26 @@ fun formatFileSize(bytes: Long): String {
 }
 
 fun openDownloadedFile(
-    context: Context,
-    fileName: String
+    context: Context, fileName: String
 ) {
     try {
         val file = File(
-            context.filesDir,
-            "downloads/$fileName"
+            context.filesDir, "downloads/$fileName"
         )
 
         if (!file.exists() || !file.isFile) {
             Log.e(
-                "OpenFile",
-                "File does not exist: ${file.absolutePath}"
+                "OpenFile", "File does not exist: ${file.absolutePath}"
             )
             return
         }
 
         val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
+            context, "${context.packageName}.fileprovider", file
         )
 
         val mimeType =
-            URLConnection.guessContentTypeFromName(file.name)
-                ?: "application/octet-stream"
+            URLConnection.guessContentTypeFromName(file.name) ?: "application/octet-stream"
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mimeType)
@@ -167,15 +160,11 @@ fun openDownloadedFile(
 
     } catch (e: ActivityNotFoundException) {
         Log.e(
-            "OpenFile",
-            "No application found to open $fileName",
-            e
+            "OpenFile", "No application found to open $fileName", e
         )
     } catch (e: Exception) {
         Log.e(
-            "OpenFile",
-            "Failed to open $fileName",
-            e
+            "OpenFile", "Failed to open $fileName", e
         )
     }
 }
@@ -194,7 +183,8 @@ fun ChatScreen(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<Draft.File>,
+    draft: Map<String, List<Draft>>,
+    savedText: Map<String, String>,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
@@ -249,14 +239,12 @@ fun ChatScreen(
         getUploadUri(name, size, sha256, uri)
     }
 
-    var showFileRow by rememberSaveable(draft) { mutableStateOf(draft.isNotEmpty()) }
-
-    val storagePermissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    var showFileRow by rememberSaveable(draft, id) {
+        mutableStateOf(!draft[id].isNullOrEmpty())
+    }
 
     val configuration = LocalConfiguration.current
-    val isLandscape =
-        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -266,10 +254,8 @@ fun ChatScreen(
                 WindowInsets(
                     left = 0.dp,
                     right = 0.dp,
-                    top = ScaffoldDefaults.contentWindowInsets
-                        .getTop(LocalDensity.current).dp,
-                    bottom = ScaffoldDefaults.contentWindowInsets
-                        .getBottom(LocalDensity.current).dp
+                    top = ScaffoldDefaults.contentWindowInsets.getTop(LocalDensity.current).dp,
+                    bottom = ScaffoldDefaults.contentWindowInsets.getBottom(LocalDensity.current).dp
                 )
             } else {
                 ScaffoldDefaults.contentWindowInsets
@@ -281,8 +267,7 @@ fun ChatScreen(
                             WindowInsets.statusBars
                         } else {
                             TopAppBarDefaults.windowInsets
-                        },
-                        title = {
+                        }, title = {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -323,8 +308,7 @@ fun ChatScreen(
                                     contentDescription = "Menu"
                                 )
                             }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
+                        }, colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
                             titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -335,8 +319,7 @@ fun ChatScreen(
                         )
                     )
                 }
-            }
-        ) { innerPadding ->
+            }) { innerPadding ->
             Spacer(modifier = Modifier.padding(innerPadding))
             TWallpaper(
                 modifier = Modifier.fillMaxSize(),
@@ -392,8 +375,7 @@ fun ChatScreen(
                                 val placeable = measurable.measure(newConstraints)
 
                                 layout(
-                                    width = placeable.width,
-                                    height = placeable.height + extra
+                                    width = placeable.width, height = placeable.height + extra
                                 ) {
                                     placeable.placeRelative(0, extra)
                                 }
@@ -404,10 +386,8 @@ fun ChatScreen(
 
                     Box(modifier = modifier) {
                         LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(
-                                top = 8.dp,
-                                bottom = if (showFileRow) 56.dp else 0.dp
+                            state = listState, contentPadding = PaddingValues(
+                                top = 8.dp, bottom = if (showFileRow) 56.dp else 0.dp
                             )
                         ) {
                             items(items = messageList, key = { it.id }) { item ->
@@ -422,7 +402,6 @@ fun ChatScreen(
                                     content = item.content,
                                     seen = item.seen,
                                     timestamp = item.date,
-                                    storagePermissionLauncher = storagePermissionLauncher,
                                     context = context,
                                     downloadFile = downloadFile,
                                     imageLoader = imageLoader,
@@ -485,7 +464,7 @@ fun ChatScreen(
                             }
                         }
                     }
-                    UploadList(showFileRow = showFileRow, draft = draft, removeFileFromDraft)
+                    UploadList(showFileRow = showFileRow, draft = draft[id] ?: emptyList(), removeFileFromDraft)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -546,9 +525,9 @@ fun ChatScreen(
 
                                             hint = "Message..."
                                             setHintTextColor(Color.Gray.toArgb())
+                                            //savedText
 
                                             setTextColor(onSurface.toArgb())
-
                                             addTextChangedListener(object : TextWatcher {
 
                                                 override fun beforeTextChanged(
@@ -591,13 +570,14 @@ fun ChatScreen(
                                         animate = false
                                     }
                                     val content = mutableListOf<Content>()
-                                    draft.forEach { file ->
-                                        content += Content.File(
-                                            //type = "file",
-                                            id = file.id,
-                                            fileSize = file.size,
-                                            fileName = file.name
-                                        )
+                                    draft[id].orEmpty().forEach { item ->
+                                        if (item is Draft.File) {
+                                            content += Content.File(
+                                                id = item.id,
+                                                fileSize = item.size,
+                                                fileName = item.name
+                                            )
+                                        }
                                     }
                                     if (message.isNotBlank()) {
                                         content += Content.Text(
@@ -697,11 +677,9 @@ fun ChatScreen(
                     .align(Alignment.TopCenter)
                     .clickable(
                         indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                        interactionSource = remember { MutableInteractionSource() }) {
                         isExpandedAttachment = false
-                    }
-            )
+                    })
             Spacer(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -712,19 +690,16 @@ fun ChatScreen(
                     .align(Alignment.BottomCenter)
                     .clickable(
                         indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                        interactionSource = remember { MutableInteractionSource() }) {
                         isExpandedAttachment = false
-                    }
-            )
+                    })
         }
     }
 }
 
 @Composable
 fun UploadList(
-    showFileRow: Boolean, draft: List<Draft.File>,
-    removeFileFromDraft: (String) -> Unit
+    showFileRow: Boolean, draft: List<Draft>, removeFileFromDraft: (String) -> Unit
 ) {
     val view = LocalView.current
     if (showFileRow && draft.isNotEmpty()) {
@@ -739,41 +714,40 @@ fun UploadList(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             draft.forEach { file ->
-                Row(
-                    modifier = Modifier
-                        .widthIn(max = 192.dp)
-                        .height(48.dp)
-                        .shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
-                        .background(
-                            shape = RoundedCornerShape(2.dp),
-                            color = MaterialTheme.colorScheme.surface
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
+                if (file is Draft.File) {
+                    Row(
                         modifier = Modifier
-                            .padding(horizontal = 8.dp)
-                            .size(32.dp),
-                        progress = { file.progress }
-                    )
-                    Text(
-                        text = file.name,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    IconButton(
-                        onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            removeFileFromDraft(file.name)
-                        }
+                            .widthIn(max = 192.dp)
+                            .height(48.dp)
+                            .shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
+                            .background(
+                                shape = RoundedCornerShape(2.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ), verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.close),
-                            contentDescription = null
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .size(32.dp),
+                            progress = { file.progress })
+                        Text(
+                            text = file.name,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                removeFileFromDraft(file.name)
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = null
+                            )
+                        }
                     }
                 }
             }
@@ -787,7 +761,6 @@ fun Message(
     content: List<Content>,
     seen: Boolean,
     timestamp: String,
-    storagePermissionLauncher: ManagedActivityResultLauncher<String, Boolean>,
     context: Context,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     imageLoader: ImageLoader,
@@ -824,25 +797,22 @@ fun Message(
                                         Text(
                                             text = contentEntity.text.toRichAnnotatedString(
                                                 linkColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            modifier = Modifier
+                                            ), modifier = Modifier
                                                 .padding(8.dp)
                                                 .padding(
                                                     end = if (isMe && lineCount == 1 && seen) timeWidth + 26.dp else if (lineCount == 1) timeWidth + 8.dp else 0.dp,
                                                     bottom = if (lineCount > 1) 24.dp else 0.dp
-                                                ),
-                                            onTextLayout = {
+                                                ), onTextLayout = {
                                                 if (lineCount == 0) {
                                                     lineCount = it.lineCount
                                                 }
-                                            }
-                                        )
+                                            })
                                     }
 
                                     is Content.File -> {
-                                        val extension = contentEntity.fileName
-                                            .substringAfterLast(".", "")
-                                            .takeIf { it.isNotEmpty() }
+                                        val extension =
+                                            contentEntity.fileName.substringAfterLast(".", "")
+                                                .takeIf { it.isNotEmpty() }
 
                                         val downloadName = if (extension != null) {
                                             "${contentEntity.id}.$extension"
@@ -854,38 +824,50 @@ fun Message(
                                         val progressColor =
                                             if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                         var downloaded by remember { mutableLongStateOf(0L) }
+                                        var showProgress by remember { mutableStateOf(false) }
+
+                                        LaunchedEffect(downloadProgress) {
+                                            if (downloadProgress > 0f && downloadProgress < 1f) {
+                                                showProgress = true
+                                            }
+
+                                            if (downloadProgress == 1f) {
+                                                delay(1000.milliseconds)
+                                                showProgress = false
+                                            }
+                                        }
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(72.dp)
-                                                //.background(
-                                                //    if (isMe)
-                                                //        MaterialTheme.colorScheme.primary
-                                                //    else
-                                                //        MaterialTheme.colorScheme.surface,
-                                                //    RoundedCornerShape(8.dp)
-                                                //)
                                                 .background(
-                                                    brush = Brush.horizontalGradient(
-                                                        colorStops = arrayOf(
-                                                            0f to progressColor.copy(alpha = 0.2f),
-                                                            downloadProgress to progressColor.copy(
-                                                                alpha = 0.2f
-                                                            ),
-                                                            downloadProgress to Color.Transparent,
-                                                            1f to Color.Transparent
+                                                    brush = if (!showProgress) {
+                                                        SolidColor(Color.Transparent)
+                                                    } else {
+                                                        Brush.horizontalGradient(
+                                                            colorStops = arrayOf(
+                                                                0f to progressColor.copy(alpha = 0.2f),
+                                                                downloadProgress to progressColor.copy(
+                                                                    alpha = 0.2f
+                                                                ),
+                                                                downloadProgress to Color.Transparent,
+                                                                1f to Color.Transparent
+                                                            )
                                                         )
-                                                    )
+                                                    }
                                                 )
                                                 .clickable {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(context = context, fileName = downloadName)
+                                                        openDownloadedFile(
+                                                            context = context,
+                                                            fileName = downloadName
+                                                        )
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
-                                                                contentEntity.fileName
-                                                                    .substringAfterLast(".", "")
-                                                                    .takeIf { it.isNotEmpty() }
+                                                                contentEntity.fileName.substringAfterLast(
+                                                                    ".", ""
+                                                                ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
                                                                 if (extension != null) {
@@ -906,26 +888,28 @@ fun Message(
                                                                 },
                                                                 { downloadedBytes ->
                                                                     downloaded = downloadedBytes
-                                                                }
-                                                            )
+                                                                })
                                                         }
                                                     }
                                                 }
                                                 .padding(horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                            verticalAlignment = Alignment.CenterVertically) {
                                             Surface(
                                                 modifier = Modifier.size(56.dp),
                                                 shape = CircleShape,
                                                 onClick = {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(context = context, fileName = downloadName)
+                                                        openDownloadedFile(
+                                                            context = context,
+                                                            fileName = downloadName
+                                                        )
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
-                                                                contentEntity.fileName
-                                                                    .substringAfterLast(".", "")
-                                                                    .takeIf { it.isNotEmpty() }
+                                                                contentEntity.fileName.substringAfterLast(
+                                                                    ".",
+                                                                    ""
+                                                                ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
                                                                 if (extension != null) {
@@ -946,8 +930,7 @@ fun Message(
                                                                 },
                                                                 { downloadedBytes ->
                                                                     downloaded = downloadedBytes
-                                                                }
-                                                            )
+                                                                })
                                                         }
                                                     }
                                                 },
@@ -958,9 +941,7 @@ fun Message(
 
                                                 Log.d(
                                                     "THUMB",
-                                                    "id=${contentEntity.id}, " +
-                                                            "serverUrl=$serverUrl, " +
-                                                            "url=$thumbnailUrl"
+                                                    "id=${contentEntity.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                 )
 
                                                 AsyncImage(
@@ -981,8 +962,7 @@ fun Message(
                                                             "ERROR: $thumbnailUrl",
                                                             it.result.throwable
                                                         )
-                                                    }
-                                                )
+                                                    })
                                             }
 
                                             Spacer(Modifier.width(12.dp))
@@ -995,7 +975,11 @@ fun Message(
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = formatFileSize(downloaded) + " / " + formatFileSize(
+                                                    text = if (downloadProgress == 0f || downloadProgress == 1f) {
+                                                        ""
+                                                    } else {
+                                                        formatFileSize(downloaded) + " / "
+                                                    } + formatFileSize(
                                                         contentEntity.fileSize
                                                     ),
                                                     modifier = Modifier.weight(1f),
@@ -1018,9 +1002,9 @@ fun Message(
                                     }
 
                                     is Content.File -> {
-                                        val extension = contentEntity.fileName
-                                            .substringAfterLast(".", "")
-                                            .takeIf { it.isNotEmpty() }
+                                        val extension =
+                                            contentEntity.fileName.substringAfterLast(".", "")
+                                                .takeIf { it.isNotEmpty() }
 
                                         val downloadName = if (extension != null) {
                                             "${contentEntity.id}.$extension"
@@ -1032,35 +1016,50 @@ fun Message(
                                         val progressColor =
                                             if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                         var downloaded by remember { mutableLongStateOf(0L) }
+                                        var showProgress by remember { mutableStateOf(false) }
+
+                                        LaunchedEffect(downloadProgress) {
+                                            if (downloadProgress > 0f && downloadProgress < 1f) {
+                                                showProgress = true
+                                            }
+
+                                            if (downloadProgress == 1f) {
+                                                delay(1000.milliseconds)
+                                                showProgress = false
+                                            }
+                                        }
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .height(72.dp)
-                                                //.background(
-                                                //    Color.Transparent,
-                                                //    RoundedCornerShape(8.dp)
-                                                //)
                                                 .background(
-                                                    brush = Brush.horizontalGradient(
-                                                        colorStops = arrayOf(
-                                                            0f to progressColor.copy(alpha = 0.2f),
-                                                            downloadProgress to progressColor.copy(
-                                                                alpha = 0.2f
-                                                            ),
-                                                            downloadProgress to Color.Transparent,
-                                                            1f to Color.Transparent
+                                                    brush = if (!showProgress) {
+                                                        SolidColor(Color.Transparent)
+                                                    } else {
+                                                        Brush.horizontalGradient(
+                                                            colorStops = arrayOf(
+                                                                0f to progressColor.copy(alpha = 0.2f),
+                                                                downloadProgress to progressColor.copy(
+                                                                    alpha = 0.2f
+                                                                ),
+                                                                downloadProgress to Color.Transparent,
+                                                                1f to Color.Transparent
+                                                            )
                                                         )
-                                                    )
+                                                    }
                                                 )
                                                 .clickable {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(context = context, fileName = downloadName)
+                                                        openDownloadedFile(
+                                                            context = context,
+                                                            fileName = downloadName
+                                                        )
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
-                                                                contentEntity.fileName
-                                                                    .substringAfterLast(".", "")
-                                                                    .takeIf { it.isNotEmpty() }
+                                                                contentEntity.fileName.substringAfterLast(
+                                                                    ".", ""
+                                                                ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
                                                                 if (extension != null) {
@@ -1081,26 +1080,28 @@ fun Message(
                                                                 },
                                                                 { downloadedBytes ->
                                                                     downloaded = downloadedBytes
-                                                                }
-                                                            )
+                                                                })
                                                         }
                                                     }
                                                 }
                                                 .padding(horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                            verticalAlignment = Alignment.CenterVertically) {
                                             Surface(
                                                 modifier = Modifier.size(56.dp),
                                                 shape = CircleShape,
                                                 onClick = {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(context = context, fileName = downloadName)
+                                                        openDownloadedFile(
+                                                            context = context,
+                                                            fileName = downloadName
+                                                        )
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
-                                                                contentEntity.fileName
-                                                                    .substringAfterLast(".", "")
-                                                                    .takeIf { it.isNotEmpty() }
+                                                                contentEntity.fileName.substringAfterLast(
+                                                                    ".",
+                                                                    ""
+                                                                ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
                                                                 if (extension != null) {
@@ -1121,8 +1122,7 @@ fun Message(
                                                                 },
                                                                 { downloadedBytes ->
                                                                     downloaded = downloadedBytes
-                                                                }
-                                                            )
+                                                                })
                                                         }
                                                     }
                                                 },
@@ -1133,9 +1133,7 @@ fun Message(
 
                                                 Log.d(
                                                     "THUMB",
-                                                    "id=${contentEntity.id}, " +
-                                                            "serverUrl=$serverUrl, " +
-                                                            "url=$thumbnailUrl"
+                                                    "id=${contentEntity.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                 )
 
                                                 AsyncImage(
@@ -1156,8 +1154,7 @@ fun Message(
                                                             "ERROR: $thumbnailUrl",
                                                             it.result.throwable
                                                         )
-                                                    }
-                                                )
+                                                    })
                                                 //Icon(
                                                 //    painter = painterResource(R.drawable.photo),
                                                 //    contentDescription = null,
@@ -1175,7 +1172,11 @@ fun Message(
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = formatFileSize(downloaded) + " / " + formatFileSize(
+                                                    text = if (downloadProgress == 0f || downloadProgress == 1f) {
+                                                        ""
+                                                    } else {
+                                                        formatFileSize(downloaded) + " / "
+                                                    } + formatFileSize(
                                                         contentEntity.fileSize
                                                     ),
                                                     modifier = Modifier.weight(1f),

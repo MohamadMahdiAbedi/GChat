@@ -141,7 +141,8 @@ fun MainScreenContainer(
     shouldScrollToBottom: Boolean,
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<Draft.File>,
+    draft: Map<String, List<Draft>>,
+    savedText: Map<String, String>,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
@@ -801,6 +802,8 @@ fun MainScreenContainer(
                                         brush = Brush.horizontalGradient(
                                             colors = listOf(
                                                 Color.Black.copy(alpha = 0.1f),
+                                                Color.Black.copy(alpha = 0.04f),
+                                                Color.Black.copy(alpha = 0.02f),
                                                 Color.Transparent
                                             ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
                                         ), blendMode = BlendMode.Multiply
@@ -820,6 +823,7 @@ fun MainScreenContainer(
                                 onScrolledToBottom = onScrolledToBottom,
                                 getUploadUri = getUploadUri,
                                 draft = draft,
+                                savedText = savedText,
                                 downloadFile = downloadFile,
                                 removeFileFromDraft = removeFileFromDraft,
                                 clearDraft = clearDraft,
@@ -1033,62 +1037,6 @@ fun ContactItem(
                             },
                             state = rememberTooltipState()
                         ) {
-//                            Row(modifier = Modifier.weight(1f))
-//                            {
-//                                for (content in contact.lastMessageContent) {
-//                                    if (content is Content.File) {
-//                                            Surface(
-//                                                shape = CircleShape,
-//                                                modifier = Modifier.size(8.dp)
-//                                            ) {
-//                                                val thumbnailUrl =
-//                                                    "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
-//                                                Log.d(
-//                                                    "THUMB",
-//                                                    "id=${content.id}, " +
-//                                                            "serverUrl=$serverUrl, " +
-//                                                            "url=$thumbnailUrl"
-//                                                )
-//                                                AsyncImage(
-//                                                    model = thumbnailUrl,
-//                                                    imageLoader = imageLoader,
-//                                                    contentDescription = null,
-//                                                    modifier = Modifier.fillMaxSize(),
-//                                                    contentScale = ContentScale.Crop,
-//                                                    onLoading = {
-//                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
-//                                                    },
-//                                                    onSuccess = {
-//                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
-//                                                    },
-//                                                    onError = {
-//                                                        Log.e(
-//                                                            "THUMB",
-//                                                            "ERROR: $thumbnailUrl",
-//                                                            it.result.throwable
-//                                                        )
-//                                                    }
-//                                                )
-//                                            }
-//                                        }
-//                                }
-//                                for (content in contact.lastMessageContent) {
-//                                    if (content is Content.Text) {
-//                                        Text(
-//                                            text = content.text.replace("\n", " ")
-//                                                .toRichAnnotatedString(
-//                                                    linkColor = MaterialTheme.colorScheme.onPrimary
-//                                                ),
-//                                            style = MaterialTheme.typography.bodySmall,
-//                                            color = MaterialTheme.colorScheme.onSurface.copy(
-//                                                alpha = .6f
-//                                            ),
-//                                            maxLines = 1,
-//                                            overflow = TextOverflow.Ellipsis
-//                                        )
-//                                    }
-//                                }
-//                            }
                             Row(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -1167,7 +1115,7 @@ fun ContactItem(
                                         text = content.text
                                             .replace("\n", " ")
                                             .toRichAnnotatedString(
-                                                linkColor = MaterialTheme.colorScheme.onPrimary
+                                                linkColor = MaterialTheme.colorScheme.primary
                                             ),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
@@ -1179,7 +1127,7 @@ fun ContactItem(
                         }
                         if (contact.unreadMessages > 0) {
 
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.weight(1f))
 
                             Box(
                                 modifier = Modifier

@@ -183,7 +183,8 @@ class MainActivity : ComponentActivity() {
                                     uri
                                 )
                             },
-                            draft = socketViewModel.draft.collectAsState().value,
+                            draft = socketViewModel.drafts.collectAsState().value,
+                            savedText = socketViewModel.savedText.collectAsState().value,
                             downloadFile = { fileId, fileName, fileSize, setProgress, setPending, setDownloadedBytes ->
                                 socketViewModel.downloadFile(
                                     fileId,
@@ -337,7 +338,8 @@ fun MainNavigation(
     setColor: (Int) -> Unit,
     paletteIndex: Int,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
-    draft: List<Draft.File>,
+    draft: Map<String, List<Draft>>,
+    savedText: Map<String, String>,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,
@@ -533,6 +535,7 @@ fun MainNavigation(
                 onScrolledToBottom = onScrolledToBottom,
                 getUploadUri = getUploadUri,
                 draft = draft,
+                savedText = savedText,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
@@ -591,6 +594,7 @@ fun MainNavigation(
                 onScrolledToBottom = onScrolledToBottom,
                 getUploadUri = getUploadUri,
                 draft = draft,
+                savedText = savedText,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
@@ -1093,15 +1097,4 @@ fun convertDigits(text: String, digits: CharArray): String {
 
 fun hash20(text: String): Int {
     return (text.hashCode() and Int.MAX_VALUE) % 19
-}
-
-fun hasStoragePermission(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        true
-    } else {
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
-    }
 }
