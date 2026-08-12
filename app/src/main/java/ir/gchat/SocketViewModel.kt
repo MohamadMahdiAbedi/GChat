@@ -1243,4 +1243,10 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    fun setSavedText(id: String, message: String) {
+        _savedText.update { current ->
+            current + (id to message)
+        }
+    }
 }

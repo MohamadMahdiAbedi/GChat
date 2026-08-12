@@ -185,6 +185,7 @@ fun ChatScreen(
     getUploadUri: (String, Long, String, Uri?) -> Unit,
     draft: Map<String, List<Draft>>,
     savedText: Map<String, String>,
+    setSavedText: (String, String) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     clearDraft: () -> Unit,
@@ -194,15 +195,16 @@ fun ChatScreen(
     isFileDownloaded: (String) -> Boolean
 ) {
     val context = LocalContext.current
+    var message by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
             getMessagesList(id)
+            message = savedText[id] ?: ""
         }
     }
 
     var isExpandedAttachment by remember { mutableStateOf(false) }
-    var message by rememberSaveable { mutableStateOf("") }
 
     val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
 
@@ -264,59 +266,59 @@ fun ChatScreen(
                 if (id != "") {
                     TopAppBar(
                         windowInsets = if (isLandscape) {
-                            WindowInsets.statusBars
-                        } else {
-                            TopAppBarDefaults.windowInsets
-                        }, title = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(bounded = false)
-                                    ) {
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    }, verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .aspectRatio(1f)
-                                        .clip(CircleShape),
-                                    shape = CircleShape,
-                                    color = backgroundColor
+                        WindowInsets.statusBars
+                    } else {
+                        TopAppBarDefaults.windowInsets
+                    }, title = {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = ripple(bounded = false)
                                 ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.profile_black_content),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        tint = iconColor.copy(alpha = 0.5f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = displayName, modifier = Modifier.weight(1f))
-                            }
-                        }, navigationIcon = {
-                            IconButton(
-                                onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    back()
-                                }) {
+                                }, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .aspectRatio(1f)
+                                    .clip(CircleShape),
+                                shape = CircleShape,
+                                color = backgroundColor
+                            ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    contentDescription = "Menu"
+                                    painter = painterResource(R.drawable.profile_black_content),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    tint = iconColor.copy(alpha = 0.5f)
                                 )
                             }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(text = displayName, modifier = Modifier.weight(1f))
+                        }
+                    }, navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                back()
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = "Menu"
+                            )
+                        }
+                    }, colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                    ), modifier = Modifier.shadow(
+                        elevation = 4.dp, shape = RectangleShape, clip = false
+                    )
                     )
                 }
             }) { innerPadding ->
@@ -464,7 +466,11 @@ fun ChatScreen(
                             }
                         }
                     }
-                    UploadList(showFileRow = showFileRow, draft = draft[id] ?: emptyList(), removeFileFromDraft)
+                    UploadList(
+                        showFileRow = showFileRow,
+                        draft = draft[id] ?: emptyList(),
+                        removeFileFromDraft
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -545,6 +551,7 @@ fun ChatScreen(
                                                     count: Int
                                                 ) {
                                                     message = s?.toString() ?: ""
+                                                    setSavedText(id, message)
                                                 }
 
                                                 override fun afterTextChanged(s: Editable?) {}
@@ -587,6 +594,7 @@ fun ChatScreen(
                                     }
                                     sendMessage(id, content)
                                     message = ""
+                                    setSavedText(id, "")
                                     clearDraft()
                                 } else {
                                     // شروع ضبط صوت
@@ -641,25 +649,25 @@ fun ChatScreen(
                         )
                         DropdownMenuItem(
                             text = { Text(text = "Files") }, onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                isExpandedAttachment = false
-                                launcher.launch("*/*")  // "image/*", "video/*"
-                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                                Icon(
-                                    painterResource(R.drawable.folder), contentDescription = null
-                                )
-                            }, trailingIcon = { }, enabled = true
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            isExpandedAttachment = false
+                            launcher.launch("*/*")  // "image/*", "video/*"
+                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.folder), contentDescription = null
+                            )
+                        }, trailingIcon = { }, enabled = true
                         )
                         DropdownMenuItem(
                             text = { Text(text = "Text Block") }, onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                isExpandedAttachment = false
-                            }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                                Icon(
-                                    painterResource(R.drawable.insert_text),
-                                    contentDescription = null
-                                )
-                            }, trailingIcon = { }, enabled = true
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            isExpandedAttachment = false
+                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.insert_text),
+                                contentDescription = null
+                            )
+                        }, trailingIcon = { }, enabled = true
                         )
                     }
                 }
@@ -907,8 +915,7 @@ fun Message(
                                                         if (!pending) {
                                                             val extension =
                                                                 contentEntity.fileName.substringAfterLast(
-                                                                    ".",
-                                                                    ""
+                                                                    ".", ""
                                                                 ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
@@ -944,25 +951,33 @@ fun Message(
                                                     "id=${contentEntity.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                 )
 
-                                                AsyncImage(
-                                                    model = thumbnailUrl,
-                                                    imageLoader = imageLoader,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.Crop,
-                                                    onLoading = {
-                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
-                                                    },
-                                                    onSuccess = {
-                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
-                                                    },
-                                                    onError = {
-                                                        Log.e(
-                                                            "THUMB",
-                                                            "ERROR: $thumbnailUrl",
-                                                            it.result.throwable
-                                                        )
-                                                    })
+                                                Box(modifier = Modifier.fillMaxSize()) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.draft),
+                                                        contentDescription = null,
+                                                       modifier = Modifier.padding(16.dp)
+                                                    )
+                                                    AsyncImage(
+                                                        model = thumbnailUrl,
+                                                        imageLoader = imageLoader,
+                                                        contentDescription = null,
+
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop,
+                                                        onLoading = {
+                                                            Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                                        },
+                                                        onSuccess = {
+                                                            Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                                        },
+                                                        onError = {
+                                                            Log.e(
+                                                                "THUMB",
+                                                                "ERROR: $thumbnailUrl",
+                                                                it.result.throwable
+                                                            )
+                                                        })
+                                                }
                                             }
 
                                             Spacer(Modifier.width(12.dp))
@@ -1099,8 +1114,7 @@ fun Message(
                                                         if (!pending) {
                                                             val extension =
                                                                 contentEntity.fileName.substringAfterLast(
-                                                                    ".",
-                                                                    ""
+                                                                    ".", ""
                                                                 ).takeIf { it.isNotEmpty() }
 
                                                             val downloadName =
@@ -1136,30 +1150,32 @@ fun Message(
                                                     "id=${contentEntity.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                 )
 
-                                                AsyncImage(
-                                                    model = thumbnailUrl,
-                                                    imageLoader = imageLoader,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.Crop,
-                                                    onLoading = {
-                                                        Log.d("THUMB", "LOADING: $thumbnailUrl")
-                                                    },
-                                                    onSuccess = {
-                                                        Log.d("THUMB", "SUCCESS: $thumbnailUrl")
-                                                    },
-                                                    onError = {
-                                                        Log.e(
-                                                            "THUMB",
-                                                            "ERROR: $thumbnailUrl",
-                                                            it.result.throwable
-                                                        )
-                                                    })
-                                                //Icon(
-                                                //    painter = painterResource(R.drawable.photo),
-                                                //    contentDescription = null,
-                                                //    modifier = Modifier.padding(12.dp)
-                                                //)
+                                                Box(modifier = Modifier.fillMaxSize()) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.draft),
+                                                        contentDescription = null,
+                                                       modifier = Modifier.padding(16.dp)
+                                                    )
+                                                    AsyncImage(
+                                                        model = thumbnailUrl,
+                                                        imageLoader = imageLoader,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop,
+                                                        onLoading = {
+                                                            Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                                        },
+                                                        onSuccess = {
+                                                            Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                                        },
+                                                        onError = {
+                                                            Log.e(
+                                                                "THUMB",
+                                                                "ERROR: $thumbnailUrl",
+                                                                it.result.throwable
+                                                            )
+                                                        })
+                                                }
                                             }
 
                                             Spacer(Modifier.width(12.dp))

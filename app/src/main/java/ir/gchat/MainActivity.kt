@@ -185,6 +185,7 @@ class MainActivity : ComponentActivity() {
                             },
                             draft = socketViewModel.drafts.collectAsState().value,
                             savedText = socketViewModel.savedText.collectAsState().value,
+                            setSavedText = { id, message -> socketViewModel.setSavedText(id, message) },
                             downloadFile = { fileId, fileName, fileSize, setProgress, setPending, setDownloadedBytes ->
                                 socketViewModel.downloadFile(
                                     fileId,
@@ -340,6 +341,7 @@ fun MainNavigation(
     getUploadUri: (String, Long, String, Uri?) -> Unit,
     draft: Map<String, List<Draft>>,
     savedText: Map<String, String>,
+    setSavedText: (String, String) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,
@@ -536,6 +538,7 @@ fun MainNavigation(
                 getUploadUri = getUploadUri,
                 draft = draft,
                 savedText = savedText,
+                setSavedText = setSavedText,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
@@ -595,6 +598,7 @@ fun MainNavigation(
                 getUploadUri = getUploadUri,
                 draft = draft,
                 savedText = savedText,
+                setSavedText = setSavedText,
                 downloadFile = downloadFile,
                 removeFileFromDraft = removeFileFromDraft,
                 clearDraft = clearDraft,
