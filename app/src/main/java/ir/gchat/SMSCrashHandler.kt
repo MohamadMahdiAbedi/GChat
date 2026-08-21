@@ -7,25 +7,25 @@ import android.content.Intent
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // TODO
+
     }
 }
 
 class MmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // TODO
+
     }
 }
 
 class SmsSentReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // TODO
+
     }
 }
 
 class SmsDeliveredReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // TODO
+
     }
 }
 

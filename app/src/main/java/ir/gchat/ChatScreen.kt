@@ -1,13 +1,18 @@
 package ir.gchat
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.KeyEvent
 import android.view.SoundEffectConstants
 import android.widget.EditText
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +22,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +44,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -49,6 +58,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,15 +67,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -74,19 +87,23 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
@@ -96,8 +113,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import coil.ImageLoader
 import coil.compose.AsyncImage
@@ -126,6 +145,26 @@ fun formatFileSize(bytes: Long): String {
         "${size.toInt()} ${units[unitIndex]}"
     } else {
         "%.1f %s".format(size, units[unitIndex])
+    }
+}
+
+fun isAudioFile(file: File): Boolean {
+    if (!file.exists() || !file.isFile) return false
+
+    val retriever = MediaMetadataRetriever()
+
+    return try {
+        retriever.setDataSource(file.absolutePath)
+
+        val mimeType = retriever.extractMetadata(
+            MediaMetadataRetriever.METADATA_KEY_MIMETYPE
+        )
+
+        mimeType?.startsWith("audio/", ignoreCase = true) == true
+    } catch (e: Exception) {
+        false
+    } finally {
+        retriever.release()
     }
 }
 
@@ -188,11 +227,18 @@ fun ChatScreen(
     setSavedText: (String, String) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
+    removeTextFromDraft: (Int) -> Unit,
     clearDraft: () -> Unit,
     seenAll: (String) -> Unit,
     serverUrl: String,
     imageLoader: ImageLoader,
-    isFileDownloaded: (String) -> Boolean
+    isFileDownloaded: (String) -> Boolean,
+    attachTextBlock: (String) -> Unit,
+    sendWith: SendMessageWith,
+    editTextInDraft: (Int, String) -> Unit,
+    deleteMessage: (Int) -> Unit,
+    playing: java.io.File?,
+    playSet: (java.io.File?) -> Unit,
 ) {
     val context = LocalContext.current
     var message by rememberSaveable { mutableStateOf("") }
@@ -206,17 +252,9 @@ fun ChatScreen(
 
     var isExpandedAttachment by remember { mutableStateOf(false) }
 
-    val colorSaver = Saver<Color, Int>(save = { it.toArgb() }, restore = { Color(it) })
-
-    var coverColor by rememberSaveable(
-        stateSaver = colorSaver
-    ) { mutableStateOf(Color.Transparent) }
-
-    var covered by rememberSaveable { mutableStateOf(false) }
-
     val view = LocalView.current
 
-    val backgroundColor = materialColors[hash20(id)]
+    val backgroundColor = materialPalette[hash19(id)].primary
     val iconColor = if (backgroundColor.luminance() >= 0.5f) {
         Color.Black
     } else {
@@ -248,6 +286,51 @@ fun ChatScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+
+    var showSheet by remember { mutableStateOf(false) }
+    var showEditSheet by remember { mutableStateOf(false) }
+    var editingId by remember { mutableIntStateOf(0) }
+    var text by remember { mutableStateOf("") }
+
+    var recording by remember { mutableStateOf(false) }
+    var locked by remember { mutableStateOf(false) }
+    var distance by remember { mutableStateOf(Offset(0.dp.value, 0.dp.value)) }
+
+    var recordingState by remember {
+        mutableStateOf(false)
+    }
+    val recorder = remember {
+        AudioRecorder(context)
+    }
+    val recordingStatePP by recorder.state.collectAsState()
+
+    var hasRecordPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasRecordPermission = granted
+    }
+
+    var messageMenu by remember { mutableStateOf(false) }
+    var messageMenuId by remember { mutableIntStateOf(0) }
+    var messageMenuOffset by remember {
+        mutableStateOf(DpOffset(0.dp, 0.dp))
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -266,59 +349,59 @@ fun ChatScreen(
                 if (id != "") {
                     TopAppBar(
                         windowInsets = if (isLandscape) {
-                        WindowInsets.statusBars
-                    } else {
-                        TopAppBarDefaults.windowInsets
-                    }, title = {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(bounded = false)
-                                ) {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }, verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
+                            WindowInsets.statusBars
+                        } else {
+                            TopAppBarDefaults.windowInsets
+                        }, title = {
+                            Row(
                                 modifier = Modifier
-                                    .height(48.dp)
-                                    .aspectRatio(1f)
-                                    .clip(CircleShape),
-                                shape = CircleShape,
-                                color = backgroundColor
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false)
+                                    ) {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    }, verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .aspectRatio(1f)
+                                        .clip(CircleShape),
+                                    shape = CircleShape,
+                                    color = backgroundColor
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.profile_black_content),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = iconColor.copy(alpha = 0.5f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = displayName, modifier = Modifier.weight(1f))
+                            }
+                        }, navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    back()
+                                }) {
                                 Icon(
-                                    painter = painterResource(R.drawable.profile_black_content),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    tint = iconColor.copy(alpha = 0.5f)
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    contentDescription = "Menu"
                                 )
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = displayName, modifier = Modifier.weight(1f))
-                        }
-                    }, navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                back()
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_back),
-                                contentDescription = "Menu"
-                            )
-                        }
-                    }, colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                    ), modifier = Modifier.shadow(
-                        elevation = 4.dp, shape = RectangleShape, clip = false
-                    )
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
                     )
                 }
             }) { innerPadding ->
@@ -386,7 +469,26 @@ fun ChatScreen(
                         Modifier.weight(1f)
                     }
 
-                    Box(modifier = modifier) {
+                    Box(
+                        modifier = modifier.pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(
+                                    requireUnconsumed = false, pass = PointerEventPass.Initial
+                                )
+
+                                val up = waitForUpOrCancellation(
+                                    pass = PointerEventPass.Initial
+                                )
+
+                                if (up != null) {
+                                    messageMenuOffset = (DpOffset(
+                                        x = up.position.x.toDp(), y = up.position.y.toDp()
+                                    ))
+
+                                    println("TAP: $messageMenuOffset")
+                                }
+                            }
+                        }) {
                         LazyColumn(
                             state = listState, contentPadding = PaddingValues(
                                 top = 8.dp, bottom = if (showFileRow) 56.dp else 0.dp
@@ -408,7 +510,13 @@ fun ChatScreen(
                                     downloadFile = downloadFile,
                                     imageLoader = imageLoader,
                                     serverUrl = serverUrl,
-                                    isFileDownloaded = isFileDownloaded
+                                    isFileDownloaded = isFileDownloaded,
+                                    openMenu = {
+                                        messageMenu = true
+                                        messageMenuId = item.id
+                                    },
+                                    playing = playing,
+                                    playSet = playSet
                                 )
                             }
 
@@ -469,8 +577,17 @@ fun ChatScreen(
                     UploadList(
                         showFileRow = showFileRow,
                         draft = draft[id] ?: emptyList(),
-                        removeFileFromDraft
-                    )
+                        removeFileFromDraft = removeFileFromDraft,
+                        removeTextFromDraft = removeTextFromDraft,
+                        openText = { textId ->
+                            val thisDraft = draft[id]!![textId]
+
+                            if (thisDraft is Draft.Text) {
+                                text = thisDraft.text
+                                editingId = thisDraft.id
+                                showEditSheet = true
+                            }
+                        })
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -531,9 +648,87 @@ fun ChatScreen(
 
                                             hint = "Message..."
                                             setHintTextColor(Color.Gray.toArgb())
-                                            //savedText
 
                                             setTextColor(onSurface.toArgb())
+
+                                            setOnKeyListener { _, keyCode, event ->
+
+                                                if (keyCode != KeyEvent.KEYCODE_ENTER || event.action != KeyEvent.ACTION_DOWN) {
+                                                    return@setOnKeyListener false
+                                                }
+
+                                                val shift = event.isShiftPressed
+                                                val ctrl = event.isCtrlPressed
+                                                val alt = event.isAltPressed
+
+                                                val send = when {
+                                                    !shift && !ctrl && !alt -> sendWith.enter
+                                                    shift && !ctrl && !alt -> sendWith.shiftEnter
+                                                    !shift && ctrl && !alt -> sendWith.ctrlEnter
+                                                    !shift && !ctrl && alt -> sendWith.altEnter
+                                                    else -> false
+                                                }
+
+                                                Log.d(
+                                                    "KEY_EVENT",
+                                                    "ENTER | shift=$shift | ctrl=$ctrl | alt=$alt | send=$send"
+                                                )
+
+                                                if (!send) {
+                                                    return@setOnKeyListener false
+                                                }
+
+                                                view.playSoundEffect(SoundEffectConstants.CLICK)
+
+                                                if (message.isNotBlank() || showFileRow) {
+
+                                                    message =
+                                                        message.replace(Regex("\\n+$"), "").trim()
+
+                                                    scope.launch {
+                                                        animate = true
+                                                        delay(1000.milliseconds)
+                                                        animate = false
+                                                    }
+
+                                                    val content = mutableListOf<Content>()
+
+                                                    draft[id].orEmpty().forEach { item ->
+                                                        content += when (item) {
+                                                            is Draft.File -> Content.File(
+                                                                id = item.id,
+                                                                fileSize = item.size,
+                                                                fileName = item.name
+                                                            )
+
+                                                            is Draft.Text -> Content.Text(
+                                                                text = item.text
+                                                            )
+                                                        }
+                                                    }
+
+                                                    if (message.isNotBlank()) {
+                                                        content += Content.Text(text = message)
+                                                    }
+
+                                                    Log.d(
+                                                        "KEY_EVENT",
+                                                        "SEND | textLength=${message.length} | " + "draftItems=${draft[id].orEmpty().size} | " + "contentItems=${content.size}"
+                                                    )
+
+                                                    sendMessage(id, content)
+
+                                                    message = ""
+                                                    setSavedText(id, "")
+                                                    clearDraft()
+
+                                                } else {
+                                                    Log.d("KEY_EVENT", "SEND CANCELLED")
+                                                }
+
+                                                true
+                                            }
+
                                             addTextChangedListener(object : TextWatcher {
 
                                                 override fun beforeTextChanged(
@@ -566,10 +761,11 @@ fun ChatScreen(
                                     })
                             }
                         }
-                        IconButton(
-                            onClick = {
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                if (message.isNotBlank() || showFileRow) {
+                        if (message.isNotBlank() || showFileRow) {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+
                                     message = message.replace(Regex("\\n+$"), "").trim()
                                     scope.launch {
                                         animate = true
@@ -578,12 +774,20 @@ fun ChatScreen(
                                     }
                                     val content = mutableListOf<Content>()
                                     draft[id].orEmpty().forEach { item ->
-                                        if (item is Draft.File) {
-                                            content += Content.File(
-                                                id = item.id,
-                                                fileSize = item.size,
-                                                fileName = item.name
-                                            )
+                                        content += when (item) {
+                                            is Draft.File -> {
+                                                Content.File(
+                                                    id = item.id,
+                                                    fileSize = item.size,
+                                                    fileName = item.name
+                                                )
+                                            }
+
+                                            is Draft.Text -> {
+                                                Content.Text(
+                                                    text = item.text
+                                                )
+                                            }
                                         }
                                     }
                                     if (message.isNotBlank()) {
@@ -596,20 +800,146 @@ fun ChatScreen(
                                     message = ""
                                     setSavedText(id, "")
                                     clearDraft()
-                                } else {
-                                    // شروع ضبط صوت
-                                }
-                            }, modifier = Modifier
-                                .padding(8.dp)
-                                .size(48.dp)
-                        ) {
-                            Icon(
-                                painter = if (message.isNotBlank() || showFileRow) painterResource(R.drawable.send) else painterResource(
-                                    R.drawable.mic
-                                ),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
+
+                                }, modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(48.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.send),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        } else {
+                            Box(
+                                Modifier
+                                    .padding(8.dp)
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .pointerInput(hasRecordPermission) {
+
+                                        awaitEachGesture {
+
+                                            val down = awaitFirstDown()
+
+                                            // Permission نداریم
+                                            if (!hasRecordPermission) {
+                                                permissionLauncher.launch(
+                                                    Manifest.permission.RECORD_AUDIO
+                                                )
+                                                return@awaitEachGesture
+                                            }
+
+                                            if (!recordingState) {
+
+                                                recorder.start()
+                                                recordingState = true
+
+                                                view.playSoundEffect(
+                                                    SoundEffectConstants.CLICK
+                                                )
+                                            }
+
+                                            val threshold = 168.dp.toPx()
+
+                                            var cancelled = false
+                                            var gestureLocked = false
+
+                                            recording = true
+                                            locked = false
+
+                                            while (true) {
+
+                                                val event = awaitPointerEvent()
+
+                                                val change =
+                                                    event.changes.firstOrNull { it.id == down.id }
+                                                        ?: break
+
+                                                if (!change.pressed) {
+
+                                                    if (cancelled) {
+
+                                                        recording = false
+
+                                                        if (recordingState) {
+                                                            recorder.cancel()
+                                                            recordingState = false
+                                                        }
+
+                                                        distance = Offset.Zero
+
+                                                    } else if (!gestureLocked) {
+
+                                                        if (recordingState) {
+
+                                                            val recordedFile = recorder.stop()
+
+                                                            recordedFile?.let { file ->
+                                                                val fileUri = Uri.fromFile(file)
+                                                                val fileName = file.name
+                                                                val fileSize = file.length()
+                                                                val fileHash =
+                                                                    calculateFileHash(file)
+
+                                                                getUploadUri(
+                                                                    fileName,
+                                                                    fileSize,
+                                                                    fileHash,
+                                                                    fileUri
+                                                                )
+                                                            }
+
+                                                            recording = false
+                                                            recordingState = false
+                                                        }
+
+                                                        recording = false
+                                                    }
+
+                                                    break
+                                                }
+
+                                                distance = change.position - down.position
+
+                                                // لغو با کشیدن به چپ
+                                                if (!cancelled && !gestureLocked && distance.x < -threshold) {
+
+                                                    cancelled = true
+                                                    recording = false
+
+                                                    view.playSoundEffect(
+                                                        SoundEffectConstants.CLICK
+                                                    )
+
+                                                    distance = Offset.Zero
+                                                }
+
+                                                // Lock با کشیدن به بالا
+                                                if (!cancelled && !gestureLocked && distance.y < -threshold) {
+
+                                                    gestureLocked = true
+                                                    locked = true
+
+                                                    view.playSoundEffect(
+                                                        SoundEffectConstants.CLICK
+                                                    )
+
+                                                    distance = Offset.Zero
+                                                }
+
+                                                change.consume()
+                                            }
+                                        }
+                                    }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.mic),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+                            }
                         }
                     }
                 }
@@ -622,92 +952,747 @@ fun ChatScreen(
                         .background(MaterialTheme.colorScheme.primary)
                         .align(Alignment.BottomCenter)
                 )
+            }
+        }
 
-                AnimatedMenu(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
-                        .imePadding(),
-                    width = 224.dp,
-                    height = 112.dp,
-                    chord = 250.dp,
-                    isExpanded = isExpandedAttachment,
-                    close = { isExpandedAttachment = false },
-                    ratioX = 0f,
-                    ratioY = 1f,
-                    position = Alignment.BottomStart,
-                    hasBackgroundCover = true,
-                    whatIsMyBackgroundFilterColor = { color, show ->
-                        covered = show
-                        coverColor = color
-                    }) {
-                    Column {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "Files") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            isExpandedAttachment = false
-                            launcher.launch("*/*")  // "image/*", "video/*"
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.folder), contentDescription = null
+        AnimatedMenuBad(
+            modifier = Modifier
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding(),
+            width = 192.dp,
+            height = 192.dp,
+            chord = 192.dp,
+            isExpanded = recording,
+            close = { recording = false },
+            ratioX = 1f,
+            offsetX = 24.dp,
+            ratioY = 1f,
+            offsetY = 24.dp,
+            position = Alignment.BottomEnd,
+            shadowShape = Quadrant2CircleShape(cornerRadius = 2.dp),
+            extruderContent = {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                ) {
+                    WobblyRecordingCircle(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(24.dp, 24.dp)
+                            .offset(
+                                y = -WindowInsets.navigationBars.asPaddingValues()
+                                    .calculateBottomPadding()
                             )
-                        }, trailingIcon = { }, enabled = true
-                        )
-                        DropdownMenuItem(
-                            text = { Text(text = "Text Block") }, onClick = {
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            isExpandedAttachment = false
-                        }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.insert_text),
-                                contentDescription = null
+                            .size(96.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    )
+                    WobblyRecordingCircle(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(8.dp, 8.dp)
+                            .offset(
+                                y = -WindowInsets.navigationBars.asPaddingValues()
+                                    .calculateBottomPadding()
                             )
-                        }, trailingIcon = { }, enabled = true
+                            .size(64.dp)
+                            .rotate(90f), color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Transparent,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(
+                                y = -WindowInsets.navigationBars.asPaddingValues()
+                                    .calculateBottomPadding()
+                            )
+                            .size(48.dp),
+                        onClick = {
+                            val recordedFile = recorder.stop()
+                            recordedFile?.let { file ->
+                                val fileUri = Uri.fromFile(file)
+                                val fileName = file.name
+                                val fileSize = file.length()
+                                val fileHash = calculateFileHash(file)
+
+                                getUploadUri(
+                                    fileName, fileSize, fileHash, fileUri
+                                )
+                            }
+
+                            recording = false
+                            recordingState = false
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.stop_circle),
+                            contentDescription = "Stop recording",
+                            modifier = Modifier.padding(6.dp),
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
+                    }
+                }
+            }) {
+            if (!locked) {
+                Box(Modifier.fillMaxSize()) {
+                    Icon(
+                        painterResource(R.drawable.close),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp),
+                        tint = lerp(
+                            MaterialTheme.colorScheme.onSurface,
+                            MaterialTheme.colorScheme.error,
+                            (-distance.x / 192f).coerceIn(0f, 1f)
+                        )
+                    )
+                    Icon(
+                        painterResource(R.drawable.keyboard_double_arrow_left),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp)
+                            .padding(start = 64.dp) // 24 - 84
+                        , tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Icon(
+                        painterResource(R.drawable.lock),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp),
+                        tint = lerp(
+                            MaterialTheme.colorScheme.onSurface,
+                            MaterialTheme.colorScheme.primary,
+                            (-distance.y / 192f).coerceIn(0f, 1f)
+                        )
+                    )
+                    Icon(
+                        painterResource(R.drawable.keyboard_double_arrow_up),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .padding(top = 64.dp) // 24 - 84
+                        , tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            } else {
+                Box(Modifier.fillMaxSize()) {
+                    Button(
+                        onClick = {
+                            recording = false
+
+                            if (recordingState) {
+                                recorder.cancel()
+                                recordingState = false
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .offset(x = (-12).dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.close), contentDescription = null
+                        )
+                        Text(
+                            text = "Cancel"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            when (recordingStatePP) {
+                                AudioRecorder.RecordingState.RECORDING -> {
+                                    recorder.pause()
+                                }
+
+                                AudioRecorder.RecordingState.PAUSED -> {
+                                    recorder.resume()
+                                }
+
+                                AudioRecorder.RecordingState.IDLE -> {
+                                    // کاری نکن
+                                }
+                            }
+                        }, modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        when (recordingStatePP) {
+                            AudioRecorder.RecordingState.RECORDING -> {
+                                Icon(
+                                    painter = painterResource(R.drawable.pause_circle),
+                                    contentDescription = "Pause",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            AudioRecorder.RecordingState.PAUSED -> {
+                                Icon(
+                                    painter = painterResource(R.drawable.play_circle),
+                                    contentDescription = "Resume",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            AudioRecorder.RecordingState.IDLE -> {
+                                // چیزی نمایش نده
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if (covered) {
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(
-                        64.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                    )
-                    .background(coverColor)
-                    .align(Alignment.TopCenter)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
+        AnimatedMenu(
+            modifier = Modifier
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding(),
+            width = 224.dp,
+            height = 112.dp,
+            chord = 250.dp,
+            isExpanded = isExpandedAttachment,
+            close = { isExpandedAttachment = false },
+            ratioY = 1f,
+            offsetX = (-24).dp,
+            offsetY = 24.dp,
+            position = Alignment.BottomStart
+        ) {
+            Column {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "Files") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
                         isExpandedAttachment = false
-                    })
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(
-                        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                    )
-                    .background(coverColor)
-                    .align(Alignment.BottomCenter)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
+                        launcher.launch("*/*")  // "image/*", "video/*"
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.folder), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+                DropdownMenuItem(
+                    text = { Text(text = "Text Block") }, onClick = {
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        showSheet = true
                         isExpandedAttachment = false
-                    })
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.insert_text),
+                            contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
+                )
+            }
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val menuWidth = 240.dp
+            val menuHeight = 320.dp
+            val menuChord = 400.dp
+
+            val x = messageMenuOffset.x - menuWidth / 2
+            val y = messageMenuOffset.y - menuHeight / 2
+
+//            val menuX = x
+//                .coerceIn(
+//                    0.dp,
+//                    maxWidth - menuWidth - 16.dp
+//                )
+//
+//            val menuY = y
+//                .coerceIn(
+//                    0.dp,
+//                    maxHeight - menuHeight - 16.dp
+//                )
+
+            val maxX = (maxWidth - menuWidth - 16.dp).coerceAtLeast(0.dp)
+            val maxY = (maxHeight - menuHeight - 16.dp).coerceAtLeast(0.dp)
+
+            val menuX = x.coerceIn(0.dp, maxX)
+            val menuY = y.coerceIn(0.dp, maxY)
+
+            AnimatedMenu(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(
+                        start = menuX,
+                        top = menuY
+                    ),
+                width = menuWidth,
+                height = menuHeight,
+                chord = menuChord,
+                isExpanded = messageMenu,
+                close = { messageMenu = false },
+                // میتونیم اینجا هم coreIn بزاریم که قشنگ‌تر بشه و همیشه از لبه شروع نکنه
+                offsetX = -(messageMenuOffset.x - menuX + 8.dp) + 24.dp,
+                offsetY = -(messageMenuOffset.y - menuY + 8.dp + 64.dp) + 24.dp,
+                position = Alignment.TopStart
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Reply") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.reply),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Copy") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.content_copy),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Forward") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.forward),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.edit),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Save") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.bookmark),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Pin") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.keep),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Translate") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.translate),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Select") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.check_box),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.share),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Report") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.report),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            deleteMessage(messageMenuId)
+                            messageMenu = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                    )
+                }
+            }
+        }
+
+        val scope = rememberCoroutineScope()
+
+        if (showSheet) {
+            LaunchedEffect(Unit) {
+                sheetState.show()
+            }
+
+            ModalBottomSheet(
+                shape = RoundedCornerShape(2.dp),
+                onDismissRequest = {
+                    scope.launch {
+                        sheetState.hide()
+                        showSheet = false
+                    }
+                },
+                sheetState = sheetState,
+                dragHandle = {},
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                sheetGesturesEnabled = false
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Text Block",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                if (text.isNotBlank()) {
+                                    scope.launch {
+                                        sheetState.hide()
+                                        showSheet = false
+                                        attachTextBlock(text)
+                                        text = ""
+                                    }
+                                }
+                            }, enabled = text.isNotBlank()
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.check),
+                                contentDescription = null
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    sheetState.hide()
+                                    showSheet = false
+                                    text = ""
+                                }
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = null
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(
+                                top = 8.dp, bottom = 10.dp
+                            )
+                            .shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            val onSurface = MaterialTheme.colorScheme.onSurface
+
+                            AndroidView(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+
+                                factory = { context ->
+                                    EditText(context).apply {
+                                        background = null
+
+                                        maxLines = 5
+
+                                        hint = "Text..."
+
+                                        setHintTextColor(
+                                            android.graphics.Color.GRAY
+                                        )
+
+                                        setTextColor(
+                                            onSurface.toArgb()
+                                        )
+
+                                        addTextChangedListener(object : TextWatcher {
+
+                                            override fun beforeTextChanged(
+                                                s: CharSequence?, start: Int, count: Int, after: Int
+                                            ) = Unit
+
+                                            override fun onTextChanged(
+                                                s: CharSequence?,
+                                                start: Int,
+                                                before: Int,
+                                                count: Int
+                                            ) {
+                                                text = s?.toString() ?: ""
+                                            }
+
+                                            override fun afterTextChanged(
+                                                s: Editable?
+                                            ) = Unit
+                                        })
+                                    }
+                                },
+
+                                update = { editText ->
+                                    if (editText.text.toString() != text) {
+                                        editText.setText(text)
+                                        editText.setSelection(text.length)
+                                    }
+                                })
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showEditSheet) {
+            LaunchedEffect(Unit) {
+                sheetState.show()
+            }
+
+            ModalBottomSheet(
+                shape = RoundedCornerShape(2.dp),
+                onDismissRequest = {
+                    scope.launch {
+                        sheetState.hide()
+                        showEditSheet = false
+                    }
+                },
+                sheetState = sheetState,
+                dragHandle = {},
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                sheetGesturesEnabled = false
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Edit Text Block",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                if (text.isNotBlank()) {
+                                    scope.launch {
+                                        sheetState.hide()
+                                        showEditSheet = false
+                                        editTextInDraft(editingId, text)
+                                        text = ""
+                                        editingId = 0
+                                    }
+                                }
+                            }, enabled = text.isNotBlank()
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.check),
+                                contentDescription = null
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    sheetState.hide()
+                                    showEditSheet = false
+                                    text = ""
+                                    editingId = 0
+                                }
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = null
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(
+                                top = 8.dp, bottom = 10.dp
+                            )
+                            .shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
+                            .background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            val onSurface = MaterialTheme.colorScheme.onSurface
+
+                            AndroidView(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp),
+
+                                factory = { context ->
+                                    EditText(context).apply {
+                                        background = null
+
+                                        maxLines = 5
+
+                                        hint = "Text..."
+
+                                        setHintTextColor(
+                                            android.graphics.Color.GRAY
+                                        )
+
+                                        setTextColor(onSurface.toArgb())
+
+                                        addTextChangedListener(object : TextWatcher {
+
+                                            override fun beforeTextChanged(
+                                                s: CharSequence?, start: Int, count: Int, after: Int
+                                            ) = Unit
+
+                                            override fun onTextChanged(
+                                                s: CharSequence?,
+                                                start: Int,
+                                                before: Int,
+                                                count: Int
+                                            ) {
+                                                text = s?.toString() ?: ""
+                                            }
+
+                                            override fun afterTextChanged(
+                                                s: Editable?
+                                            ) = Unit
+                                        })
+                                    }
+                                },
+
+                                update = { editText ->
+                                    if (editText.text.toString() != text) {
+                                        editText.setText(text)
+                                        editText.setSelection(text.length)
+                                    }
+                                })
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 fun UploadList(
-    showFileRow: Boolean, draft: List<Draft>, removeFileFromDraft: (String) -> Unit
+    showFileRow: Boolean,
+    draft: List<Draft>,
+    removeFileFromDraft: (String) -> Unit,
+    removeTextFromDraft: (Int) -> Unit,
+    openText: (Int) -> Unit,
 ) {
     val view = LocalView.current
     if (showFileRow && draft.isNotEmpty()) {
@@ -721,8 +1706,8 @@ fun UploadList(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            draft.forEach { file ->
-                if (file is Draft.File) {
+            draft.forEach { draftItem ->
+                if (draftItem is Draft.File) {
                     Row(
                         modifier = Modifier
                             .widthIn(max = 192.dp)
@@ -739,9 +1724,9 @@ fun UploadList(
                             modifier = Modifier
                                 .padding(horizontal = 8.dp)
                                 .size(32.dp),
-                            progress = { file.progress })
+                            progress = { draftItem.progress })
                         Text(
-                            text = file.name,
+                            text = draftItem.name,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -749,7 +1734,45 @@ fun UploadList(
                         IconButton(
                             onClick = {
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                removeFileFromDraft(file.name)
+                                removeFileFromDraft(draftItem.name)
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = null
+                            )
+                        }
+                    }
+                } else if (draftItem is Draft.Text) {
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 192.dp)
+                            .height(48.dp)
+                            .shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            )
+                            .background(
+                                shape = RoundedCornerShape(2.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            )
+                            .clickable {
+                                openText(draftItem.id)
+                            }, verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            painter = painterResource(R.drawable.insert_text),
+                            contentDescription = null
+                        )
+                        Text(
+                            text = draftItem.text.replace("\n", " "),
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        IconButton(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                removeTextFromDraft(draftItem.id)
                             }) {
                             Icon(
                                 painter = painterResource(R.drawable.close),
@@ -773,10 +1796,20 @@ fun Message(
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     imageLoader: ImageLoader,
     serverUrl: String,
-    isFileDownloaded: (String) -> Boolean
+    isFileDownloaded: (String) -> Boolean,
+    openMenu: () -> Unit,
+    playing: java.io.File?,
+    playSet: (java.io.File?) -> Unit
 ) {
     Box(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                openMenu()
+            }
     ) {
         var lineCount by remember(content) { mutableIntStateOf(0) }
         val formatMessageTime = formatMessageTime(timestamp)
@@ -846,7 +1879,7 @@ fun Message(
                                         }
                                         Row(
                                             modifier = Modifier
-                                                .fillMaxWidth()
+                                                //.fillMaxWidth()
                                                 .height(72.dp)
                                                 .background(
                                                     brush = if (!showProgress) {
@@ -866,10 +1899,19 @@ fun Message(
                                                 )
                                                 .clickable {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(
-                                                            context = context,
-                                                            fileName = downloadName
+                                                        val file = File(
+                                                            context.filesDir,
+                                                            "downloads/$downloadName"
                                                         )
+
+                                                        if (isAudioFile(file)) {
+                                                            playSet(file)
+                                                        } else {
+                                                            openDownloadedFile(
+                                                                context = context,
+                                                                fileName = downloadName
+                                                            )
+                                                        }
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
@@ -907,10 +1949,19 @@ fun Message(
                                                 shape = CircleShape,
                                                 onClick = {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(
-                                                            context = context,
-                                                            fileName = downloadName
+                                                        val file = File(
+                                                            context.filesDir,
+                                                            "downloads/$downloadName"
                                                         )
+
+                                                        if (isAudioFile(file)) {
+                                                            playSet(file)
+                                                        } else {
+                                                            openDownloadedFile(
+                                                                context = context,
+                                                                fileName = downloadName
+                                                            )
+                                                        }
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
@@ -955,13 +2006,12 @@ fun Message(
                                                     Icon(
                                                         painter = painterResource(R.drawable.draft),
                                                         contentDescription = null,
-                                                       modifier = Modifier.padding(16.dp)
+                                                        modifier = Modifier.padding(16.dp)
                                                     )
                                                     AsyncImage(
                                                         model = thumbnailUrl,
                                                         imageLoader = imageLoader,
                                                         contentDescription = null,
-
                                                         modifier = Modifier.fillMaxSize(),
                                                         contentScale = ContentScale.Crop,
                                                         onLoading = {
@@ -982,24 +2032,27 @@ fun Message(
 
                                             Spacer(Modifier.width(12.dp))
 
-                                            Column {
+                                            Column(
+                                                //modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
                                                 Text(
                                                     text = contentEntity.fileName,
-                                                    modifier = Modifier.weight(1f),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
+
                                                 Text(
-                                                    text = if (downloadProgress == 0f || downloadProgress == 1f) {
-                                                        ""
-                                                    } else {
-                                                        formatFileSize(downloaded) + " / "
-                                                    } + formatFileSize(
-                                                        contentEntity.fileSize
-                                                    ),
-                                                    modifier = Modifier.weight(1f),
+                                                    text = buildString {
+                                                        if (downloadProgress != 0f && downloadProgress != 1f) {
+                                                            append(formatFileSize(downloaded))
+                                                            append(" / ")
+                                                        }
+                                                        append(formatFileSize(contentEntity.fileSize))
+                                                    },
                                                     maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodySmall
                                                 )
                                             }
                                         }
@@ -1065,10 +2118,19 @@ fun Message(
                                                 )
                                                 .clickable {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(
-                                                            context = context,
-                                                            fileName = downloadName
+                                                        val file = File(
+                                                            context.filesDir,
+                                                            "downloads/$downloadName"
                                                         )
+
+                                                        if (isAudioFile(file)) {
+                                                            playSet(file)
+                                                        } else {
+                                                            openDownloadedFile(
+                                                                context = context,
+                                                                fileName = downloadName
+                                                            )
+                                                        }
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
@@ -1106,10 +2168,19 @@ fun Message(
                                                 shape = CircleShape,
                                                 onClick = {
                                                     if (isFileDownloaded(downloadName)) {
-                                                        openDownloadedFile(
-                                                            context = context,
-                                                            fileName = downloadName
+                                                        val file = File(
+                                                            context.filesDir,
+                                                            "downloads/$downloadName"
                                                         )
+
+                                                        if (isAudioFile(file)) {
+                                                            playSet(file)
+                                                        } else {
+                                                            openDownloadedFile(
+                                                                context = context,
+                                                                fileName = downloadName
+                                                            )
+                                                        }
                                                     } else {
                                                         if (!pending) {
                                                             val extension =
@@ -1154,7 +2225,7 @@ fun Message(
                                                     Icon(
                                                         painter = painterResource(R.drawable.draft),
                                                         contentDescription = null,
-                                                       modifier = Modifier.padding(16.dp)
+                                                        modifier = Modifier.padding(16.dp)
                                                     )
                                                     AsyncImage(
                                                         model = thumbnailUrl,
@@ -1180,24 +2251,27 @@ fun Message(
 
                                             Spacer(Modifier.width(12.dp))
 
-                                            Column {
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
                                                 Text(
                                                     text = contentEntity.fileName,
-                                                    modifier = Modifier.weight(1f),
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
+
                                                 Text(
-                                                    text = if (downloadProgress == 0f || downloadProgress == 1f) {
-                                                        ""
-                                                    } else {
-                                                        formatFileSize(downloaded) + " / "
-                                                    } + formatFileSize(
-                                                        contentEntity.fileSize
-                                                    ),
-                                                    modifier = Modifier.weight(1f),
+                                                    text = buildString {
+                                                        if (downloadProgress != 0f && downloadProgress != 1f) {
+                                                            append(formatFileSize(downloaded))
+                                                            append(" / ")
+                                                        }
+                                                        append(formatFileSize(contentEntity.fileSize))
+                                                    },
                                                     maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodySmall
                                                 )
                                             }
                                         }

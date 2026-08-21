@@ -3,6 +3,8 @@ package ir.gchat
 import android.app.Application
 import android.content.Intent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -26,16 +28,73 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
+    private val _sendWith = MutableStateFlow(SendMessageWith())
+    val sendWith: StateFlow<SendMessageWith> = _sendWith.asStateFlow()
+
+    private val _useDynamicColor = MutableStateFlow(false)
+    val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
+
     init {
         viewModelScope.launch {
-            _theme.value = context.dataStore.data.map { it[THEME_KEY] ?: 0 }.first()
-            _palette.value = context.dataStore.data.map { it[PALETTE_KEY] ?: 19 }.first()
+            val preferences = context.dataStore.data.first()
+
+            _theme.value = preferences[THEME_KEY] ?: 0
+            _useDynamicColor.value = preferences[USE_DYNAMIC_COLOR] ?: false
+            _palette.value = preferences[PALETTE_KEY] ?: 19
+
+            preferences[CUSTOM_PRIMARY_COLOR_KEY]?.let { argb ->
+                val color = Color(argb)
+
+                materialPalette[19] = Palette(
+                    primary = color,
+                    onPrimary = if (color.luminance() >= 0.5f) {
+                        Color.Black
+                    } else {
+                        Color.White
+                    }
+                )
+            }
+
             _ready.value = true
+
+            val enter = preferences[SEND_WITH_ENTER] ?: false
+            val shiftEnter = preferences[SEND_WITH_SHIFT] ?: false
+            val ctrlEnter = preferences[SEND_WITH_CTRL] ?: false
+            val altEnter = preferences[SEND_WITH_ALT] ?: false
+
+            _sendWith.value = SendMessageWith(
+                enter = enter,
+                shiftEnter = shiftEnter,
+                ctrlEnter = ctrlEnter,
+                altEnter = altEnter
+            )
         }
     }
 
     private val _lightNavBar: MutableStateFlow<Boolean?> = MutableStateFlow(null)
     val lightNavBar: StateFlow<Boolean?> = _lightNavBar.asStateFlow()
+
+    fun setSendWith(value: SendMessageWith) {
+        _sendWith.value = value
+
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[SEND_WITH_ENTER] = value.enter
+                preferences[SEND_WITH_SHIFT] = value.shiftEnter
+                preferences[SEND_WITH_CTRL] = value.ctrlEnter
+                preferences[SEND_WITH_ALT] = value.altEnter
+            }
+        }
+    }
+
+    fun setUseDynamicColor(useDynamicColor: Boolean) {
+        _useDynamicColor.value = useDynamicColor
+        viewModelScope.launch {
+            context.dataStore.edit { preferences ->
+                preferences[USE_DYNAMIC_COLOR] = useDynamicColor
+            }
+        }
+    }
 
     fun setTheme() {
         _theme.value = when (_theme.value) {
@@ -68,19 +127,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return context.resources.openRawResource(R.raw.rules).bufferedReader().use { it.readText() }
     }
 
-    private val _pendingIntent = MutableStateFlow<Intent?>(null)
-    val pendingIntent: StateFlow<Intent?> = _pendingIntent
-
-    fun setPendingIntent(intent: Intent?) {
-        _pendingIntent.value = intent
-    }
-
     fun setColor(index: Int) {
         _palette.value = index
 
         viewModelScope.launch {
             context.dataStore.edit {
                 it[PALETTE_KEY] = index
+                if (index == 19/*materialPalette[_palette.value] == materialPalette[19]*/) {
+                    it[CUSTOM_PRIMARY_COLOR_KEY] = materialPalette[19].primary.toArgb()
+                }
             }
         }
     }

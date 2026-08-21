@@ -11,31 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.mutableStateListOf
 
-val materialColors = listOf(
-    Color(0xFFF44336),
-    Color(0xFFE91E63),
-    Color(0xFF9C27B0),
-    Color(0xFF673AB7),
-    Color(0xFF3F51B5),
-    Color(0xFF2196F3),
-    Color(0xFF03A9F4),
-    Color(0xFF00BCD4),
-    Color(0xFF009688),
-    Color(0xFF4CAF50),
-    Color(0xFF8BC34A),
-    Color(0xFFCDDC39),
-    Color(0xFFFFEB3B),
-    Color(0xFFFFC107),
-    Color(0xFFFF9800),
-    Color(0xFFFF5722),
-    Color(0xFF795548),
-    Color(0xFF9E9E9E),
-    Color(0xFF607D8B),
-    Color(0xFF296A47)
-)
-
-val materialPalette = listOf(
+var materialPalette = mutableStateListOf(
     Palette(
         primary = Color(0xFFF44336),
         onPrimary = Color(0xFFFFFFFF)
@@ -65,6 +43,7 @@ val materialPalette = listOf(
         //onPrimary = Color(0xFF000000)
     ), Palette(
         primary = Color(0xFF009688),
+        //#008577 in android 5 - 11
         onPrimary = Color(0xFFFFFFFF)
     ), Palette(
         primary = Color(0xFF4CAF50),
@@ -213,10 +192,23 @@ fun GChatTheme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(
-                context
-            )
+            if (darkTheme) {
+                dynamicDarkColorScheme(context).let { scheme ->
+                    scheme.copy(
+                        background = scheme.surfaceContainer,
+                        surface = scheme.surface
+                    )
+                }
+            } else {
+                dynamicLightColorScheme(context).let { scheme ->
+                    scheme.copy(
+                        background = scheme.surfaceContainer,
+                        surface = scheme.surface
+                    )
+                }
+            }
         }
+
         darkTheme -> darkScheme
         else -> lightScheme
     }

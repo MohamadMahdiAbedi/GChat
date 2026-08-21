@@ -1,11 +1,9 @@
 package ir.gchat
 
-import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
-import android.content.Context
-import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,13 +13,19 @@ import android.text.util.Linkify
 import android.view.SoundEffectConstants
 import android.view.ViewTreeObserver
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -30,20 +34,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -53,19 +70,32 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -77,16 +107,17 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -98,7 +129,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil.ImageLoader
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
+import java.io.File
+import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
     val viewModel: MainViewModel by viewModels()
@@ -117,6 +155,7 @@ class MainActivity : ComponentActivity() {
                     // theme
                     val theme by viewModel.theme.collectAsState()
                     val palette by viewModel.palette.collectAsState()
+                    val dynamicColor by viewModel.useDynamicColor.collectAsState()
                     val darkTheme = when (theme) {
                         0 -> isSystemInDarkTheme()
                         1 -> true
@@ -130,7 +169,7 @@ class MainActivity : ComponentActivity() {
                     val chatList by socketViewModel.chatList.collectAsState()
                     val contactsSearchList by socketViewModel.contactSearchList.collectAsState()
                     GChatTheme(
-                        dynamicColor = false, darkTheme = darkTheme, paletteIndex = palette
+                        dynamicColor = dynamicColor, darkTheme = darkTheme, paletteIndex = palette
                     ) {
                         MainNavigation(
                             setTheme = { viewModel.setTheme() },
@@ -177,15 +216,16 @@ class MainActivity : ComponentActivity() {
                             paletteIndex = palette,
                             getUploadUri = { name, size, hash, uri ->
                                 socketViewModel.getUploadUri(
-                                    name,
-                                    size,
-                                    hash,
-                                    uri
+                                    name, size, hash, uri
                                 )
                             },
                             draft = socketViewModel.drafts.collectAsState().value,
                             savedText = socketViewModel.savedText.collectAsState().value,
-                            setSavedText = { id, message -> socketViewModel.setSavedText(id, message) },
+                            setSavedText = { id, message ->
+                                socketViewModel.setSavedText(
+                                    id, message
+                                )
+                            },
                             downloadFile = { fileId, fileName, fileSize, setProgress, setPending, setDownloadedBytes ->
                                 socketViewModel.downloadFile(
                                     fileId,
@@ -202,16 +242,38 @@ class MainActivity : ComponentActivity() {
                                     fileName
                                 )
                             },
+                            removeTextFromDraft = { id ->
+                                socketViewModel.removeTextFromDraft(
+                                    id
+                                )
+                            },
                             clearDraft = { socketViewModel.clearDraft() },
                             setNavBarTheme = { mode -> viewModel.setNavBarTheme(mode) },
                             seenAll = { id -> socketViewModel.seenAll(id) },
                             token = socketViewModel.token.collectAsState().value,
-                            isFileDownloaded = { fileName -> socketViewModel.isFileDownloaded(fileName) }
-                        )
-                        SetUpSystemBars(
-                            palette = palette,
-                            lightNavBar = viewModel.lightNavBar.collectAsState().value
-                        )
+                            isFileDownloaded = { fileName ->
+                                socketViewModel.isFileDownloaded(
+                                    fileName
+                                )
+                            },
+                            attachTextBlock = { text -> socketViewModel.attachTextBlock(text) },
+                            sendWith = viewModel.sendWith.collectAsState().value,
+                            setSendWith = { keys -> viewModel.setSendWith(keys) },
+                            useDynamicColor = dynamicColor,
+                            setUseDynamicColor = { useDynamicColor ->
+                                viewModel.setUseDynamicColor(
+                                    useDynamicColor
+                                )
+                            },
+                            editTextInDraft = { id, text ->
+                                socketViewModel.editTextInDraft(
+                                    id = id, newText = text
+                                )
+                            },
+                            deleteMessage = { id ->
+                                socketViewModel.deleteMessage(id)
+                            })
+                        SetUpSystemBars(lightNavBar = viewModel.lightNavBar.collectAsState().value)
                     }
                     window.setBackgroundDrawableResource(android.R.color.transparent)
                 }
@@ -223,10 +285,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SetUpSystemBars(palette: Int, lightNavBar: Boolean?) {
-    val colorLuminance = remember(palette) {
-        materialColors[palette].luminance()
-    }
+fun SetUpSystemBars(lightNavBar: Boolean?) {
+    val colorLuminance = MaterialTheme.colorScheme.primary.luminance()
     val darkIcons = remember(colorLuminance) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             colorLuminance >= 0.7f
@@ -267,8 +327,7 @@ fun SetUpSystemBars(palette: Int, lightNavBar: Boolean?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
 
-            controller.isAppearanceLightNavigationBars =
-                lightNavBar ?: !darkIcons
+            controller.isAppearanceLightNavigationBars = lightNavBar ?: !darkIcons
         }
 
         // Status Bar
@@ -345,18 +404,71 @@ fun MainNavigation(
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,
+    removeTextFromDraft: (Int) -> Unit,
     clearDraft: () -> Unit,
     setNavBarTheme: (Boolean?) -> Unit,
     seenAll: (String) -> Unit,
     token: String,
-    isFileDownloaded: (String) -> Boolean
+    isFileDownloaded: (String) -> Boolean,
+    attachTextBlock: (String) -> Unit,
+    sendWith: SendMessageWith,
+    setSendWith: (SendMessageWith) -> Unit,
+    useDynamicColor: Boolean,
+    setUseDynamicColor: (Boolean) -> Unit,
+    editTextInDraft: (Int, String) -> Unit,
+    deleteMessage: (Int) -> Unit
 ) {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
 
+    var selectedAudio by remember { mutableStateOf<File?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var isSeeking by remember { mutableStateOf(false) }
+
+    var currentPosition by remember { mutableIntStateOf(0) }
+    var duration by remember { mutableIntStateOf(0) }
+
+    val mediaPlayer = remember { MediaPlayer() }
+
+    LaunchedEffect(selectedAudio) {
+        selectedAudio?.let { file ->
+            mediaPlayer.reset()
+
+            mediaPlayer.setDataSource(file.absolutePath)
+
+            mediaPlayer.setOnPreparedListener {
+                duration = it.duration
+                currentPosition = 0
+
+                it.start()
+                isPlaying = true
+            }
+
+            mediaPlayer.setOnCompletionListener {
+                isPlaying = false
+                currentPosition = duration
+            }
+
+            mediaPlayer.prepareAsync()
+        }
+    }
+
+    LaunchedEffect(isPlaying, isSeeking) {
+        while (isPlaying && !isSeeking) {
+            currentPosition = mediaPlayer.currentPosition
+            delay(100.milliseconds)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer.release()
+        }
+    }
+
     val primaryLuminance = MaterialTheme.colorScheme.primary.luminance()
     LaunchedEffect(currentRoute, primaryLuminance) {
-        if (currentRoute.toString().startsWith("chatScreen")) {
+        if (currentRoute.toString().startsWith("chatScreen") && selectedAudio != null) {
             setNavBarTheme(primaryLuminance > 0.5f)
         } else {
             setNavBarTheme(null)
@@ -366,15 +478,37 @@ fun MainNavigation(
     LaunchedEffect(loggedIn, oldLoggedIn) {
         if (oldLoggedIn) {
             if (loggedIn) {
-                if (currentRoute != "mainScreen" && !currentRoute.toString().startsWith("chatScreen")) {
-                    navController.navigate("mainScreen") {
-                        popUpTo(0) { inclusive = true }
+                //if (currentRoute != "mainScreen" && !currentRoute.toString()
+                //        .startsWith("chatScreen")
+                //) {
+                //    navController.navigate("mainScreen") {
+                //        popUpTo(0) { inclusive = true }
+                //    }
+                //}
+                when (currentRoute) {
+                    "wait" -> {
+                        navController.popBackStack()
+                    }
+
+                    "greeting" -> {
+                        navController.navigate("mainScreen") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+
+                    "ipConfig" -> {
+                        if (navController.previousBackStackEntry?.destination?.route == "wait") {
+                            navController.popBackStack("mainScreen", inclusive = false)
+                        } else {
+                            navController.popBackStack()
+                        }
                     }
                 }
             } else {
-                navController.navigate("wait") {
-                    popUpTo(0) { inclusive = true }
-                }
+                //navController.navigate("wait") {
+                //    popUpTo(0) { inclusive = true }
+                //}
+                navController.navigate("wait")
             }
         } else {
             navController.navigate("greeting") {
@@ -386,278 +520,510 @@ fun MainNavigation(
     val context = LocalContext.current
 
     val imageLoader = remember(context, token) {
-        ImageLoader.Builder(context)
-            .okHttpClient {
-                OkHttpClient.Builder()
-                    .addInterceptor { chain ->
-                        val original = chain.request()
+        ImageLoader.Builder(context).okHttpClient {
+            OkHttpClient.Builder().addInterceptor { chain ->
+                val original = chain.request()
 
-                        val request = original.newBuilder()
-                            .addHeader("Authorization", "Bearer $token")
-                            .build()
+                val request =
+                    original.newBuilder().addHeader("Authorization", "Bearer $token").build()
 
-                        chain.proceed(request)
-                    }
-                    .build()
-            }
-            .build()
+                chain.proceed(request)
+            }.build()
+        }.build()
     }
 
-    NavHost(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        navController = navController,
-        startDestination = "wait",
-        enterTransition = {
-            slideInVertically(
-                initialOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
-                    durationMillis = 320, easing = FastOutSlowInEasing
+    val bottomPadding by animateDpAsState(
+        targetValue = if (selectedAudio != null) 64.dp else 0.dp, animationSpec = tween(
+            durationMillis = 300, easing = FastOutSlowInEasing
+        ), label = "bottomPadding"
+    )
+
+    val playBarHeight by animateDpAsState(
+        targetValue = if (selectedAudio != null) 64.dp + WindowInsets.navigationBars.asPaddingValues()
+            .calculateBottomPadding() else 0.dp, animationSpec = tween(
+            durationMillis = 300, easing = FastOutSlowInEasing
+        ), label = "bottomPadding"
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(bottom = bottomPadding),
+            navController = navController,
+            startDestination = "mainScreen",
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
+                        durationMillis = 320, easing = FastOutSlowInEasing
+                    )
                 )
-            )
-        },
-        exitTransition = {
-            slideOutVertically(
-                targetOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
-                animationSpec = tween(
-                    durationMillis = 320, easing = FastOutSlowInEasing
+            },
+            exitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = 320, easing = FastOutSlowInEasing
+                    )
                 )
-            )
-        },
-        popEnterTransition = {
-            slideInVertically(
-                initialOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
-                animationSpec = tween(
-                    durationMillis = 320, easing = FastOutSlowInEasing
+            },
+            popEnterTransition = {
+                slideInVertically(
+                    initialOffsetY = { fullHeight -> -(fullHeight * 0.1f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = 320, easing = FastOutSlowInEasing
+                    )
                 )
-            )
-        },
-        popExitTransition = {
-            slideOutVertically(
-                targetOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
-                    durationMillis = 320, easing = FastOutSlowInEasing
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
+                        durationMillis = 320, easing = FastOutSlowInEasing
+                    )
                 )
-            )
-        }) {
-        composable(route = "greeting") {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Greeting(
+            }) {
+            composable(route = "greeting") {
+                var showIpConfigDialog by rememberSaveable { mutableStateOf(false) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Greeting(
+                        setTheme = setTheme,
+                        theme = theme,
+                        signIn = { username, password ->
+                            signIn(
+                                username, password
+                            )
+                        },
+                        signUp = { iccid, username, password ->
+                            signUp(
+                                iccid, username, password
+                            )
+                        },
+                        ipConfig = { showIpConfigDialog = true },
+                        getRules = getRules,
+                        loginResponse = loginResponse
+                    )
+                    if (showIpConfigDialog) {
+                        //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        //    IpConfigDialogMaterialYou(
+                        //        serverIP = serverIP,
+                        //        device = device,
+                        //        back = { showIpConfigDialog = false },
+                        //        setDevice = setDevice,
+                        //        setServerIP = setServerIP
+                        //    )
+                        //} else {
+                        IpConfigDialog(
+                            serverIP = serverIP,
+                            device = device,
+                            back = { showIpConfigDialog = false },
+                            setDevice = setDevice,
+                            setServerIP = setServerIP
+                        )
+                        //}
+                    }
+                }
+            }
+            composable(route = "wait") {
+                val view = LocalView.current
+                var showIpConfigDialog by rememberSaveable { mutableStateOf(false) }
+                BackHandler { }
+                Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.fillMaxSize(),
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Text("Connecting...")
+                            }, colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                                subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
+                                actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                            ), modifier = Modifier.shadow(
+                                elevation = 4.dp, shape = RectangleShape, clip = false
+                            ), actions = {
+                                IconButton(
+                                    onClick = {
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        showIpConfigDialog = true
+                                    }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.tune),
+                                        contentDescription = "IP config"
+                                    )
+                                }
+                            })
+                    }) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+
+                            AndroidView(
+                                modifier = Modifier.size(48.dp), factory = { context ->
+                                    ProgressBar(context).apply {
+                                        isIndeterminate = true
+                                        indeterminateTintList =
+                                            ColorStateList.valueOf(progressColor)
+                                    }
+                                })
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "After connecting, you will be taken to the home page.",
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                }
+                if (showIpConfigDialog) {
+                    //if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    //    IpConfigDialogMaterialYou(
+                    //        serverIP = serverIP,
+                    //        device = device,
+                    //        back = { showIpConfigDialog = false },
+                    //        setDevice = setDevice,
+                    //        setServerIP = setServerIP
+                    //    )
+                    //} else {
+                    IpConfigDialog(
+                        serverIP = serverIP,
+                        device = device,
+                        back = { showIpConfigDialog = false },
+                        setDevice = setDevice,
+                        setServerIP = setServerIP
+                    )
+                    //}
+                }
+            }
+            composable(route = "mainScreen") {
+                MainScreenContainer(
+                    chatList = chatList,
+                    navHostController = navController,
+                    searchContactList = searchContactList,
+                    searchContact = searchContact,
+                    clearSearchList = clearSearchList,
+                    logout = logout,
+                    sendMessage = sendMessage,
+                    messageList = messageList,
+                    getMessagesList = getMessagesList,
+                    getConversations = getConversations,
+                    seenMessage = seenMessage,
+                    username = username,
+                    shouldScrollToBottom = shouldScrollToBottom,
+                    onScrolledToBottom = onScrolledToBottom,
+                    getUploadUri = getUploadUri,
+                    draft = draft,
+                    savedText = savedText,
+                    setSavedText = setSavedText,
+                    downloadFile = downloadFile,
+                    removeFileFromDraft = removeFileFromDraft,
+                    removeTextFromDraft = removeTextFromDraft,
+                    clearDraft = clearDraft,
+                    seenAll = seenAll,
+                    serverUrl = serverIP,
+                    imageLoader = imageLoader,
+                    isFileDownloaded = isFileDownloaded,
+                    attachTextBlock = attachTextBlock,
+                    sendWith = sendWith,
+                    editTextInDraft = editTextInDraft,
+                    deleteMessage = deleteMessage,
+                    playing = selectedAudio,
+                    playSet = { value -> selectedAudio = value })
+            }
+            composable(route = "appearanceSettings") {
+                AppearanceSettingsScreen(
                     setTheme = setTheme,
                     theme = theme,
-                    signIn = { username, password ->
-                        signIn(
-                            username, password
-                        )
-                    },
-                    signUp = { iccid, username, password ->
-                        signUp(
-                            iccid, username, password
-                        )
-                    },
-                    ipConfig = { navController.navigate("ipConfig") },
-                    getRules = getRules,
-                    loginResponse = loginResponse
+                    navHostController = navController,
+                    setColor = setColor,
+                    paletteIndex = paletteIndex,
+                    useDynamicColor = useDynamicColor,
+                    setUseDynamicColor = setUseDynamicColor
+                )
+            }
+            composable(route = "sendBoxKeysSettings") {
+                SendBoxKeysSettingsScreen(
+                    navHostController = navController,
+                    sendWith = sendWith,
+                    setSendWith = setSendWith
+                )
+            }
+            composable(route = "contentAnalysisSettings") {
+                ContentAnalysisScreen(
+                    navHostController = navController
+                )
+            }
+            composable(route = "settings") {
+                SettingsScreen(
+                    navHostController = navController,
+                    setTheme = setTheme,
+                    theme = theme,
+                    setServerIP = setServerIP,
+                    serverIP = serverIP,
+                    setDevice = setDevice,
+                    device = device,
+                    setColor = setColor,
+                    paletteIndex = paletteIndex,
+                    sendWith = sendWith,
+                    setSendWith = setSendWith,
+                    useDynamicColor = useDynamicColor,
+                    setUseDynamicColor = setUseDynamicColor
+                )
+            }
+            composable(
+                route = "chatScreen?id={id}&displayName={displayName}&selectedChatUnreadCount={selectedChatUnreadCount}",
+                arguments = listOf(navArgument("id") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }, navArgument("displayName") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }, navArgument("selectedChatUnreadCount") {
+                    type = NavType.IntType
+                    defaultValue = 0
+                })
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getString("id") ?: ""
+                val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
+                val selectedChatUnreadCount =
+                    backStackEntry.arguments?.getInt("selectedChatUnreadCount") ?: 0
+                ChatScreen(
+                    back = { navController.popBackStack() },
+                    id = id,
+                    //type = type,
+                    sendMessage = sendMessage,
+                    messageList = messageList,
+                    seenMessage = seenMessage,
+                    getMessagesList = getMessagesList,
+                    displayName = displayName,
+                    unreadCount = selectedChatUnreadCount,
+                    shouldScrollToBottom = shouldScrollToBottom,
+                    onScrolledToBottom = onScrolledToBottom,
+                    getUploadUri = getUploadUri,
+                    draft = draft,
+                    savedText = savedText,
+                    setSavedText = setSavedText,
+                    downloadFile = downloadFile,
+                    removeFileFromDraft = removeFileFromDraft,
+                    removeTextFromDraft = removeTextFromDraft,
+                    clearDraft = clearDraft,
+                    seenAll = seenAll,
+                    serverUrl = serverIP,
+                    imageLoader = imageLoader,
+                    isFileDownloaded = isFileDownloaded,
+                    attachTextBlock = attachTextBlock,
+                    sendWith = sendWith,
+                    editTextInDraft = editTextInDraft,
+                    deleteMessage = deleteMessage,
+                    playing = selectedAudio,
+                    playSet = { value -> selectedAudio = value })
+            }
+            composable(route = "ipConfig") {
+                IpConfig(
+                    serverIP = serverIP,
+                    device = device,
+                    back = { navController.popBackStack() },
+                    setDevice = setDevice,
+                    setServerIP = setServerIP
                 )
             }
         }
-        composable(route = "wait") {
-            val view = LocalView.current
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    TopAppBar(
-                        title = {
-                            Text("Connecting...")
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        ), actions = {
-                            IconButton(
-                                onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    navController.navigate("ipConfig")
-                                }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.tune),
-                                    contentDescription = "IP config"
-                                )
-                            }
-                        })
-                }) { innerPadding ->
-                Box(
+
+        val isKeyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+        Box(
+            modifier = Modifier
+                .imePadding()
+                .align(Alignment.BottomCenter)
+                .shadow(elevation = 4.dp, clip = false)
+                .background(color = MaterialTheme.colorScheme.surface)
+                .height(if (isKeyboardOpen) bottomPadding else playBarHeight)
+                .fillMaxWidth()
+        ) {
+            if (selectedAudio != null) {
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding)
+                        .navigationBarsPadding()
+                        .imePadding()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    IconButton(
+                        onClick = {
+                            if (mediaPlayer.isPlaying) {
+                                mediaPlayer.pause()
+                                isPlaying = false
+                            } else {
+                                mediaPlayer.start()
+                                isPlaying = true
+                            }
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
-                        val progressColor = MaterialTheme.colorScheme.primary.toArgb()
+                        Icon(
+                            painter = if (isPlaying) {
+                                painterResource(R.drawable.pause_circle)
+                            } else {
+                                painterResource(R.drawable.play_circle)
+                            }, contentDescription = null
+                        )
+                    }
+//
+//                Slider(
+//                    value = if (duration > 0) {
+//                    currentPosition.toFloat() / duration
+//                } else {
+//                    0f
+//                }, onValueChange = { value ->
+//                    currentPosition = (value * duration).toInt()
+//                }, onValueChangeFinished = {
+//                    mediaPlayer.seekTo(currentPosition)
+//                }, modifier = Modifier.weight(1f)
+//                )
 
-                        AndroidView(
-                            modifier = Modifier.size(48.dp), factory = { context ->
-                                ProgressBar(context).apply {
-                                    isIndeterminate = true
-                                    indeterminateTintList = ColorStateList.valueOf(progressColor)
-                                }
-                            })
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "After connecting, you will be taken to the home page.",
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onBackground
+                    val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
+                    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+
+                    AndroidView(
+                        factory = { context ->
+                            SeekBar(context).apply {
+                                max = 1000
+
+                                progressTintList =
+                                    ColorStateList.valueOf(primaryColor)
+
+                                progressBackgroundTintList =
+                                    ColorStateList.valueOf(trackColor)
+
+                                thumbTintList =
+                                    ColorStateList.valueOf(primaryColor)
+
+                                setOnSeekBarChangeListener(
+                                    object : SeekBar.OnSeekBarChangeListener {
+
+                                        override fun onStartTrackingTouch(
+                                            seekBar: SeekBar
+                                        ) {
+                                            isSeeking = true
+                                        }
+
+                                        override fun onProgressChanged(
+                                            seekBar: SeekBar,
+                                            progress: Int,
+                                            fromUser: Boolean
+                                        ) {
+                                            if (fromUser && duration > 0) {
+                                                currentPosition =
+                                                    (progress / 1000f * duration).toInt()
+                                            }
+                                        }
+
+                                        override fun onStopTrackingTouch(
+                                            seekBar: SeekBar
+                                        ) {
+                                            val position = currentPosition
+
+                                            mediaPlayer.seekTo(position)
+
+                                            isSeeking = false
+                                        }
+                                    }
+                                )
+                            }
+                        },
+
+                        update = { seekBar ->
+
+                            seekBar.progressTintList =
+                                ColorStateList.valueOf(primaryColor)
+
+                            seekBar.progressBackgroundTintList =
+                                ColorStateList.valueOf(trackColor)
+
+                            seekBar.thumbTintList =
+                                ColorStateList.valueOf(primaryColor)
+
+                            // هنگام Drag مقدار SeekBar را از بیرون تغییر نده
+                            if (!isSeeking) {
+                                seekBar.progress =
+                                    if (duration > 0) {
+                                        (currentPosition * 1000f / duration)
+                                            .toInt()
+                                    } else {
+                                        0
+                                    }
+                            }
+                        },
+
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Text(
+                        text = "${formatTime(currentPosition)}\n${formatTime(duration)}",
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    IconButton(
+                        onClick = {
+                            if (mediaPlayer.isPlaying) {
+                                mediaPlayer.stop()
+                            }
+
+                            mediaPlayer.reset()
+
+                            selectedAudio = null
+                            isPlaying = false
+                            isSeeking = false
+                            currentPosition = 0
+                            duration = 0
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.close),
+                            contentDescription = null
                         )
                     }
                 }
             }
-        }
-        composable(route = "mainScreen") {
-            MainScreenContainer(
-                chatList = chatList,
-                navHostController = navController,
-                searchContactList = searchContactList,
-                searchContact = searchContact,
-                clearSearchList = clearSearchList,
-                logout = logout,
-                sendMessage = sendMessage,
-                messageList = messageList,
-                getMessagesList = getMessagesList,
-                getConversations = getConversations,
-                seenMessage = seenMessage,
-                username = username,
-                shouldScrollToBottom = shouldScrollToBottom,
-                onScrolledToBottom = onScrolledToBottom,
-                getUploadUri = getUploadUri,
-                draft = draft,
-                savedText = savedText,
-                setSavedText = setSavedText,
-                downloadFile = downloadFile,
-                removeFileFromDraft = removeFileFromDraft,
-                clearDraft = clearDraft,
-                seenAll = seenAll,
-                serverUrl = serverIP,
-                imageLoader = imageLoader,
-                isFileDownloaded = isFileDownloaded
-            )
-        }
-        composable(route = "appearanceSettings") {
-            AppearanceSettingsScreen(
-                setTheme = setTheme,
-                theme = theme,
-                navHostController = navController,
-                setColor = setColor,
-                paletteIndex = paletteIndex
-            )
-        }
-        composable(route = "settings") {
-            SettingsScreen(navHostController = navController)
-        }
-        composable(
-            //route = "chatScreen?id={id}&type={type}&displayName={displayName}",
-            // چک شود
-            route = "chatScreen?id={id}&displayName={displayName}&selectedChatUnreadCount={selectedChatUnreadCount}",
-            arguments = listOf(
-                navArgument("id") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                },
-                navArgument("displayName") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                },
-                navArgument("selectedChatUnreadCount") {
-                    type = NavType.IntType
-                    defaultValue = 0
-                }
-            )
-        ) { backStackEntry ->
-            val id = backStackEntry.arguments?.getString("id") ?: ""
-            val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
-            val selectedChatUnreadCount =
-                backStackEntry.arguments?.getInt("selectedChatUnreadCount") ?: 0
-            ChatScreen(
-                back = { navController.popBackStack() },
-                id = id,
-                //type = type,
-                sendMessage = sendMessage,
-                messageList = messageList,
-                seenMessage = seenMessage,
-                getMessagesList = getMessagesList,
-                displayName = displayName,
-                unreadCount = selectedChatUnreadCount,
-                shouldScrollToBottom = shouldScrollToBottom,
-                onScrolledToBottom = onScrolledToBottom,
-                getUploadUri = getUploadUri,
-                draft = draft,
-                savedText = savedText,
-                setSavedText = setSavedText,
-                downloadFile = downloadFile,
-                removeFileFromDraft = removeFileFromDraft,
-                clearDraft = clearDraft,
-                seenAll = seenAll,
-                serverUrl = serverIP,
-                imageLoader = imageLoader,
-                isFileDownloaded = isFileDownloaded
-            )
-        }
-        //composable(route = "smsMainScreen") {
-        //    SMSMainScreen(
-        //        navHostController = navController, smsViewModel = smsViewModel
-        //    )
-        //}
-        //composable(
-        //    route = "smsChatScreen?id={id}&displayName={displayName}",
-        //    arguments = listOf(navArgument("id") {
-        //        type = NavType.StringType
-        //    }, navArgument("displayName") {
-        //        type = NavType.StringType
-        //    })
-        //) { backStackEntry ->
-        //    val id = backStackEntry.arguments?.getString("id") ?: ""
-        //    val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
-        //    SMSChatScreen(
-        //        back = { navController.popBackStack() },
-        //        id = id,
-        //        displayName = displayName,
-        //        smsViewModel = smsViewModel
-        //    )
-        //}
-        composable(route = "ipConfig") {
-            IpConfig(
-                serverIP = serverIP,
-                device = device,
-                back = { navController.popBackStack() },
-                setDevice = setDevice,
-                setServerIP = setServerIP
-            )
         }
     }
 }
 
 @Composable
 fun AnimatedMenu(
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
     width: Dp,
     height: Dp,
     chord: Dp,
     isExpanded: Boolean,
     close: () -> Unit,
-    ratioX: Float,
+    ratioX: Float = 0f,
     offsetX: Dp = 0.dp,
-    ratioY: Float,
+    ratioY: Float = 0f,
     offsetY: Dp = 0.dp,
     position: Alignment,
-    hasBackgroundCover: Boolean,
-    tabletView: Boolean = false,
-    whatIsMyBackgroundFilterColor: (Color, Boolean) -> Unit,
+    shadow: Boolean = true,
+    shadowShape: Shape = RoundedCornerShape(2.dp),
+    hasBackgroundCover: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val sizeBtn by animateDpAsState(
@@ -678,19 +1044,8 @@ fun AnimatedMenu(
 
     val showContent = expandProgress > 0.05f
 
-    val backgroundFilter = remember(hasBackgroundCover, expandProgress) {
-        if (hasBackgroundCover) {
-            Color.Black.copy(alpha = expandProgress * 0.25f)
-        } else {
-            Color.Transparent
-        }
-    }
-
-    LaunchedEffect(backgroundFilter, showContent) {
-        whatIsMyBackgroundFilterColor(
-            backgroundFilter, showContent
-        )
-    }
+    val sharedBackgroundFilter =
+        remember(expandProgress) { Color.Black.copy(alpha = expandProgress * 0.25f) }
 
     BackHandler(enabled = isExpanded) {
         close()
@@ -700,32 +1055,32 @@ fun AnimatedMenu(
         MutableInteractionSource()
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        if (showContent) {
+        if (showContent && hasBackgroundCover) {
             Spacer(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(sharedBackgroundFilter)
                     .clickable(
                         indication = null, interactionSource = interactionSource
                     ) {
                         close()
-                    }
-                    .background(backgroundFilter))
+                    })
         }
 
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .padding(8.dp)
                 .size(width, height)
                 .shadow(
-                    elevation = if (expandProgress > 0.99f && isExpanded) {
+                    elevation = if (expandProgress > 0.99f && isExpanded && shadow) {
                         8.dp
                     } else {
                         0.dp
-                    }, shape = RoundedCornerShape(2.dp), clip = false
+                    }, shape = shadowShape, clip = false
                 )
-                .clip(RoundedCornerShape(2.dp))
+                .clip(shadowShape)
                 .align(position)
         ) {
 
@@ -735,40 +1090,17 @@ fun AnimatedMenu(
                     .align(Alignment.Center)
                     .then(
                         if (sizeBtn != 48.dp) {
-                            Modifier.clickable(
-                                indication = null, interactionSource = interactionSource
-                            ) {}
-                        } else Modifier)) {
+                        Modifier.clickable(
+                            indication = null, interactionSource = interactionSource
+                        ) {}
+                    } else Modifier)) {
 
                 val radius = sizeBtn.toPx() / 2
 
-                val center = when (position) {
-
-                    Alignment.BottomStart -> {
-                        Offset(
-                            x = size.width * ratioX + 24.dp.toPx() - offsetX.toPx(),
-
-                            y = size.height * ratioY - 24.dp.toPx() - offsetY.toPx()
-                        )
-                    }
-
-                    Alignment.TopEnd -> {
-                        Offset(
-                            x = size.width * ratioX - if (tabletView) 24.dp.toPx()
-                            else 12.dp.toPx() - offsetX.toPx(),
-
-                            y = size.height * ratioY + if (tabletView) 24.dp.toPx()
-                            else 12.dp.toPx() - offsetY.toPx()
-                        )
-                    }
-
-                    else -> {
-                        Offset(
-                            x = size.width * ratioX - offsetX.toPx(),
-                            y = size.height * ratioY - offsetY.toPx()
-                        )
-                    }
-                }
+                val center = Offset(
+                    x = size.width * ratioX - offsetX.toPx(),
+                    y = size.height * ratioY - offsetY.toPx()
+                )
 
 
                 drawCircle(
@@ -786,6 +1118,203 @@ fun AnimatedMenu(
                     modifier = Modifier.alpha(expandProgress)
                 ) {
                     content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AnimatedMenuBad(
+    modifier: Modifier,
+    width: Dp,
+    height: Dp,
+    chord: Dp,
+    isExpanded: Boolean,
+    close: () -> Unit,
+    ratioX: Float,
+    offsetX: Dp = 0.dp,
+    ratioY: Float,
+    offsetY: Dp = 0.dp,
+    position: Alignment,
+    shadow: Boolean = true,
+    shadowShape: Shape = RoundedCornerShape(2.dp),
+    hasBackgroundCover: Boolean = true,
+    extruderContent: @Composable () -> Unit = {},
+    content: @Composable () -> Unit
+) {
+    val sizeBtn by animateDpAsState(
+        targetValue = if (isExpanded) chord * 2 else 48.dp, animationSpec = tween(
+            durationMillis = 200, easing = FastOutSlowInEasing
+        ), label = "circle_size"
+    )
+
+    val surface = MenuDefaults.containerColor
+
+    val expandProgress = if (chord == 24.dp) {
+        1f
+    } else {
+        ((sizeBtn - 48.dp).value / (chord.value * 2f - 48f)).coerceIn(0f, 1f)
+    }
+
+    val showContent = expandProgress > 0.05f
+
+    BackHandler(enabled = isExpanded) {
+        close()
+    }
+
+    val interactionSource = remember {
+        MutableInteractionSource()
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+
+        // ============================================================
+        // کل محدوده‌ای که modifier اصلی روی آن اعمال می‌شود
+        // ============================================================
+
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+
+            // --------------------------------------------------------
+            // BACKGROUND COVER
+            // --------------------------------------------------------
+
+            if (showContent && hasBackgroundCover) {
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Color.Black.copy(
+                                alpha = expandProgress * 0.25f
+                            )
+                        )
+                        .clickable(
+                            indication = null, interactionSource = interactionSource
+                        ) {
+                            close()
+                        })
+            }
+
+            // --------------------------------------------------------
+            // MENU
+            // --------------------------------------------------------
+
+            Box(
+                modifier = modifier
+                    .padding(8.dp)
+                    .size(width, height)
+                    .align(position)
+                    .shadow(
+                        elevation = if (expandProgress > 0.99f && isExpanded && shadow) {
+                            8.dp
+                        } else {
+                            0.dp
+                        }, shape = shadowShape, clip = false
+                    )
+            ) {
+
+                // ----------------------------------------------------
+                // CIRCLE
+                // ----------------------------------------------------
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (sizeBtn != 48.dp) {
+                            Modifier.clickable(
+                                indication = null, interactionSource = interactionSource
+                            ) {}
+                        } else {
+                            Modifier
+                        })) {
+                    val radius = sizeBtn.toPx() / 2f
+
+                    val center = Offset(
+                        x = size.width * ratioX - offsetX.toPx(),
+
+                        y = size.height * ratioY - offsetY.toPx()
+                    )
+
+                    if (sizeBtn != 48.dp) {
+                        drawCircle(
+                            color = surface, radius = radius, center = center
+                        )
+                    }
+                }
+
+                // ----------------------------------------------------
+                // CONTENT
+                // ----------------------------------------------------
+
+                if (showContent) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(expandProgress)
+                            .drawWithCache {
+
+                                val radius = sizeBtn.toPx() / 2f
+
+                                val center = Offset(
+                                    x = size.width * ratioX - offsetX.toPx(),
+
+                                    y = size.height * ratioY - offsetY.toPx()
+                                )
+
+                                val path = Path().apply {
+                                    addOval(
+                                        Rect(
+                                            left = center.x - radius,
+                                            top = center.y - radius,
+                                            right = center.x + radius,
+                                            bottom = center.y + radius
+                                        )
+                                    )
+                                }
+
+                                onDrawWithContent {
+                                    clipPath(path) {
+                                        this@onDrawWithContent.drawContent()
+                                    }
+                                }
+                            }) {
+                        content()
+                    }
+                }
+            }
+        }
+
+        // ============================================================
+        // EXTRUDER
+        // ============================================================
+        //
+        // نکته:
+        // این Box عمداً sibling منوی اصلی است.
+        //
+        // اما modifier اصلی روی آن اعمال نمی‌شود.
+        //
+        // اندازه‌اش کل صفحه است تا هیچ clipping ناشی از
+        // 192dp منو ایجاد نشود.
+        // ============================================================
+
+        if (showContent) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(expandProgress)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(width, height)
+                        .align(position)
+                ) {
+                    extruderContent()
                 }
             }
         }
@@ -932,156 +1461,86 @@ fun String.toRichAnnotatedString(
     }
 }
 
-//fun String.toRichAnnotatedString(
-//    linkColor: Color
-//): AnnotatedString {
-//
-//    val bidi = BidiFormatter.getInstance()
-//
-//    val spannable = SpannableString(
-//        lines().joinToString("\n") { bidi.unicodeWrap(it) }
-//    )
-//
-//    Linkify.addLinks(spannable, Linkify.WEB_URLS)
-//
-//    val urlSpans = spannable.getSpans(
-//        0,
-//        spannable.length,
-//        URLSpan::class.java
-//    )
-//
-//    return buildAnnotatedString {
-//
-//        val text = spannable.toString()
-//        var index = 0
-//
-//        while (index < text.length) {
-//
-//            // لینک
-//            val urlSpan = urlSpans.firstOrNull {
-//                spannable.getSpanStart(it) == index
-//            }
-//
-//            if (urlSpan != null) {
-//                val end = spannable.getSpanEnd(urlSpan)
-//
-//                withLink(
-//                    LinkAnnotation.Url(
-//                        url = urlSpan.url,
-//                        styles = TextLinkStyles(
-//                            style = SpanStyle(
-//                                color = linkColor,
-//                                textDecoration = TextDecoration.Underline
-//                            )
-//                        )
-//                    )
-//                ) {
-//                    append(text.substring(index, end))
-//                }
-//
-//                index = end
-//                continue
-//            }
-//
-//
-//            // بولد *text*
-//            if (text[index] == '*') {
-//                val end = text.indexOf('*', index + 1)
-//
-//                if (end > index + 1) {
-//                    withStyle(
-//                        SpanStyle(
-//                            fontWeight = FontWeight.Bold
-//                        )
-//                    ) {
-//                        append(text.substring(index + 1, end))
-//                    }
-//
-//                    index = end + 1
-//                    continue
-//                }
-//            }
-//
-//
-//            // ایتالیک _text_
-//            if (text[index] == '_') {
-//                val end = text.indexOf('_', index + 1)
-//
-//                if (end != -1) {
-//                    withStyle(
-//                        SpanStyle(
-//                            fontStyle = FontStyle.Italic
-//                        )
-//                    ) {
-//                        append(text.substring(index + 1, end))
-//                    }
-//
-//                    index = end + 1
-//                    continue
-//                }
-//            }
-//
-//
-//            // خط خورده ~text~
-//            if (text[index] == '~') {
-//                val end = text.indexOf('~', index + 1)
-//
-//                if (end > index + 1) {
-//                    withStyle(
-//                        SpanStyle(
-//                            textDecoration = TextDecoration.LineThrough
-//                        )
-//                    ) {
-//                        append(text.substring(index + 1, end))
-//                    }
-//
-//                    index = end + 1
-//                    continue
-//                }
-//            }
-//
-//            append(text[index])
-//            index++
-//        }
-//    }
-//}
-//
-//fun String.toAnnotatedLinkString(onPrimary: Color): AnnotatedString {
-//    val spannable = SpannableString(this)
-//
-//    Linkify.addLinks(spannable, Linkify.WEB_URLS)
-//
-//    val spans = spannable.getSpans(0, spannable.length, URLSpan::class.java)
-//
-//    return buildAnnotatedString {
-//        var lastIndex = 0
-//
-//        for (span in spans.sortedBy { urlSpan ->
-//            spannable.getSpanStart(urlSpan)
-//        }) {
-//            val start = spannable.getSpanStart(span)
-//            val end = spannable.getSpanEnd(span)
-//
-//            append(this@toAnnotatedLinkString.substring(lastIndex, start))
-//
-//            withLink(
-//                LinkAnnotation.Url(
-//                    url = span.url, styles = TextLinkStyles(
-//                        style = SpanStyle(
-//                            color = onPrimary, textDecoration = TextDecoration.Underline
-//                        )
-//                    )
-//                )
-//            ) {
-//                append(this@toAnnotatedLinkString.substring(start, end))
-//            }
-//
-//            lastIndex = end
-//        }
-//
-//        append(this@toAnnotatedLinkString.substring(lastIndex))
-//    }
-//}
+fun String.toRichAnnotatedStringNoLinks(): AnnotatedString {
+
+    val source = this
+
+    fun AnnotatedString.Builder.parseRange(
+        start: Int, end: Int
+    ) {
+        var i = start
+
+        while (i < end) {
+
+            // **bold**
+            if (source.startsWith("**", i)) {
+                val close = source.indexOf("**", i + 2)
+
+                if (close > i + 2 && close < end) {
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        parseRange(i + 2, close)
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+            // __italic__
+            if (source.startsWith("__", i)) {
+                val close = source.indexOf("__", i + 2)
+
+                if (close > i + 2 && close < end) {
+                    withStyle(
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic
+                        )
+                    ) {
+                        parseRange(i + 2, close)
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+            // ~~strike~~
+            if (source.startsWith("~~", i)) {
+                val close = source.indexOf("~~", i + 2)
+
+                if (close > i + 2 && close < end) {
+                    withStyle(
+                        SpanStyle(
+                            textDecoration = TextDecoration.LineThrough
+                        )
+                    ) {
+                        parseRange(i + 2, close)
+                    }
+
+                    i = close + 2
+                    continue
+                }
+            }
+
+            append(source[i])
+            i++
+        }
+    }
+
+    return buildAnnotatedString {
+        withStyle(
+            ParagraphStyle(
+                textDirection = TextDirection.Content
+            )
+        ) {
+            parseRange(0, source.length)
+        }
+    }
+}
 
 fun convertDigits(text: String, digits: CharArray): String {
     require(digits.size == 10) { "digits must contain exactly 10 characters." }
@@ -1099,6 +1558,138 @@ fun convertDigits(text: String, digits: CharArray): String {
     return builder.toString()
 }
 
-fun hash20(text: String): Int {
-    return (text.hashCode() and Int.MAX_VALUE) % 19
+fun hash19(text: String): Int {
+    return (text.hashCode() and Int.MAX_VALUE) % 18
+}
+
+class Quadrant2CircleShape(
+    private val cornerRadius: Dp = 0.dp
+) : Shape {
+
+    override fun createOutline(
+        size: Size, layoutDirection: LayoutDirection, density: Density
+    ): Outline {
+
+        val radius = minOf(size.width, size.height)
+
+        with(density) {
+            val corner = cornerRadius.toPx().coerceIn(0f, radius / 2f)
+
+            val center = Offset(radius, radius)
+
+            val path = Path().apply {
+
+                // ─────────────
+                // مرکز
+                // ─────────────
+                moveTo(center.x - corner, center.y)
+
+                // ضلع چپ تا گوشه
+                lineTo(corner, center.y)
+
+                // گوشهٔ پایین-چپ
+                quadraticTo(
+                    0f, center.y, 0f, center.y - corner
+                )
+
+                // ─────────────
+                // ربع دایره
+                // از کمی بعد از گوشهٔ چپ
+                // تا کمی قبل از گوشهٔ بالا
+                // ─────────────
+
+                val angleOffset = Math.toDegrees(
+                    asin(
+                        corner / radius
+                    ).toDouble()
+                ).toFloat()
+
+                arcTo(
+                    rect = Rect(
+                        left = 0f, top = 0f, right = radius * 2f, bottom = radius * 2f
+                    ),
+                    startAngleDegrees = 180f + angleOffset,
+                    sweepAngleDegrees = 90f - 2f * angleOffset,
+                    forceMoveTo = false
+                )
+
+                // گوشهٔ بالا
+                quadraticTo(
+                    radius, 0f, radius, corner
+                )
+
+                // ضلع راست تا مرکز
+                lineTo(
+                    center.x, center.y - corner
+                )
+
+                // گوشهٔ مرکز
+                quadraticTo(
+                    center.x, center.y, center.x - corner, center.y
+                )
+
+                close()
+            }
+
+            return Outline.Generic(path)
+        }
+    }
+}
+
+@Composable
+fun WobblyRecordingCircle(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    scale: Float = 1f,
+    wobbleAmount: Float = 0.01f,
+    wobbleSpeed: Int = 1200
+) {
+    val infiniteTransition = rememberInfiniteTransition(
+        label = "wobble"
+    )
+
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 2f * PI.toFloat(), animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = wobbleSpeed, easing = LinearEasing
+            ), repeatMode = RepeatMode.Restart
+        ), label = "phase"
+    )
+
+    Canvas(
+        modifier = modifier
+    ) {
+        val center = this.center
+
+        val radius = size.minDimension / 2f * scale
+
+        val path = Path()
+        val points = 64
+
+        for (i in 0..points) {
+            val angle = i.toFloat() / points * 2f * PI.toFloat()
+
+            val wobble =
+                1f + wobbleAmount * sin(angle * 3f + phase) + wobbleAmount * 0.6f * sin(angle * 5f - phase) + wobbleAmount * 0.3f * sin(
+                    angle * 7f + phase
+                )
+
+            val r = radius * wobble
+
+            val x = center.x + cos(angle) * r
+            val y = center.y + sin(angle) * r
+
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+
+        path.close()
+
+        drawPath(
+            path = path, color = color
+        )
+    }
 }

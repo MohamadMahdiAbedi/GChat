@@ -9,6 +9,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "data")
 
@@ -20,6 +23,12 @@ val DEVICE_TYPE_KEY = intPreferencesKey("deviceTypeIP")
 val USERNAME_KEY = stringPreferencesKey("username")
 val PASSWORD_KEY = stringPreferencesKey("password")
 val PALETTE_KEY = intPreferencesKey("palette")
+val CUSTOM_PRIMARY_COLOR_KEY = intPreferencesKey("custom_color")
+val SEND_WITH_ENTER = booleanPreferencesKey("sendWithEnter")
+val SEND_WITH_SHIFT = booleanPreferencesKey("sendWithShift")
+val SEND_WITH_CTRL = booleanPreferencesKey("sendWithCtrl")
+val SEND_WITH_ALT = booleanPreferencesKey("sendWithAlt")
+val USE_DYNAMIC_COLOR = booleanPreferencesKey("useDynamicColor")
 
 data class Contact(
     val id: String,
@@ -54,7 +63,7 @@ sealed class Draft {
         val size: Long
     ) : Draft()
 
-    data class Text(val text: String) : Draft()
+    data class Text(val text: String, val id: Int) : Draft()
 }
 
 sealed class Content {
@@ -66,4 +75,33 @@ sealed class Content {
         var progress: Float = 0f,
         var fileSize: Long
     ) : Content()
+}
+
+data class SendMessageWith(
+    val enter: Boolean = false,
+    val shiftEnter: Boolean = false,
+    val ctrlEnter: Boolean = false,
+    val altEnter: Boolean = false
+)
+
+enum class RecordingState {
+    IDLE,
+    RECORDING,
+    PAUSED
+}
+
+fun calculateFileHash(file: File): String {
+    return try {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        FileInputStream(file).use { fis ->
+            var bytesRead: Int
+            while (fis.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    } catch (e: Exception) {
+        ""
+    }
 }

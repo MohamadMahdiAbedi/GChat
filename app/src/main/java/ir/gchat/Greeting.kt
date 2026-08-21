@@ -57,6 +57,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Compact
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Medium
 import androidx.compose.runtime.Composable
@@ -102,7 +103,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -170,8 +170,7 @@ fun Greeting(
             linkInteractionListener = { showTermsDialog = true },
             styles = TextLinkStyles(
                 style = SpanStyle(
-                    color = Color(0xFF296A47),
-                    textDecoration = TextDecoration.Underline
+                    color = Color(0xFF296A47), textDecoration = TextDecoration.Underline
                 )
             )
         )
@@ -189,8 +188,7 @@ fun Greeting(
             linkInteractionListener = { navController.navigate("signIn") /*showSignInDialog = true */ },
             styles = TextLinkStyles(
                 style = SpanStyle(
-                    color = Color(0xFF296A47),
-                    textDecoration = TextDecoration.Underline
+                    color = Color(0xFF296A47), textDecoration = TextDecoration.Underline
                 )
             )
         )
@@ -235,6 +233,8 @@ fun Greeting(
 
     var firstClick by remember { mutableStateOf(false) }
 
+    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) && windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact) }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
@@ -247,20 +247,7 @@ fun Greeting(
                 contentScale = ContentScale.FillBounds
             )
 
-            if (expanded) {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(0f)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }) {
-                            expanded = false
-                        }
-                )
-            }
-
-            if (windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) {
+            if (!expandedScreen) {
                 Column {
                     Box(
                         modifier = Modifier
@@ -360,9 +347,7 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,
-                                            shape = CircleShape,
-                                            clip = false
+                                            elevation = 6.dp, shape = CircleShape, clip = false
                                         ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
@@ -547,9 +532,7 @@ fun Greeting(
                                         keyboardActions = KeyboardActions(
                                             onNext = {
                                                 passwordFocusRequester.requestFocus()
-                                            }
-                                        )
-                                    )
+                                            }))
 
                                     TextField(
                                         modifier = Modifier
@@ -878,6 +861,18 @@ fun Greeting(
                     }
                 }
 
+                if (expanded) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }) {
+                                expanded = false
+                            }
+                    )
+                }
+
                 AnimatedMenu(
                     modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
                     width = 200.dp,
@@ -886,10 +881,11 @@ fun Greeting(
                     isExpanded = expanded,
                     close = { expanded = false },
                     ratioX = 1f,
-                    ratioY = 0f,
+                    offsetX = 24.dp,
+                    offsetY = (-24).dp,
                     position = Alignment.TopEnd,
-                    hasBackgroundCover = false,
-                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                    hasBackgroundCover = false
+                ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         DropdownMenuItem(text = {
@@ -980,7 +976,8 @@ fun Greeting(
                                     onClick = {
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         expanded = true
-                                    }) {
+                                    }
+                                ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.menu_dots),
                                         contentDescription = "Menu",
@@ -1013,9 +1010,7 @@ fun Greeting(
                                         .size(56.dp)
                                         .align(Alignment.BottomEnd)
                                         .shadow(
-                                            elevation = 6.dp,
-                                            shape = CircleShape,
-                                            clip = false
+                                            elevation = 6.dp, shape = CircleShape, clip = false
                                         ),
                                     shape = CircleShape,
                                     contentPadding = PaddingValues(16.dp)
@@ -1045,21 +1040,34 @@ fun Greeting(
                                     )
                                 }
 
+                                if (expanded) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }) {
+                                                expanded = false
+                                            }
+                                    )
+                                }
+
                                 AnimatedMenu(
-                                    modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
                                     chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
-                                    ratioY = 0f,
+                                    offsetX = 24.dp,
+                                    offsetY = (-24).dp,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false,
-                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    hasBackgroundCover = false
+                                ) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        DropdownMenuItem(text = {
+                                        DropdownMenuItem(
+                                            text = {
                                             Text(
                                                 text = dropdownThemeText
                                             )
@@ -1095,7 +1103,8 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                            })
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1198,18 +1207,30 @@ fun Greeting(
                                     )
                                 }
 
+                                if (expanded) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }) {
+                                                expanded = false
+                                            }
+                                    )
+                                }
+
                                 AnimatedMenu(
-                                    modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
                                     chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
-                                    ratioY = 0f,
+                                    offsetX = 24.dp,
+                                    offsetY = (-24).dp,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false,
-                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    hasBackgroundCover = false
+                                ) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -1248,7 +1269,8 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                            })
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1472,18 +1494,30 @@ fun Greeting(
                                     )
                                 }
 
+                                if (expanded) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }) {
+                                                expanded = false
+                                            }
+                                    )
+                                }
+
                                 AnimatedMenu(
-                                    modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
                                     chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
-                                    ratioY = 0f,
+                                    offsetX = 24.dp,
+                                    offsetY = (-24).dp,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false,
-                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    hasBackgroundCover = false
+                                ) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -1522,7 +1556,8 @@ fun Greeting(
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                                 expanded = false
                                                 ipConfig()
-                                            })
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -1745,18 +1780,30 @@ fun Greeting(
                                     )
                                 }
 
+                                if (expanded) {
+                                    Spacer(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() }) {
+                                                expanded = false
+                                            }
+                                    )
+                                }
+
                                 AnimatedMenu(
-                                    modifier = Modifier.zIndex(1f),
                                     width = 200.dp,
                                     height = 160.dp,
                                     chord = 256.dp,
                                     isExpanded = expanded,
                                     close = { expanded = false },
                                     ratioX = 1f,
-                                    ratioY = 0f,
+                                    offsetX = 24.dp,
+                                    offsetY = (-24).dp,
                                     position = Alignment.TopEnd,
-                                    hasBackgroundCover = false,
-                                    whatIsMyBackgroundFilterColor = { _, _ -> }) {
+                                    hasBackgroundCover = false
+                                ) {
                                     Column(modifier = Modifier.fillMaxSize()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         DropdownMenuItem(text = {
@@ -1833,8 +1880,7 @@ fun Greeting(
             confirmButton = {
                 Button(
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF296A47),
-                        contentColor = Color(0xFFFFFFFF)
+                        containerColor = Color(0xFF296A47), contentColor = Color(0xFFFFFFFF)
                     ),
                     onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -1855,10 +1901,8 @@ fun Greeting(
             dismissButton = {
                 TextButton(
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color(0xFF296A47)
-                    ),
-                    shape = RoundedCornerShape(2.dp), onClick = {
+                        containerColor = Color.Transparent, contentColor = Color(0xFF296A47)
+                    ), shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showSupportDialog = false
                     }) {
@@ -1896,10 +1940,8 @@ fun Greeting(
             confirmButton = {
                 TextButton(
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        contentColor = Color(0xFF296A47)
-                    ),
-                    shape = RoundedCornerShape(2.dp), onClick = {
+                        containerColor = Color.Transparent, contentColor = Color(0xFF296A47)
+                    ), shape = RoundedCornerShape(2.dp), onClick = {
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showTermsDialog = false
                     }) {
@@ -2125,14 +2167,10 @@ fun VerifySimCard(selectedIccid: String?, setSelectedIccid: (String) -> Unit, en
                         end = 8.dp,
                         bottom = 8.dp
                     )
-                    .fillMaxWidth(),
-                shadowElevation = 4.dp,
-                onClick = {
+                    .fillMaxWidth(), shadowElevation = 4.dp, onClick = {
                     view.playSoundEffect(SoundEffectConstants.CLICK)
                     setSelectedIccid(iccid)
-                },
-                color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(2.dp)
+                }, color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(2.dp)
             ) {
                 Row(
                     modifier = Modifier

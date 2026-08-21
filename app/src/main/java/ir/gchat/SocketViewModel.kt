@@ -2,6 +2,8 @@ package ir.gchat
 
 import android.app.Application
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
@@ -29,10 +31,10 @@ import okhttp3.WebSocketListener
 import okio.BufferedSink
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.collections.emptyMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -102,7 +104,6 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _shouldScrollToBottom = MutableStateFlow(false)
     val shouldScrollToBottom: StateFlow<Boolean> = _shouldScrollToBottom.asStateFlow()
 
-    //private var _drafts = MutableStateFlow(emptyList<Draft.File>())
     private var _drafts = MutableStateFlow<Map<String, List<Draft>>>(emptyMap())
     val drafts: StateFlow<Map<String, List<Draft>>> = _drafts.asStateFlow()
 
@@ -628,6 +629,12 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                             "آپلود شکست خورد (onFailure)",
                                                             e
                                                         )
+
+                                                        showToast(
+                                                            message = "Upload failed"
+                                                        )
+
+                                                        removeFileFromDraft(fileName = file.name)
                                                     }
 
                                                     override fun onResponse(
@@ -642,6 +649,157 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                                 "FileUpload",
                                                                 "پاسخ سرور: code=$code"
                                                             )
+
+                                                            when (code) {
+                                                                200 -> {
+                                                                    try {
+                                                                        val result = JSONObject(bodyString)
+
+                                                                        if (result.optString("status") != "success") {
+                                                                            showToast("آپلود ناموفق")
+                                                                        }
+
+                                                                        val fileId = result.getInt("file_id")
+
+                                                                        val thumbUrl = result.optString(
+                                                                            "thumb_url",
+                                                                            ""
+                                                                        )
+
+                                                                        // فایل موقت
+                                                                        val sourceFile = File(
+                                                                            context.filesDir,
+                                                                            "recordings/${file.name}"
+                                                                        )
+
+                                                                        // پوشه نهایی Downloads
+                                                                        val targetDir = File(
+                                                                            context.filesDir,
+                                                                            "downloads"
+                                                                        )
+
+                                                                        targetDir.mkdirs()
+
+                                                                        // گرفتن پسوند فایل
+                                                                        val extension = sourceFile.extension
+
+                                                                        // نام نهایی = file_id.extension
+                                                                        val finalName = if (extension.isNotEmpty()) {
+                                                                            "$fileId.$extension"
+                                                                        } else {
+                                                                            fileId.toString()
+                                                                        }
+
+                                                                        val targetFile = File(
+                                                                            targetDir,
+                                                                            finalName
+                                                                        )
+
+                                                                        // انتقال + تغییر نام
+                                                                        val localFile = when {
+                                                                            targetFile.exists() -> {
+                                                                                if (sourceFile.exists()) {
+                                                                                    sourceFile.delete()
+                                                                                }
+
+                                                                                targetFile
+                                                                            }
+
+                                                                            sourceFile.exists() -> {
+                                                                                if (sourceFile.renameTo(targetFile)) {
+                                                                                    targetFile
+                                                                                } else {
+                                                                                    try {
+                                                                                        sourceFile.copyTo(
+                                                                                            targetFile,
+                                                                                            overwrite = true
+                                                                                        )
+                                                                                        sourceFile.delete()
+                                                                                        targetFile
+                                                                                    } catch (_: Exception) {
+                                                                                        null
+                                                                                    }
+                                                                                }
+                                                                            }
+
+                                                                            else -> null
+                                                                        }
+
+                                                                        // آپدیت Draft
+                                                                        _drafts.update { draftsMap ->
+
+                                                                            val chatId = openedChat.value
+
+                                                                            val drafts = draftsMap[chatId]
+                                                                                ?: return@update draftsMap
+
+                                                                            draftsMap + (
+                                                                                    chatId to drafts.map { currentDraft ->
+
+                                                                                        if (
+                                                                                            currentDraft is Draft.File &&
+                                                                                            currentDraft.name == file.name
+                                                                                        ) {
+                                                                                            currentDraft.copy(
+                                                                                                id = fileId,
+                                                                                                progress = 1f,
+                                                                                                thumbUrl = thumbUrl,
+                                                                                                localUri = localFile?.let { movedFile ->
+                                                                                                    Uri.fromFile(movedFile)
+                                                                                                } ?: currentDraft.localUri
+                                                                                            )
+                                                                                        } else {
+                                                                                            currentDraft
+                                                                                        }
+                                                                                    }
+                                                                                    )
+                                                                        }
+
+                                                                    } catch (e: Exception) {
+                                                                        Log.e(
+                                                                            "FileUpload",
+                                                                            "Error",
+                                                                            e
+                                                                        )
+                                                                    }
+                                                                }
+
+                                                                404 -> {
+                                                                    showToast("Invalid upload token")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+
+                                                                410 -> {
+                                                                    showToast("Upload token has expired")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+
+                                                                413 -> {
+                                                                    showToast("File is too large")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+
+                                                                415 -> {
+                                                                    showToast("Unsupported file type")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+
+                                                                500 -> {
+                                                                    showToast("Server error")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+
+                                                                else -> {
+                                                                    showToast("Upload failed: $code")
+                                                                    removeFileFromDraft(fileName = file.name)
+                                                                    return
+                                                                }
+                                                            }
 
                                                             Log.d(
                                                                 "FileUpload",
@@ -684,7 +842,15 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
                                                                     Log.d(
                                                                         "FileUpload",
-                                                                        "آپلود موفق! file_id=${file.id}, thumb=${file.thumbUrl}"
+                                                                        "Upload successful! file_id=${
+                                                                            result.getInt(
+                                                                                "file_id"
+                                                                            )
+                                                                        }, " + "thumb=${
+                                                                            result.optString(
+                                                                                "thumb_url"
+                                                                            )
+                                                                        }"
                                                                     )
                                                                 } else {
                                                                     Log.e(
@@ -745,6 +911,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                     delay(1000.milliseconds)
                                     connect()
                                 }
+                            }
+
+                            "delete_dm_response" -> {
+                                getConversations()
+                                getMessagesList(openedChat.value)
                             }
                         }
                     } catch (e: Exception) {
@@ -924,6 +1095,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         getMessagesList(contact)
+        getConversations()
     }
 
     fun getConversations() {
@@ -949,6 +1121,20 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         put("type", "get_dms")
                         put("with", contact)
                         put("limit", 50)
+                    }.toString()
+                )
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun deleteMessage(id: Int) {
+        viewModelScope.launch {
+            try {
+                webSocket?.send(
+                    JSONObject().apply {
+                        put("type", "delete_dm")
+                        put("id", id)
                     }.toString()
                 )
             } catch (_: Exception) {
@@ -1053,7 +1239,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                     // Internal Storage
                     // =========================================================
 
-                    val downloadsDirectory = java.io.File(
+                    val downloadsDirectory = File(
                         context.filesDir, "downloads"
                     )
 
@@ -1065,7 +1251,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
 
-                    var targetFile = java.io.File(
+                    var targetFile = File(
                         downloadsDirectory, fileName
                     )
 
@@ -1086,7 +1272,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                 "$baseName ($index).$extension"
                             }
 
-                            targetFile = java.io.File(
+                            targetFile = File(
                                 downloadsDirectory, newName
                             )
 
@@ -1203,7 +1389,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun isFileDownloaded(fileName: String): Boolean {
-        val file = java.io.File(
+        val file = File(
             context.filesDir, "downloads/$fileName"
         )
 
@@ -1218,6 +1404,18 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
             draftsMap + (chatId to drafts.filter { draft ->
                 draft !is Draft.File || draft.name != fileName
+            })
+        }
+    }
+
+    fun removeTextFromDraft(id: Int) {
+        val chatId = openedChat.value
+
+        _drafts.update { draftsMap ->
+            val drafts = draftsMap[chatId] ?: return@update draftsMap
+
+            draftsMap + (chatId to drafts.filter { draft ->
+                draft !is Draft.Text || draft.id != id
             })
         }
     }
@@ -1247,6 +1445,41 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     fun setSavedText(id: String, message: String) {
         _savedText.update { current ->
             current + (id to message)
+        }
+    }
+
+    fun attachTextBlock(text: String) {
+        _drafts.update { draftsMap ->
+            val chatId = openedChat.value
+            val drafts = draftsMap[chatId] ?: emptyList()
+
+            val newId = (drafts.filterIsInstance<Draft.Text>().maxOfOrNull { it.id } ?: -1) + 1
+
+            draftsMap + (chatId to (drafts + Draft.Text(text, id = newId)))
+        }
+    }
+
+    fun editTextInDraft(id: Int, newText: String) {
+        val chatId = openedChat.value
+
+        _drafts.update { draftsMap ->
+            val drafts = draftsMap[chatId] ?: return@update draftsMap
+
+            draftsMap + (chatId to drafts.map { draft ->
+                if (draft is Draft.Text && draft.id == id) {
+                    draft.copy(text = newText)
+                } else {
+                    draft
+                }
+            })
+        }
+    }
+
+    fun showToast(message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(
+                context, message, Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }

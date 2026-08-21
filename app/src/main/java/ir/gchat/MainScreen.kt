@@ -56,16 +56,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults.colors
+import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
@@ -75,6 +73,7 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.material3.ripple
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Compact
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Companion.Medium
 import androidx.compose.runtime.Composable
@@ -121,7 +120,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import coil.ImageLoader
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -148,11 +147,18 @@ fun MainScreenContainer(
     setSavedText: (String, String) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
+    removeTextFromDraft: (Int) -> Unit,
     clearDraft: () -> Unit,
     seenAll: (String) -> Unit,
     serverUrl: String,
     imageLoader: ImageLoader,
-    isFileDownloaded: (String) -> Boolean
+    isFileDownloaded: (String) -> Boolean,
+    attachTextBlock: (String) -> Unit,
+    sendWith: SendMessageWith,
+    editTextInDraft: (Int, String) -> Unit,
+    deleteMessage: (Int) -> Unit,
+    playing: java.io.File?,
+    playSet: (java.io.File?) -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -164,14 +170,14 @@ fun MainScreenContainer(
         else -> 0.3f
     }
 
-    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium)) }
+    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) && windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact) }
     var selectedChat by rememberSaveable { mutableStateOf("") }
     var selectedChatDisplayName by rememberSaveable { mutableStateOf("") }
     var selectedChatUnreadCount by rememberSaveable { mutableIntStateOf(0) }
 
     val view = LocalView.current
 
-    val backgroundColor = materialColors[hash20(username)]
+    val backgroundColor = materialPalette[hash19(username)].primary
     val iconColor = if (backgroundColor.luminance() >= 0.5f) {
         Color.Black
     } else {
@@ -204,11 +210,14 @@ fun MainScreenContainer(
     val navController = rememberNavController()
 
     val configuration = LocalConfiguration.current
-    val isLandscape =
-        configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var smsAlertHeight by remember { mutableStateOf(0.dp) }
     val density = LocalDensity.current
+
+    LaunchedEffect(navController.currentBackStackEntry?.destination?.route == "mainScreen") {
+        getConversations()
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -239,8 +248,7 @@ fun MainScreenContainer(
                                     ), startY = size.height - gradientHeight, endY = size.height
                                 ), blendMode = BlendMode.Multiply
                             )
-                        }
-                ) {
+                        }) {
 
                     Icon(
                         painter = painterResource(R.drawable.profile_black_content),
@@ -262,8 +270,7 @@ fun MainScreenContainer(
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
                                 //expanded = !expanded
                             }
-                            .padding(start = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
+                            .padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             modifier = Modifier.weight(1f),
                             text = username,
@@ -375,63 +382,57 @@ fun MainScreenContainer(
                     contentWindowInsets = if (isLandscape) {
                         val density = LocalDensity.current
 
-                        WindowInsets(
-                            left = 0.dp,
-                            right = 0.dp,
-                            top = with(density) {
-                                ScaffoldDefaults.contentWindowInsets.getTop(this).toDp()
-                            },
-                            bottom = with(density) {
-                                ScaffoldDefaults.contentWindowInsets.getBottom(this).toDp()
-                            }
-                        )
+                        WindowInsets(left = 0.dp, right = 0.dp, top = with(density) {
+                            ScaffoldDefaults.contentWindowInsets.getTop(this).toDp()
+                        }, bottom = with(density) {
+                            ScaffoldDefaults.contentWindowInsets.getBottom(this).toDp()
+                        })
                     } else {
                         ScaffoldDefaults.contentWindowInsets
                     },
                     topBar = {
                         TopAppBar(
                             windowInsets = if (isLandscape) {
-                                WindowInsets.statusBars
-                            } else {
-                                TopAppBarDefaults.windowInsets
-                            },
-                            title = {
-                                Text("GChat")
-                            }, navigationIcon = {
-                                IconButton(
-                                    onClick = {
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        scope.launch {
-                                            drawerState.apply {
-                                                if (isClosed) open() else close()
-                                            }
+                            WindowInsets.statusBars
+                        } else {
+                            TopAppBarDefaults.windowInsets
+                        }, title = {
+                            Text("GChat")
+                        }, navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    scope.launch {
+                                        drawerState.apply {
+                                            if (isClosed) open() else close()
                                         }
-                                    }) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.menu),
-                                        contentDescription = "Menu"
-                                    )
-                                }
-                            }, actions = {
-                                IconButton(
-                                    onClick = {
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        searching = true
-                                    }) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.search),
-                                        contentDescription = "Search"
-                                    )
-                                }
-                            }, colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                            ), modifier = Modifier.shadow(
-                                elevation = 4.dp, clip = false
-                            )
+                                    }
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.menu),
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        }, actions = {
+                            IconButton(
+                                onClick = {
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    searching = true
+                                }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.search),
+                                    contentDescription = "Search"
+                                )
+                            }
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, clip = false
+                        )
                         )
                     }) { innerPadding ->
                     Box(
@@ -440,8 +441,7 @@ fun MainScreenContainer(
                             .padding(innerPadding)
                     ) {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
+                            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(
                                 bottom = smsAlertHeight + 8.dp
                             )
                         ) {
@@ -493,18 +493,18 @@ fun MainScreenContainer(
                                         smsAlertHeight = with(density) {
                                             it.height.toDp()
                                         }
-                                    }
-                            ) {
+                                    }) {
                                 val compact = maxWidth < 512.dp
 
-                                val containerModifier = Modifier
-                                    .fillMaxWidth()
-                                    .shadow(elevation = 4.dp, clip = false)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.error,
-                                        shape = RoundedCornerShape(2.dp)
-                                    )
-                                    .padding(16.dp)
+                                val containerModifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .shadow(elevation = 4.dp, clip = false)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.error,
+                                            shape = RoundedCornerShape(2.dp)
+                                        )
+                                        .padding(16.dp)
 
                                 if (compact) {
                                     Column(
@@ -524,10 +524,10 @@ fun MainScreenContainer(
 
                                                 try {
                                                     context.startActivity(
-                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-                                                            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                                                        else
-                                                            Intent(Settings.ACTION_SETTINGS)
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) Intent(
+                                                            Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
+                                                        )
+                                                        else Intent(Settings.ACTION_SETTINGS)
                                                     )
                                                 } catch (_: Exception) {
                                                     context.startActivity(Intent(Settings.ACTION_SETTINGS))
@@ -555,22 +555,20 @@ fun MainScreenContainer(
                                         )
 
                                         TextButton(
-                                            shape = RoundedCornerShape(2.dp),
-                                            onClick = {
+                                            shape = RoundedCornerShape(2.dp), onClick = {
                                                 view.playSoundEffect(SoundEffectConstants.CLICK)
 
                                                 try {
                                                     context.startActivity(
-                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-                                                            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                                                        else
-                                                            Intent(Settings.ACTION_SETTINGS)
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) Intent(
+                                                            Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS
+                                                        )
+                                                        else Intent(Settings.ACTION_SETTINGS)
                                                     )
                                                 } catch (_: Exception) {
                                                     context.startActivity(Intent(Settings.ACTION_SETTINGS))
                                                 }
-                                            },
-                                            colors = ButtonDefaults.textButtonColors(
+                                            }, colors = ButtonDefaults.textButtonColors(
                                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                                             )
@@ -700,8 +698,7 @@ fun MainScreenContainer(
                             .padding(bottom = 8.dp)
                             .fillMaxSize()
                             .shadow(
-                                elevation = 4.dp,
-                                clip = false
+                                elevation = 4.dp, clip = false
                             )
                             .background(
                                 //color = MaterialTheme.colorScheme.surfaceContainer,
@@ -729,9 +726,7 @@ fun MainScreenContainer(
                                             }&selectedChatUnreadCount=${selectedChatUnreadCount}"
                                         )
                                     }
-                                },
-                                serverUrl = serverUrl,
-                                imageLoader = imageLoader
+                                }, serverUrl = serverUrl, imageLoader = imageLoader
                             )
                         }
                     }
@@ -748,8 +743,7 @@ fun MainScreenContainer(
                     startDestination = "chatScreen",
                     enterTransition = {
                         slideInVertically(
-                            initialOffsetY = { fullHeight -> fullHeight },
-                            animationSpec = tween(
+                            initialOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
                                 durationMillis = 320, easing = FastOutSlowInEasing
                             )
                         )
@@ -772,32 +766,26 @@ fun MainScreenContainer(
                     },
                     popExitTransition = {
                         slideOutVertically(
-                            targetOffsetY = { fullHeight -> fullHeight },
-                            animationSpec = tween(
+                            targetOffsetY = { fullHeight -> fullHeight }, animationSpec = tween(
                                 durationMillis = 320, easing = FastOutSlowInEasing
                             )
                         )
                     }) {
                     composable(
                         route = "chatScreen?id={id}&displayName={displayName}&selectedChatUnreadCount={selectedChatUnreadCount}",
-                        arguments = listOf(
-                            navArgument("id") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("displayName") {
-                                type = NavType.StringType
-                                defaultValue = ""
-                            },
-                            navArgument("selectedChatUnreadCount") {
-                                type = NavType.IntType
-                                defaultValue = 0
-                            }
-                        )
+                        arguments = listOf(navArgument("id") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        }, navArgument("displayName") {
+                            type = NavType.StringType
+                            defaultValue = ""
+                        }, navArgument("selectedChatUnreadCount") {
+                            type = NavType.IntType
+                            defaultValue = 0
+                        })
                     ) { backStackEntry ->
                         val id = backStackEntry.arguments?.getString("id") ?: ""
-                        val displayName =
-                            backStackEntry.arguments?.getString("displayName") ?: ""
+                        val displayName = backStackEntry.arguments?.getString("displayName") ?: ""
                         val selectedChatUnreadCount =
                             backStackEntry.arguments?.getInt("selectedChatUnreadCount") ?: 0
                         Box(
@@ -816,8 +804,7 @@ fun MainScreenContainer(
                                             ), startX = 0.dp.toPx(), endX = 8.dp.toPx()
                                         ), blendMode = BlendMode.Multiply
                                     )
-                                }
-                        ) {
+                                }) {
                             ChatScreen(
                                 back = { navController.popBackStack() },
                                 id = id/*selectedChat*/,
@@ -835,11 +822,18 @@ fun MainScreenContainer(
                                 setSavedText = setSavedText,
                                 downloadFile = downloadFile,
                                 removeFileFromDraft = removeFileFromDraft,
+                                removeTextFromDraft = removeTextFromDraft,
                                 clearDraft = clearDraft,
                                 seenAll = seenAll,
                                 serverUrl = serverUrl,
                                 imageLoader = imageLoader,
-                                isFileDownloaded = isFileDownloaded
+                                isFileDownloaded = isFileDownloaded,
+                                attachTextBlock = attachTextBlock,
+                                sendWith = sendWith,
+                                editTextInDraft = editTextInDraft,
+                                deleteMessage = deleteMessage,
+                                playing = playing,
+                                playSet = playSet
                             )
                         }
                     }
@@ -860,7 +854,7 @@ fun ContactItem(
     savedText: String = "",
 ) {
     val backgroundColor = remember(contact.id) {
-        materialColors[hash20(contact.id)]
+        materialPalette[hash19(contact.id)].primary
     }
 
     val iconColor = if (backgroundColor.luminance() >= 0.5f) Color.Black
@@ -970,8 +964,9 @@ fun ContactItem(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TooltipBox(
-                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                            tooltip = {
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                positioning = TooltipAnchorPosition.Above
+                            ), tooltip = {
                                 PlainTooltip {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         for (content in contact.lastMessageContent) {
@@ -996,19 +991,45 @@ fun ContactItem(
                                                             "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
                                                         Log.d(
                                                             "THUMB",
-                                                            "id=${content.id}, " +
-                                                                    "serverUrl=$serverUrl, " +
-                                                                    "url=$thumbnailUrl"
+                                                            "id=${content.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                         )
                                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            AsyncImage(
+                                                            SubcomposeAsyncImage(
                                                                 model = thumbnailUrl,
                                                                 imageLoader = imageLoader,
                                                                 contentDescription = null,
+
                                                                 modifier = Modifier
                                                                     .aspectRatio(1f)
                                                                     .fillMaxSize(),
+
                                                                 contentScale = ContentScale.Crop,
+
+                                                                loading = {
+                                                                    Icon(
+                                                                        painter = painterResource(
+                                                                            R.drawable.draft
+                                                                        ),
+                                                                        contentDescription = null,
+                                                                        modifier = Modifier
+                                                                            .fillMaxSize()
+                                                                            .padding(8.dp),
+                                                                        tint = MaterialTheme.colorScheme.surface
+                                                                    )
+                                                                },
+
+                                                                error = {
+                                                                    Icon(
+                                                                        painter = painterResource(
+                                                                            R.drawable.draft
+                                                                        ),
+                                                                        contentDescription = null,
+                                                                        modifier = Modifier
+                                                                            .fillMaxSize()
+                                                                            .padding(8.dp),
+                                                                        tint = MaterialTheme.colorScheme.surface
+                                                                    )
+                                                                },
                                                                 onLoading = {
                                                                     Log.d(
                                                                         "THUMB",
@@ -1027,8 +1048,7 @@ fun ContactItem(
                                                                         "ERROR: $thumbnailUrl",
                                                                         it.result.throwable
                                                                     )
-                                                                }
-                                                            )
+                                                                })
                                                             Text(
                                                                 text = content.fileName,
                                                                 modifier = Modifier
@@ -1048,8 +1068,7 @@ fun ContactItem(
                                         }
                                     }
                                 }
-                            },
-                            state = rememberTooltipState()
+                            }, state = rememberTooltipState()
                         ) {
                             Row(
                                 modifier = Modifier.weight(1f),
@@ -1071,20 +1090,43 @@ fun ContactItem(
 
                                     visibleFiles.forEach { content ->
                                         Surface(
-                                            shape = CircleShape,
-                                            modifier = Modifier
-                                                .size(16.dp)
+                                            shape = CircleShape, modifier = Modifier.size(16.dp)
                                         ) {
                                             val thumbnailUrl =
                                                 "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
 
-                                            AsyncImage(
+                                            SubcomposeAsyncImage(
                                                 model = thumbnailUrl,
                                                 imageLoader = imageLoader,
                                                 contentDescription = null,
-                                                placeholder = painterResource(R.drawable.draft),
-                                                modifier = Modifier.fillMaxSize(),
+
+                                                modifier = Modifier
+                                                    .aspectRatio(1f)
+                                                    .fillMaxSize(),
+
                                                 contentScale = ContentScale.Crop,
+
+                                                loading = {
+                                                    Icon(
+                                                        painter = painterResource(
+                                                            R.drawable.draft
+                                                        ),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        tint = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                },
+
+                                                error = {
+                                                    Icon(
+                                                        painter = painterResource(
+                                                            R.drawable.draft
+                                                        ),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        tint = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                },
                                                 onLoading = {
                                                     Log.d("THUMB", "LOADING: $thumbnailUrl")
                                                 },
@@ -1097,8 +1139,7 @@ fun ContactItem(
                                                         "ERROR: $thumbnailUrl",
                                                         it.result.throwable
                                                     )
-                                                }
-                                            )
+                                                })
                                         }
                                     }
 
@@ -1106,8 +1147,7 @@ fun ContactItem(
                                     if (files.size > 3) {
                                         Surface(
                                             shape = CircleShape,
-                                            modifier = Modifier
-                                                .size(16.dp),
+                                            modifier = Modifier.size(16.dp),
                                             color = MaterialTheme.colorScheme.primary
                                         ) {
                                             Box(
@@ -1125,13 +1165,22 @@ fun ContactItem(
                                 }
 
                                 // Texts — after files
-                                texts.forEach { content ->
+                                //texts.forEach { content ->
+                                //    Text(
+                                //        text = content.text.replace("\n", " ")
+                                //            .toRichAnnotatedString(
+                                //                linkColor = MaterialTheme.colorScheme.primary
+                                //            ),
+                                //        style = MaterialTheme.typography.bodySmall,
+                                //        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                                //        maxLines = 1,
+                                //        overflow = TextOverflow.Ellipsis
+                                //    )
+                                //}
+                                if (texts.isNotEmpty()) {
                                     Text(
-                                        text = content.text
-                                            .replace("\n", " ")
-                                            .toRichAnnotatedString(
-                                                linkColor = MaterialTheme.colorScheme.primary
-                                            ),
+                                        text = texts.last().text.replace("\n", " ")
+                                            .toRichAnnotatedStringNoLinks(),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
                                         maxLines = 1,
@@ -1143,8 +1192,9 @@ fun ContactItem(
                         Spacer(modifier = Modifier.weight(1f))
                         if (draft.isNotEmpty() || savedText.isNotBlank()) {
                             TooltipBox(
-                                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                                tooltip = {
+                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                    positioning = TooltipAnchorPosition.Above
+                                ), tooltip = {
                                     PlainTooltip {
                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             for (content in draft) {
@@ -1163,50 +1213,80 @@ fun ContactItem(
                                                             modifier = Modifier
                                                                 .height(32.dp)
                                                                 .fillMaxWidth(),
-                                                            color = Color.White.copy(alpha = 0.25f)
+                                                            color = MaterialTheme.colorScheme.surface.copy(
+                                                                alpha = 0.25f
+                                                            )
                                                         ) {
-                                                            val thumbnailUrl =
-                                                                "http://${
-                                                                    serverUrl.substringBefore(
-                                                                        ":"
-                                                                    )
-                                                                }:8080/thumb/${content.id}"
+                                                            val thumbnailUrl = "http://${
+                                                                serverUrl.substringBefore(
+                                                                    ":"
+                                                                )
+                                                            }:8080/thumb/${content.id}"
                                                             Log.d(
                                                                 "THUMB",
-                                                                "id=${content.id}, " +
-                                                                        "serverUrl=$serverUrl, " +
-                                                                        "url=$thumbnailUrl"
+                                                                "id=${content.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
                                                             )
                                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                AsyncImage(
+                                                                SubcomposeAsyncImage(
                                                                     model = thumbnailUrl,
                                                                     imageLoader = imageLoader,
                                                                     contentDescription = null,
-                                                                    placeholder = painterResource(R.drawable.draft),
+
                                                                     modifier = Modifier
-                                                                        .aspectRatio(1f)
+                                                                        .aspectRatio(
+                                                                            1f
+                                                                        )
                                                                         .fillMaxSize(),
+
                                                                     contentScale = ContentScale.Crop,
+
+                                                                    loading = {
+                                                                        Icon(
+                                                                            painter = painterResource(
+                                                                                R.drawable.draft
+                                                                            ),
+                                                                            contentDescription = null,
+                                                                            modifier = Modifier
+                                                                                .fillMaxSize()
+                                                                                .padding(8.dp),
+                                                                            tint = MaterialTheme.colorScheme.surface
+                                                                        )
+                                                                    },
+
+                                                                    error = {
+                                                                        Icon(
+                                                                            painter = painterResource(
+                                                                                R.drawable.draft
+                                                                            ),
+                                                                            contentDescription = null,
+                                                                            modifier = Modifier
+                                                                                .fillMaxSize()
+                                                                                .padding(8.dp),
+                                                                            tint = MaterialTheme.colorScheme.surface
+                                                                        )
+                                                                    },
+
                                                                     onLoading = {
                                                                         Log.d(
                                                                             "THUMB",
                                                                             "LOADING: $thumbnailUrl"
                                                                         )
                                                                     },
+
                                                                     onSuccess = {
                                                                         Log.d(
                                                                             "THUMB",
                                                                             "SUCCESS: $thumbnailUrl"
                                                                         )
                                                                     },
+
                                                                     onError = {
                                                                         Log.e(
                                                                             "THUMB",
                                                                             "ERROR: $thumbnailUrl",
                                                                             it.result.throwable
                                                                         )
-                                                                    }
-                                                                )
+                                                                    })
                                                                 Text(
                                                                     text = content.name,
                                                                     modifier = Modifier
@@ -1224,15 +1304,16 @@ fun ContactItem(
                                                     }
                                                 }
                                             }
-                                            Text(
-                                                text = savedText.toRichAnnotatedString(
-                                                    linkColor = MaterialTheme.colorScheme.primary
+                                            if (savedText.isNotBlank()) {
+                                                Text(
+                                                    text = savedText.toRichAnnotatedString(
+                                                        linkColor = MaterialTheme.colorScheme.primary
+                                                    )
                                                 )
-                                            )
+                                            }
                                         }
                                     }
-                                },
-                                state = rememberTooltipState()
+                                }, state = rememberTooltipState()
                             ) {
                                 Row(
                                     modifier = Modifier
