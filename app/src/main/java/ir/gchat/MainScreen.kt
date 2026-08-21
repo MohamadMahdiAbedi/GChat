@@ -832,7 +832,6 @@ fun MainScreenContainer(
                                 sendWith = sendWith,
                                 editTextInDraft = editTextInDraft,
                                 deleteMessage = deleteMessage,
-                                playing = playing,
                                 playSet = playSet
                             )
                         }

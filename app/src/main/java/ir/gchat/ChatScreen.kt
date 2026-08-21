@@ -41,11 +41,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -161,7 +163,7 @@ fun isAudioFile(file: File): Boolean {
         )
 
         mimeType?.startsWith("audio/", ignoreCase = true) == true
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         false
     } finally {
         retriever.release()
@@ -237,8 +239,7 @@ fun ChatScreen(
     sendWith: SendMessageWith,
     editTextInDraft: (Int, String) -> Unit,
     deleteMessage: (Int) -> Unit,
-    playing: java.io.File?,
-    playSet: (java.io.File?) -> Unit,
+    playSet: (File?) -> Unit,
 ) {
     val context = LocalContext.current
     var message by rememberSaveable { mutableStateOf("") }
@@ -515,7 +516,6 @@ fun ChatScreen(
                                         messageMenu = true
                                         messageMenuId = item.id
                                     },
-                                    playing = playing,
                                     playSet = playSet
                                 )
                             }
@@ -535,15 +535,60 @@ fun ChatScreen(
                             }
                         }
 
+                        val density = LocalDensity.current
+
                         this@Column.AnimatedVisibility(
                             visible = showButton,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(8.dp)
                                 .padding(bottom = if (showFileRow) 56.dp else 0.dp),
-                            enter = slideInVertically { if (showFileRow) 2 * it else it },// + fadeIn() + scaleIn(initialScale = 0.8f),
-                            exit = slideOutVertically { if (showFileRow) 2 * it else it }// + fadeOut() + scaleOut(targetScale = 0.8f)
+                            //enter = slideInVertically { if (showFileRow) 2 * it else it }, // + fadeIn() + scaleIn(initialScale = 0.8f),
+                            enter = slideInVertically {
+                                with(density) {
+                                    if (showFileRow) 128.dp.roundToPx()
+                                    else 64.dp.roundToPx()
+                                }
+                            },
+                            //exit = slideOutVertically { if (showFileRow) 2 * it else it } // + fadeOut() + scaleOut(targetScale = 0.8f)
+                            exit = slideOutVertically {
+                                with(density) {
+                                    if (showFileRow) 128.dp.roundToPx()
+                                    else 64.dp.roundToPx()
+                                }
+                            }
                         ) {
+//                            Box(
+//                                modifier = Modifier
+//                                    .requiredSize(48.dp)
+//                                    .shadow(
+//                                        elevation = 6.dp,
+//                                        shape = CircleShape,
+//                                        clip = false
+//                                    )
+//                                    .clip(CircleShape)
+//                                    .background(MaterialTheme.colorScheme.surface)
+//                                    .clickable {
+//                                        view.playSoundEffect(
+//                                            SoundEffectConstants.CLICK
+//                                        )
+//
+//                                        scope.launch {
+//                                            listState.scrollToItem(
+//                                                listState.layoutInfo.totalItemsCount - 1
+//                                            )
+//                                            seenAll(id)
+//                                        }
+//                                    },
+//                                contentAlignment = Alignment.Center
+//                            ) {
+//                                Icon(
+//                                    painter = painterResource(R.drawable.keyboard_arrow_down),
+//                                    contentDescription = "Navigate to end",
+//                                    modifier = Modifier.requiredSize(24.dp),
+//                                    tint = MaterialTheme.colorScheme.onSurface
+//                                )
+//                            }
                             Button(
                                 onClick = {
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -554,7 +599,7 @@ fun ChatScreen(
                                 },
                                 modifier = Modifier
                                     .padding(8.dp)
-                                    .size(48.dp)
+                                    .requiredSize(48.dp)
                                     .align(Alignment.BottomEnd)
                                     .shadow(
                                         elevation = 6.dp, shape = CircleShape, clip = false
@@ -569,7 +614,7 @@ fun ChatScreen(
                                 Icon(
                                     painter = painterResource(R.drawable.keyboard_arrow_down),
                                     contentDescription = "Navigate to end",
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.requiredSize(24.dp)
                                 )
                             }
                         }
@@ -812,6 +857,134 @@ fun ChatScreen(
                                 )
                             }
                         } else {
+//                            Box(
+//                                Modifier
+//                                    .padding(8.dp)
+//                                    .size(48.dp)
+//                                    .clip(CircleShape)
+//                                    .pointerInput(hasRecordPermission) {
+//
+//                                        awaitEachGesture {
+//
+//                                            val down = awaitFirstDown()
+//
+//                                            // Permission نداریم
+//                                            if (!hasRecordPermission) {
+//                                                permissionLauncher.launch(
+//                                                    Manifest.permission.RECORD_AUDIO
+//                                                )
+//                                                return@awaitEachGesture
+//                                            }
+//
+//                                            if (!recordingState) {
+//
+//                                                recorder.start()
+//                                                recordingState = true
+//
+//                                                view.playSoundEffect(
+//                                                    SoundEffectConstants.CLICK
+//                                                )
+//                                            }
+//
+//                                            val threshold = 168.dp.toPx()
+//
+//                                            var cancelled = false
+//                                            var gestureLocked = false
+//
+//                                            recording = true
+//                                            locked = false
+//
+//                                            while (true) {
+//
+//                                                val event = awaitPointerEvent()
+//
+//                                                val change =
+//                                                    event.changes.firstOrNull { it.id == down.id }
+//                                                        ?: break
+//
+//                                                if (!change.pressed) {
+//
+//                                                    if (cancelled) {
+//
+//                                                        recording = false
+//
+//                                                        if (recordingState) {
+//                                                            recorder.cancel()
+//                                                            recordingState = false
+//                                                        }
+//
+//                                                        distance = Offset.Zero
+//
+//                                                    } else if (!gestureLocked) {
+//
+//                                                        if (recordingState) {
+//
+//                                                            val recordedFile = recorder.stop()
+//
+//                                                            recordedFile?.let { file ->
+//                                                                val fileUri = Uri.fromFile(file)
+//                                                                val fileName = file.name
+//                                                                val fileSize = file.length()
+//                                                                val fileHash =
+//                                                                    calculateFileHash(file)
+//
+//                                                                getUploadUri(
+//                                                                    fileName,
+//                                                                    fileSize,
+//                                                                    fileHash,
+//                                                                    fileUri
+//                                                                )
+//                                                            }
+//
+//                                                            recording = false
+//                                                            recordingState = false
+//                                                        }
+//
+//                                                        recording = false
+//                                                    }
+//
+//                                                    break
+//                                                }
+//
+//                                                distance = change.position - down.position
+//
+//                                                // لغو با کشیدن به چپ
+//                                                if (!cancelled && !gestureLocked && distance.x < -threshold) {
+//
+//                                                    cancelled = true
+//                                                    recording = false
+//
+//                                                    view.playSoundEffect(
+//                                                        SoundEffectConstants.CLICK
+//                                                    )
+//
+//                                                    distance = Offset.Zero
+//                                                }
+//
+//                                                // Lock با کشیدن به بالا
+//                                                if (!cancelled && !gestureLocked && distance.y < -threshold) {
+//
+//                                                    gestureLocked = true
+//                                                    locked = true
+//
+//                                                    view.playSoundEffect(
+//                                                        SoundEffectConstants.CLICK
+//                                                    )
+//
+//                                                    distance = Offset.Zero
+//                                                }
+//
+//                                                change.consume()
+//                                            }
+//                                        }
+//                                    }) {
+//                                Icon(
+//                                    painter = painterResource(R.drawable.mic),
+//                                    contentDescription = null,
+//                                    tint = MaterialTheme.colorScheme.onPrimary,
+//                                    modifier = Modifier.align(Alignment.Center)
+//                                )
+//                            }
                             Box(
                                 Modifier
                                     .padding(8.dp)
@@ -831,6 +1004,75 @@ fun ChatScreen(
                                                 return@awaitEachGesture
                                             }
 
+                                            // --------------------------------
+                                            // Long Press
+                                            // --------------------------------
+
+                                            val threshold = 168.dp.toPx()
+                                            val longPressTime = 200L
+
+                                            var cancelled = false
+                                            var gestureLocked = false
+
+                                            recording = false
+                                            locked = false
+                                            distance = Offset.Zero
+
+                                            val longPressed = withTimeoutOrNull(longPressTime) {
+
+                                                while (true) {
+
+                                                    val event = awaitPointerEvent()
+
+                                                    val change =
+                                                        event.changes.firstOrNull {
+                                                            it.id == down.id
+                                                        } ?: return@withTimeoutOrNull false
+
+                                                    if (!change.pressed) {
+                                                        return@withTimeoutOrNull false
+                                                    }
+
+                                                    distance =
+                                                        change.position - down.position
+
+                                                    // لغو قبل از شروع ضبط
+                                                    if (distance.x < -threshold) {
+
+                                                        cancelled = true
+                                                        distance = Offset.Zero
+
+                                                        view.playSoundEffect(
+                                                            SoundEffectConstants.CLICK
+                                                        )
+
+                                                        change.consume()
+
+                                                        return@withTimeoutOrNull false
+                                                    }
+
+                                                    change.consume()
+                                                }
+
+                                            } == null
+
+                                            // --------------------------------
+                                            // Tap کوتاه
+                                            // --------------------------------
+
+                                            if (!longPressed || cancelled) {
+
+                                                recording = false
+                                                locked = false
+                                                distance = Offset.Zero
+
+                                                return@awaitEachGesture
+                                            }
+
+                                            // --------------------------------
+                                            // Long Press → شروع ضبط
+                                            // --------------------------------
+
                                             if (!recordingState) {
 
                                                 recorder.start()
@@ -841,21 +1083,26 @@ fun ChatScreen(
                                                 )
                                             }
 
-                                            val threshold = 168.dp.toPx()
-
-                                            var cancelled = false
-                                            var gestureLocked = false
-
                                             recording = true
                                             locked = false
+                                            distance = Offset.Zero
+
+                                            // --------------------------------
+                                            // ادامه Gesture
+                                            // --------------------------------
 
                                             while (true) {
 
                                                 val event = awaitPointerEvent()
 
                                                 val change =
-                                                    event.changes.firstOrNull { it.id == down.id }
-                                                        ?: break
+                                                    event.changes.firstOrNull {
+                                                        it.id == down.id
+                                                    } ?: break
+
+                                                // --------------------------------
+                                                // انگشت برداشته شد
+                                                // --------------------------------
 
                                                 if (!change.pressed) {
 
@@ -874,12 +1121,20 @@ fun ChatScreen(
 
                                                         if (recordingState) {
 
-                                                            val recordedFile = recorder.stop()
+                                                            val recordedFile =
+                                                                recorder.stop()
 
                                                             recordedFile?.let { file ->
-                                                                val fileUri = Uri.fromFile(file)
-                                                                val fileName = file.name
-                                                                val fileSize = file.length()
+
+                                                                val fileUri =
+                                                                    Uri.fromFile(file)
+
+                                                                val fileName =
+                                                                    file.name
+
+                                                                val fileSize =
+                                                                    file.length()
+
                                                                 val fileHash =
                                                                     calculateFileHash(file)
 
@@ -896,15 +1151,33 @@ fun ChatScreen(
                                                         }
 
                                                         recording = false
+
+                                                    } else {
+
+                                                        // Locked:
+                                                        // با رها کردن انگشت ضبط ادامه پیدا می‌کند.
+                                                        distance = Offset.Zero
                                                     }
 
                                                     break
                                                 }
 
-                                                distance = change.position - down.position
+                                                distance =
+                                                    change.position - down.position
 
+                                                // --------------------------------
                                                 // لغو با کشیدن به چپ
-                                                if (!cancelled && !gestureLocked && distance.x < -threshold) {
+                                                //
+                                                // دقت کن:
+                                                // اینجا recorder.cancel() نمی‌کنیم!
+                                                // دقیقاً مثل نسخه سالم
+                                                // --------------------------------
+
+                                                if (
+                                                    !cancelled &&
+                                                    !gestureLocked &&
+                                                    distance.x < -threshold
+                                                ) {
 
                                                     cancelled = true
                                                     recording = false
@@ -916,8 +1189,15 @@ fun ChatScreen(
                                                     distance = Offset.Zero
                                                 }
 
+                                                // --------------------------------
                                                 // Lock با کشیدن به بالا
-                                                if (!cancelled && !gestureLocked && distance.y < -threshold) {
+                                                // --------------------------------
+
+                                                if (
+                                                    !cancelled &&
+                                                    !gestureLocked &&
+                                                    distance.y < -threshold
+                                                ) {
 
                                                     gestureLocked = true
                                                     locked = true
@@ -932,7 +1212,8 @@ fun ChatScreen(
                                                 change.consume()
                                             }
                                         }
-                                    }) {
+                                    }
+                            ) {
                                 Icon(
                                     painter = painterResource(R.drawable.mic),
                                     contentDescription = null,
@@ -976,13 +1257,18 @@ fun ChatScreen(
                     Modifier
                         .fillMaxSize()
                 ) {
+                    val ime = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                    val navigationBars = WindowInsets.navigationBars.asPaddingValues()
+                        .calculateBottomPadding()
                     WobblyRecordingCircle(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .offset(24.dp, 24.dp)
                             .offset(
-                                y = -WindowInsets.navigationBars.asPaddingValues()
-                                    .calculateBottomPadding()
+                                y = if (ime < navigationBars) -navigationBars else 0.dp
+                            )
+                            .offset(
+                                y = -ime
                             )
                             .size(96.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -992,8 +1278,10 @@ fun ChatScreen(
                             .align(Alignment.BottomEnd)
                             .offset(8.dp, 8.dp)
                             .offset(
-                                y = -WindowInsets.navigationBars.asPaddingValues()
-                                    .calculateBottomPadding()
+                                y = if (ime < navigationBars) -navigationBars else 0.dp
+                            )
+                            .offset(
+                                y = -ime
                             )
                             .size(64.dp)
                             .rotate(90f), color = MaterialTheme.colorScheme.primary
@@ -1004,8 +1292,10 @@ fun ChatScreen(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .offset(
-                                y = -WindowInsets.navigationBars.asPaddingValues()
-                                    .calculateBottomPadding()
+                                y = if (ime < navigationBars) -navigationBars else 0.dp
+                            )
+                            .offset(
+                                y = -ime
                             )
                             .size(48.dp),
                         onClick = {
@@ -1798,8 +2088,7 @@ fun Message(
     serverUrl: String,
     isFileDownloaded: (String) -> Boolean,
     openMenu: () -> Unit,
-    playing: java.io.File?,
-    playSet: (java.io.File?) -> Unit
+    playSet: (File?) -> Unit
 ) {
     Box(
         modifier = Modifier
