@@ -732,7 +732,6 @@ fun MainNavigation(
                     sendWith = sendWith,
                     editTextInDraft = editTextInDraft,
                     deleteMessage = deleteMessage,
-                    playing = selectedAudio,
                     playSet = { value -> selectedAudio = value })
             }
             composable(route = "appearanceSettings") {

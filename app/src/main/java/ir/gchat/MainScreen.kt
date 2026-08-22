@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.SoundEffectConstants
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,6 +17,10 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,8 +38,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -47,6 +54,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
@@ -95,11 +103,14 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -108,6 +119,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
@@ -157,7 +169,6 @@ fun MainScreenContainer(
     sendWith: SendMessageWith,
     editTextInDraft: (Int, String) -> Unit,
     deleteMessage: (Int) -> Unit,
-    playing: java.io.File?,
     playSet: (java.io.File?) -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -217,6 +228,12 @@ fun MainScreenContainer(
 
     LaunchedEffect(navController.currentBackStackEntry?.destination?.route == "mainScreen") {
         getConversations()
+    }
+
+    var messageMenu by remember { mutableStateOf(false) }
+    var longPressId by remember { mutableStateOf("") }
+    var messageMenuOffset by remember {
+        mutableStateOf(DpOffset(0.dp, 0.dp))
     }
 
     ModalNavigationDrawer(
@@ -441,7 +458,42 @@ fun MainScreenContainer(
                             .padding(innerPadding)
                     ) {
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(
+                            modifier = Modifier
+                                .fillMaxSize()
+//                                .pointerInput(Unit) {
+//                                    awaitEachGesture {
+//                                        awaitFirstDown(
+//                                            requireUnconsumed = false,
+//                                            pass = PointerEventPass.Initial
+//                                        )
+//
+//                                        val up = waitForUpOrCancellation(
+//                                            pass = PointerEventPass.Initial
+//                                        )
+//
+//                                        if (up != null) {
+//                                            messageMenuOffset = (DpOffset(
+//                                                x = up.position.x.toDp(), y = up.position.y.toDp()
+//                                            ))
+//
+//                                            println("TAP: $messageMenuOffset")
+//                                        }
+//                                    }
+//                                }
+                                    .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(
+                                            requireUnconsumed = false,
+                                            pass = PointerEventPass.Initial
+                                        )
+
+                                        messageMenuOffset = DpOffset(
+                                            x = down.position.x.toDp(),
+                                            y = down.position.y.toDp()
+                                        )
+                                    }
+                                }
+                            , contentPadding = PaddingValues(
                                 bottom = smsAlertHeight + 8.dp
                             )
                         ) {
@@ -478,8 +530,11 @@ fun MainScreenContainer(
                                     serverUrl = serverUrl,
                                     imageLoader = imageLoader,
                                     draft = draft[contact.id] ?: emptyList<Draft>(),
-                                    savedText = savedText[contact.id] ?: ""
-                                )
+                                    savedText = savedText[contact.id] ?: "",
+                                    openMenu = {
+                                        messageMenu = true
+                                        longPressId = contact.id
+                                    })
                             }
                         }
 
@@ -707,28 +762,85 @@ fun MainScreenContainer(
                             )
                     ) {
                         items(items = searchContactList) { item ->
-                            ContactItem(
-                                contact = item, onClick = {
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    val id = item.id
-                                    selectedChat = id
-                                    selectedChatDisplayName = id
-                                    getMessagesList(selectedChat)
-                                    if (!expandedScreen) {
-                                        //selectedChatUnreadCount این رو باید درست پاس بدی این یه باگ نیست در آیده هندل میشه
-                                        navHostController.navigate("chatScreen?id=$id&displayName=$id&selectedChatUnreadCount=$selectedChatUnreadCount")
-                                    } else {
-                                        navController.navigate(
-                                            "chatScreen?id=$id&displayName=${
-                                                Uri.encode(
-                                                    selectedChatDisplayName
-                                                )
-                                            }&selectedChatUnreadCount=${selectedChatUnreadCount}"
-                                        )
-                                    }
-                                }, serverUrl = serverUrl, imageLoader = imageLoader
-                            )
+                            ContactItem(contact = item, onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                val id = item.id
+                                selectedChat = id
+                                selectedChatDisplayName = id
+                                getMessagesList(selectedChat)
+                                if (!expandedScreen) {
+                                    //selectedChatUnreadCount این رو باید درست پاس بدی این یه باگ نیست در آیده هندل میشه
+                                    navHostController.navigate("chatScreen?id=$id&displayName=$id&selectedChatUnreadCount=$selectedChatUnreadCount")
+                                } else {
+                                    navController.navigate(
+                                        "chatScreen?id=$id&displayName=${
+                                            Uri.encode(
+                                                selectedChatDisplayName
+                                            )
+                                        }&selectedChatUnreadCount=${selectedChatUnreadCount}"
+                                    )
+                                }
+                            }, serverUrl = serverUrl, imageLoader = imageLoader, openMenu = { })
                         }
+                    }
+                }
+
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    val navigationBars = WindowInsets.navigationBars
+                    val statusBars = WindowInsets.statusBars
+                    val density = LocalDensity.current
+                    val layoutDirection = LocalLayoutDirection.current
+                    var menuWidth = maxWidth - navigationBars.getRight(density, layoutDirection).dp
+                    var menuHeight = maxHeight - statusBars.getTop(LocalDensity.current).dp
+                    -navigationBars.getBottom(LocalDensity.current).dp
+                    if (menuWidth - 256.dp > menuHeight) {
+                        menuWidth -= 256.dp
+                    } else {
+                        menuHeight -= 128.dp
+                    }
+                    val menuChord = (menuWidth + menuHeight) / 2
+
+                    val x = messageMenuOffset.x - menuWidth / 2
+                    val y = messageMenuOffset.y - menuHeight / 2
+
+                    val maxX = (maxWidth - menuWidth - 16.dp).coerceAtLeast(0.dp)
+                    val maxY = (maxHeight - menuHeight - 16.dp).coerceAtLeast(0.dp)
+
+                    val menuX = x.coerceIn(0.dp, maxX)
+                    val menuY = y.coerceIn(0.dp, maxY)
+
+                    AnimatedMenu(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .imePadding(),
+                        width = menuWidth,
+                        height = menuHeight,
+                        chord = menuChord,
+                        isExpanded = messageMenu,
+                        close = { messageMenu = false },
+                        // میتونیم اینجا هم coreIn بزاریم که قشنگ‌تر بشه و همیشه از لبه شروع نکنه
+                        offsetX = -(messageMenuOffset.x - menuX + 8.dp) + 24.dp,
+                        offsetY = -(messageMenuOffset.y - menuY + 8.dp + 64.dp) + 24.dp,
+                        position = Alignment.TopStart
+                    ) {
+                        ChatScreenPopUp(
+                            id = longPressId,
+                            messageList = messageList,
+                            getMessagesList = getMessagesList,
+                            unreadCount = selectedChatUnreadCount,
+                            shouldScrollToBottom = shouldScrollToBottom,
+                            onScrolledToBottom = onScrolledToBottom,
+                            downloadFile = downloadFile,
+                            seenAll = seenAll,
+                            serverUrl = serverUrl,
+                            imageLoader = imageLoader,
+                            isFileDownloaded = isFileDownloaded,
+                            deleteMessage = deleteMessage,
+                            playSet = playSet
+                        )
                     }
                 }
             }
@@ -851,6 +963,7 @@ fun ContactItem(
     imageLoader: ImageLoader,
     draft: List<Draft> = emptyList<Draft>(),
     savedText: String = "",
+    openMenu: () -> Unit
 ) {
     val backgroundColor = remember(contact.id) {
         materialPalette[hash19(contact.id)].primary
@@ -916,8 +1029,12 @@ fun ContactItem(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(backgroundColor), contentAlignment = Alignment.Center
-                    ) {
+                            .background(backgroundColor)
+                            .combinedClickable(onClick = {
+                                // کلیک معمولی
+                            }, onLongClick = {
+                                openMenu()
+                            }), contentAlignment = Alignment.Center) {
                         Icon(
                             painter = painterResource(
                                 R.drawable.profile_black_content
@@ -962,230 +1079,348 @@ fun ContactItem(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TooltipBox(
-                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                positioning = TooltipAnchorPosition.Above
-                            ), tooltip = {
-                                PlainTooltip {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        for (content in contact.lastMessageContent) {
-                                            when (content) {
-                                                is Content.Text -> {
-                                                    Text(
-                                                        text = content.text.toRichAnnotatedString(
-                                                            linkColor = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    )
-                                                }
-
-                                                is Content.File -> {
-                                                    Surface(
-                                                        shape = CircleShape,
-                                                        modifier = Modifier
-                                                            .height(32.dp)
-                                                            .fillMaxWidth(),
-                                                        color = Color.White.copy(alpha = 0.25f)
-                                                    ) {
-                                                        val thumbnailUrl =
-                                                            "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
-                                                        Log.d(
-                                                            "THUMB",
-                                                            "id=${content.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
-                                                        )
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            SubcomposeAsyncImage(
-                                                                model = thumbnailUrl,
-                                                                imageLoader = imageLoader,
-                                                                contentDescription = null,
-
-                                                                modifier = Modifier
-                                                                    .aspectRatio(1f)
-                                                                    .fillMaxSize(),
-
-                                                                contentScale = ContentScale.Crop,
-
-                                                                loading = {
-                                                                    Icon(
-                                                                        painter = painterResource(
-                                                                            R.drawable.draft
-                                                                        ),
-                                                                        contentDescription = null,
-                                                                        modifier = Modifier
-                                                                            .fillMaxSize()
-                                                                            .padding(8.dp),
-                                                                        tint = MaterialTheme.colorScheme.surface
-                                                                    )
-                                                                },
-
-                                                                error = {
-                                                                    Icon(
-                                                                        painter = painterResource(
-                                                                            R.drawable.draft
-                                                                        ),
-                                                                        contentDescription = null,
-                                                                        modifier = Modifier
-                                                                            .fillMaxSize()
-                                                                            .padding(8.dp),
-                                                                        tint = MaterialTheme.colorScheme.surface
-                                                                    )
-                                                                },
-                                                                onLoading = {
-                                                                    Log.d(
-                                                                        "THUMB",
-                                                                        "LOADING: $thumbnailUrl"
-                                                                    )
-                                                                },
-                                                                onSuccess = {
-                                                                    Log.d(
-                                                                        "THUMB",
-                                                                        "SUCCESS: $thumbnailUrl"
-                                                                    )
-                                                                },
-                                                                onError = {
-                                                                    Log.e(
-                                                                        "THUMB",
-                                                                        "ERROR: $thumbnailUrl",
-                                                                        it.result.throwable
-                                                                    )
-                                                                })
-                                                            Text(
-                                                                text = content.fileName,
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .padding(
-                                                                        horizontal = 4.dp,
-                                                                        vertical = 2.dp
-                                                                    ),
-                                                                textAlign = TextAlign.Center,
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }, state = rememberTooltipState()
+//                        TooltipBox(
+//                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+//                                positioning = TooltipAnchorPosition.Above
+//                            ), tooltip = {
+//                                PlainTooltip {
+//                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+//                                        for (content in contact.lastMessageContent) {
+//                                            when (content) {
+//                                                is Content.Text -> {
+//                                                    Text(
+//                                                        text = content.text.toRichAnnotatedString(
+//                                                            linkColor = MaterialTheme.colorScheme.primary
+//                                                        )
+//                                                    )
+//                                                }
+//
+//                                                is Content.File -> {
+//                                                    Surface(
+//                                                        shape = CircleShape,
+//                                                        modifier = Modifier
+//                                                            .height(32.dp)
+//                                                            .fillMaxWidth(),
+//                                                        color = Color.White.copy(alpha = 0.25f)
+//                                                    ) {
+//                                                        val thumbnailUrl =
+//                                                            "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+//                                                        Log.d(
+//                                                            "THUMB",
+//                                                            "id=${content.id}, " + "serverUrl=$serverUrl, " + "url=$thumbnailUrl"
+//                                                        )
+//                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+//                                                            SubcomposeAsyncImage(
+//                                                                model = thumbnailUrl,
+//                                                                imageLoader = imageLoader,
+//                                                                contentDescription = null,
+//
+//                                                                modifier = Modifier
+//                                                                    .aspectRatio(1f)
+//                                                                    .fillMaxSize(),
+//
+//                                                                contentScale = ContentScale.Crop,
+//
+//                                                                loading = {
+//                                                                    Icon(
+//                                                                        painter = painterResource(
+//                                                                            R.drawable.draft
+//                                                                        ),
+//                                                                        contentDescription = null,
+//                                                                        modifier = Modifier
+//                                                                            .fillMaxSize()
+//                                                                            .padding(8.dp),
+//                                                                        tint = MaterialTheme.colorScheme.surface
+//                                                                    )
+//                                                                },
+//
+//                                                                error = {
+//                                                                    Icon(
+//                                                                        painter = painterResource(
+//                                                                            R.drawable.draft
+//                                                                        ),
+//                                                                        contentDescription = null,
+//                                                                        modifier = Modifier
+//                                                                            .fillMaxSize()
+//                                                                            .padding(8.dp),
+//                                                                        tint = MaterialTheme.colorScheme.surface
+//                                                                    )
+//                                                                },
+//                                                                onLoading = {
+//                                                                    Log.d(
+//                                                                        "THUMB",
+//                                                                        "LOADING: $thumbnailUrl"
+//                                                                    )
+//                                                                },
+//                                                                onSuccess = {
+//                                                                    Log.d(
+//                                                                        "THUMB",
+//                                                                        "SUCCESS: $thumbnailUrl"
+//                                                                    )
+//                                                                },
+//                                                                onError = {
+//                                                                    Log.e(
+//                                                                        "THUMB",
+//                                                                        "ERROR: $thumbnailUrl",
+//                                                                        it.result.throwable
+//                                                                    )
+//                                                                })
+//                                                            Text(
+//                                                                text = content.fileName,
+//                                                                modifier = Modifier
+//                                                                    .fillMaxWidth()
+//                                                                    .padding(
+//                                                                        horizontal = 4.dp,
+//                                                                        vertical = 2.dp
+//                                                                    ),
+//                                                                textAlign = TextAlign.Center,
+//                                                                maxLines = 1,
+//                                                                overflow = TextOverflow.Ellipsis
+//                                                            )
+//                                                        }
+//                                                    }
+//                                                }
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                            }, state = rememberTooltipState()
+//                        ) {
+//                            Row(
+//                                modifier = Modifier.weight(1f),
+//                                verticalAlignment = Alignment.CenterVertically,
+//                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+//                            ) {
+//                                val files =
+//                                    contact.lastMessageContent.filterIsInstance<Content.File>()
+//                                val texts =
+//                                    contact.lastMessageContent.filterIsInstance<Content.Text>()
+//
+//                                // Files — always shown first
+//                                if (files.isNotEmpty()) {
+//                                    val visibleFiles = if (files.size > 3) {
+//                                        files.take(2)
+//                                    } else {
+//                                        files
+//                                    }
+//
+//                                    visibleFiles.forEach { content ->
+//                                        Surface(
+//                                            shape = CircleShape, modifier = Modifier.size(16.dp)
+//                                        ) {
+//                                            val thumbnailUrl =
+//                                                "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+//
+//                                            SubcomposeAsyncImage(
+//                                                model = thumbnailUrl,
+//                                                imageLoader = imageLoader,
+//                                                contentDescription = null,
+//
+//                                                modifier = Modifier
+//                                                    .aspectRatio(1f)
+//                                                    .fillMaxSize(),
+//
+//                                                contentScale = ContentScale.Crop,
+//
+//                                                loading = {
+//                                                    Icon(
+//                                                        painter = painterResource(
+//                                                            R.drawable.draft
+//                                                        ),
+//                                                        contentDescription = null,
+//                                                        modifier = Modifier.fillMaxSize(),
+//                                                        tint = MaterialTheme.colorScheme.onSurface
+//                                                    )
+//                                                },
+//
+//                                                error = {
+//                                                    Icon(
+//                                                        painter = painterResource(
+//                                                            R.drawable.draft
+//                                                        ),
+//                                                        contentDescription = null,
+//                                                        modifier = Modifier.fillMaxSize(),
+//                                                        tint = MaterialTheme.colorScheme.onSurface
+//                                                    )
+//                                                },
+//                                                onLoading = {
+//                                                    Log.d("THUMB", "LOADING: $thumbnailUrl")
+//                                                },
+//                                                onSuccess = {
+//                                                    Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+//                                                },
+//                                                onError = {
+//                                                    Log.e(
+//                                                        "THUMB",
+//                                                        "ERROR: $thumbnailUrl",
+//                                                        it.result.throwable
+//                                                    )
+//                                                })
+//                                        }
+//                                    }
+//
+//                                    // +N
+//                                    if (files.size > 3) {
+//                                        Surface(
+//                                            shape = CircleShape,
+//                                            modifier = Modifier.size(16.dp),
+//                                            color = MaterialTheme.colorScheme.primary
+//                                        ) {
+//                                            Box(
+//                                                contentAlignment = Alignment.Center,
+//                                                modifier = Modifier.fillMaxSize()
+//                                            ) {
+//                                                Text(
+//                                                    text = "+${files.size - 2}",
+//                                                    style = MaterialTheme.typography.labelSmall,
+//                                                    color = MaterialTheme.colorScheme.onPrimary
+//                                                )
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//
+//                                // Texts — after files
+//                                //texts.forEach { content ->
+//                                //    Text(
+//                                //        text = content.text.replace("\n", " ")
+//                                //            .toRichAnnotatedString(
+//                                //                linkColor = MaterialTheme.colorScheme.primary
+//                                //            ),
+//                                //        style = MaterialTheme.typography.bodySmall,
+//                                //        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+//                                //        maxLines = 1,
+//                                //        overflow = TextOverflow.Ellipsis
+//                                //    )
+//                                //}
+//                                if (texts.isNotEmpty()) {
+//                                    Text(
+//                                        text = texts.last().text.replace("\n", " ")
+//                                            .toRichAnnotatedStringNoLinks(),
+//                                        style = MaterialTheme.typography.bodySmall,
+//                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+//                                        maxLines = 1,
+//                                        overflow = TextOverflow.Ellipsis
+//                                    )
+//                                }
+//                            }
+//                        }
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                val files =
-                                    contact.lastMessageContent.filterIsInstance<Content.File>()
-                                val texts =
-                                    contact.lastMessageContent.filterIsInstance<Content.Text>()
+                            val files =
+                                contact.lastMessageContent.filterIsInstance<Content.File>()
+                            val texts =
+                                contact.lastMessageContent.filterIsInstance<Content.Text>()
 
-                                // Files — always shown first
-                                if (files.isNotEmpty()) {
-                                    val visibleFiles = if (files.size > 3) {
-                                        files.take(2)
-                                    } else {
-                                        files
-                                    }
+                            // Files — always shown first
+                            if (files.isNotEmpty()) {
+                                val visibleFiles = if (files.size > 3) {
+                                    files.take(2)
+                                } else {
+                                    files
+                                }
 
-                                    visibleFiles.forEach { content ->
-                                        Surface(
-                                            shape = CircleShape, modifier = Modifier.size(16.dp)
-                                        ) {
-                                            val thumbnailUrl =
-                                                "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
+                                visibleFiles.forEach { content ->
+                                    Surface(
+                                        shape = CircleShape, modifier = Modifier.size(16.dp)
+                                    ) {
+                                        val thumbnailUrl =
+                                            "http://${serverUrl.substringBefore(":")}:8080/thumb/${content.id}"
 
-                                            SubcomposeAsyncImage(
-                                                model = thumbnailUrl,
-                                                imageLoader = imageLoader,
-                                                contentDescription = null,
+                                        SubcomposeAsyncImage(
+                                            model = thumbnailUrl,
+                                            imageLoader = imageLoader,
+                                            contentDescription = null,
 
-                                                modifier = Modifier
-                                                    .aspectRatio(1f)
-                                                    .fillMaxSize(),
+                                            modifier = Modifier
+                                                .aspectRatio(1f)
+                                                .fillMaxSize(),
 
-                                                contentScale = ContentScale.Crop,
+                                            contentScale = ContentScale.Crop,
 
-                                                loading = {
-                                                    Icon(
-                                                        painter = painterResource(
-                                                            R.drawable.draft
-                                                        ),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        tint = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                },
-
-                                                error = {
-                                                    Icon(
-                                                        painter = painterResource(
-                                                            R.drawable.draft
-                                                        ),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.fillMaxSize(),
-                                                        tint = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                },
-                                                onLoading = {
-                                                    Log.d("THUMB", "LOADING: $thumbnailUrl")
-                                                },
-                                                onSuccess = {
-                                                    Log.d("THUMB", "SUCCESS: $thumbnailUrl")
-                                                },
-                                                onError = {
-                                                    Log.e(
-                                                        "THUMB",
-                                                        "ERROR: $thumbnailUrl",
-                                                        it.result.throwable
-                                                    )
-                                                })
-                                        }
-                                    }
-
-                                    // +N
-                                    if (files.size > 3) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            modifier = Modifier.size(16.dp),
-                                            color = MaterialTheme.colorScheme.primary
-                                        ) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier.fillMaxSize()
-                                            ) {
-                                                Text(
-                                                    text = "+${files.size - 2}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onPrimary
+                                            loading = {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        R.drawable.draft
+                                                    ),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    tint = MaterialTheme.colorScheme.onSurface
                                                 )
-                                            }
-                                        }
+                                            },
+
+                                            error = {
+                                                Icon(
+                                                    painter = painterResource(
+                                                        R.drawable.draft
+                                                    ),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    tint = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            },
+                                            onLoading = {
+                                                Log.d("THUMB", "LOADING: $thumbnailUrl")
+                                            },
+                                            onSuccess = {
+                                                Log.d("THUMB", "SUCCESS: $thumbnailUrl")
+                                            },
+                                            onError = {
+                                                Log.e(
+                                                    "THUMB",
+                                                    "ERROR: $thumbnailUrl",
+                                                    it.result.throwable
+                                                )
+                                            })
                                     }
                                 }
 
-                                // Texts — after files
-                                //texts.forEach { content ->
-                                //    Text(
-                                //        text = content.text.replace("\n", " ")
-                                //            .toRichAnnotatedString(
-                                //                linkColor = MaterialTheme.colorScheme.primary
-                                //            ),
-                                //        style = MaterialTheme.typography.bodySmall,
-                                //        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
-                                //        maxLines = 1,
-                                //        overflow = TextOverflow.Ellipsis
-                                //    )
-                                //}
-                                if (texts.isNotEmpty()) {
-                                    Text(
-                                        text = texts.last().text.replace("\n", " ")
-                                            .toRichAnnotatedStringNoLinks(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                // +N
+                                if (files.size > 3) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        modifier = Modifier.size(16.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            Text(
+                                                text = "+${files.size - 2}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
+                                    }
                                 }
+                            }
+
+                            // Texts — after files
+                            //texts.forEach { content ->
+                            //    Text(
+                            //        text = content.text.replace("\n", " ")
+                            //            .toRichAnnotatedString(
+                            //                linkColor = MaterialTheme.colorScheme.primary
+                            //            ),
+                            //        style = MaterialTheme.typography.bodySmall,
+                            //        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                            //        maxLines = 1,
+                            //        overflow = TextOverflow.Ellipsis
+                            //    )
+                            //}
+                            if (texts.isNotEmpty()) {
+                                Text(
+                                    text = texts.last().text.replace("\n", " ")
+                                        .toRichAnnotatedStringNoLinks(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.weight(1f))

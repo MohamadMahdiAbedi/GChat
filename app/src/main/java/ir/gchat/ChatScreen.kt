@@ -1696,7 +1696,7 @@ fun ChatScreen(
             }
 
             ModalBottomSheet(
-                shape = RoundedCornerShape(2.dp),
+                shape = RectangleShape, //RoundedCornerShape(2.dp,2.dp,0.dp,0.dp),
                 onDismissRequest = {
                     scope.launch {
                         sheetState.hide()
@@ -1838,7 +1838,7 @@ fun ChatScreen(
             }
 
             ModalBottomSheet(
-                shape = RoundedCornerShape(2.dp),
+                shape = RectangleShape,//RoundedCornerShape(2.dp,2.dp,0.dp,0.dp),
                 onDismissRequest = {
                     scope.launch {
                         sheetState.hide()
@@ -2594,6 +2594,383 @@ fun Message(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreenPopUp(
+    id: String,
+    messageList: List<MessageItem>,
+    getMessagesList: (String) -> Unit,
+    unreadCount: Int,
+    shouldScrollToBottom: Boolean,
+    onScrolledToBottom: () -> Unit,
+    downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
+    seenAll: (String) -> Unit,
+    serverUrl: String,
+    imageLoader: ImageLoader,
+    isFileDownloaded: (String) -> Boolean,
+    deleteMessage: (Int) -> Unit,
+    playSet: (File?) -> Unit,
+) {
+    val context = LocalContext.current
+
+    LaunchedEffect(id) {
+        if (id.isNotBlank()) {
+            getMessagesList(id)
+        }
+    }
+
+    val view = LocalView.current
+
+    var animate by remember { mutableStateOf(false) }
+
+    var messageMenu by remember { mutableStateOf(false) }
+    var messageMenuId by remember { mutableIntStateOf(0) }
+    var messageMenuOffset by remember {
+        mutableStateOf(DpOffset(0.dp, 0.dp))
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        TWallpaper(
+            modifier = Modifier.fillMaxSize(),
+            colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
+            fps = 60,
+            tails = 90,
+            animate = animate
+        )
+        if (id != "") {
+            Column(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .fillMaxSize()
+            ) {
+                val listState = rememberLazyListState()
+                val scope = rememberCoroutineScope()
+                val showButton by remember {
+                    derivedStateOf {
+                        listState.canScrollForward
+                    }
+                }
+                LaunchedEffect(messageList.size, unreadCount) {
+                    if (messageList.isEmpty()) return@LaunchedEffect
+
+                    val index =
+                        (messageList.size - unreadCount).coerceIn(0, messageList.lastIndex)
+
+                    val visible = listState.layoutInfo.visibleItemsInfo
+
+                    val firstVisible = visible.firstOrNull()?.index ?: return@LaunchedEffect
+                    val lastVisible = visible.lastOrNull()?.index ?: return@LaunchedEffect
+
+                    when {
+                        index < firstVisible -> listState.scrollToItem(index)
+                        index > lastVisible -> listState.scrollToItem(index)
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(
+                                    requireUnconsumed = false, pass = PointerEventPass.Initial
+                                )
+
+                                val up = waitForUpOrCancellation(
+                                    pass = PointerEventPass.Initial
+                                )
+
+                                if (up != null) {
+                                    messageMenuOffset = (DpOffset(
+                                        x = up.position.x.toDp(), y = up.position.y.toDp()
+                                    ))
+
+                                    println("TAP: $messageMenuOffset")
+                                }
+                            }
+                        }) {
+                    LazyColumn(
+                        state = listState, contentPadding = PaddingValues(
+                            top = 8.dp
+                        )
+                    ) {
+                        items(items = messageList, key = { it.id }) { item ->
+                            Message(
+                                isMe = item.myMessage,
+                                content = item.content,
+                                seen = item.seen,
+                                timestamp = item.date,
+                                context = context,
+                                downloadFile = downloadFile,
+                                imageLoader = imageLoader,
+                                serverUrl = serverUrl,
+                                isFileDownloaded = isFileDownloaded,
+                                openMenu = {
+                                    messageMenu = true
+                                    messageMenuId = item.id
+                                },
+                                playSet = playSet
+                            )
+                        }
+
+                        item {
+                            Spacer(Modifier.height(0.dp))
+                        }
+                    }
+
+                    LaunchedEffect(shouldScrollToBottom, messageList.size) {
+                        if (shouldScrollToBottom && messageList.isNotEmpty()) {
+                            //listState.animateScrollToItem(messageList.lastIndex)
+                            listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                        }
+                        if (shouldScrollToBottom) {
+                            onScrolledToBottom()
+                        }
+                    }
+
+                    val density = LocalDensity.current
+
+                    this@Column.AnimatedVisibility(
+                        visible = showButton,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .padding(bottom = 0.dp),
+                        enter = slideInVertically {
+                            with(density) { 64.dp.roundToPx() }
+                        },
+                        exit = slideOutVertically {
+                            with(density) { 64.dp.roundToPx() }
+                        }
+                    ) {
+                        Button(
+                            onClick = {
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                scope.launch {
+                                    listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                                    seenAll(id)
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .requiredSize(48.dp)
+                                .align(Alignment.BottomEnd)
+                                .shadow(
+                                    elevation = 6.dp, shape = CircleShape, clip = false
+                                ),
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.keyboard_arrow_down),
+                                contentDescription = "Navigate to end",
+                                modifier = Modifier.requiredSize(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val menuWidth = 240.dp
+            val menuHeight = 320.dp
+            val menuChord = 400.dp
+
+            val x = messageMenuOffset.x - menuWidth / 2
+            val y = messageMenuOffset.y - menuHeight / 2
+
+            val maxX = (maxWidth - menuWidth - 16.dp).coerceAtLeast(0.dp)
+            val maxY = (maxHeight - menuHeight - 16.dp).coerceAtLeast(0.dp)
+
+            val menuX = x.coerceIn(0.dp, maxX)
+            val menuY = y.coerceIn(0.dp, maxY)
+
+            AnimatedMenu(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(
+                        start = menuX,
+                        top = menuY
+                    ),
+                width = menuWidth,
+                height = menuHeight,
+                chord = menuChord,
+                isExpanded = messageMenu,
+                close = { messageMenu = false },
+                // میتونیم اینجا هم coreIn بزاریم که قشنگ‌تر بشه و همیشه از لبه شروع نکنه
+                offsetX = -(messageMenuOffset.x - menuX + 8.dp) + 24.dp,
+                offsetY = -(messageMenuOffset.y - menuY + 8.dp + 64.dp) + 24.dp,
+                position = Alignment.TopStart
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Reply") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.reply),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Copy") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.content_copy),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Forward") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.forward),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.edit),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Save") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.bookmark),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Pin") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.keep),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Translate") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.translate),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Select") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.check_box),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.share),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Report") },
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.report),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            deleteMessage(messageMenuId)
+                            messageMenu = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.delete),
+                                contentDescription = null
+                            )
+                        }
+                    )
+
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                    )
                 }
             }
         }
