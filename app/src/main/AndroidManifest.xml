@@ -32,7 +32,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.GChat.Splash">
+        android:theme="@style/Theme.Mint.Splash">
 
         <receiver
 
@@ -59,7 +59,7 @@
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter>
-                <action android:name="ir.gchat.SMS_SENT" />
+                <action android:name="ir.mint.SMS_SENT" />
             </intent-filter>
         </receiver>
 
@@ -68,7 +68,7 @@
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter>
-                <action android:name="ir.gchat.SMS_DELIVERED" />
+                <action android:name="ir.mint.SMS_DELIVERED" />
             </intent-filter>
         </receiver>
 
@@ -90,7 +90,7 @@
         <activity
             android:name=".SendSmsActivity"
             android:exported="true"
-            android:theme="@style/Theme.GChat.Splash"
+            android:theme="@style/Theme.Mint.Splash"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
@@ -123,7 +123,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.GChat.Splash"
+            android:theme="@style/Theme.Mint.Splash"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>

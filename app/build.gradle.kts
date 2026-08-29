@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "ir.gchat"
+    namespace = "ir.mint"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ir.gchat"
+        applicationId = "ir.mint"
         minSdk = 21
         targetSdk = 37
         versionCode = 1
@@ -69,5 +69,6 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.github.om252345:composemeshgradient:0.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.profileinstaller:profileinstaller:1.4.0")
 }

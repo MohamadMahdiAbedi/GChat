@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.GChat" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <style name="Theme.GChat.Splash" parent="Theme.GChat">
+    <style name="Theme.Mint" parent="Theme.AppCompat.Light.NoActionBar" />
+
+    <style name="Theme.Mint.Splash" parent="Theme.Mint">
         <item name="android:windowBackground">@drawable/splash_bg</item>
     </style>
+
 </resources>
