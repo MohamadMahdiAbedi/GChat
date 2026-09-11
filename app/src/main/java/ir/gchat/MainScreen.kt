@@ -172,8 +172,8 @@ fun MainScreenContainer(
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
     draft: Map<String, List<Draft>>,
-    savedText: Map<String, String>,
-    setSavedText: (String, String) -> Unit,
+    savedText: Map<String, Triple<Int?, String, List<Triple<Int, Int, String>>>>,
+    setSavedText: (String, String, Int?, List<Triple<Int, Int, String>>) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     removeTextFromDraft: (Int) -> Unit,
@@ -554,7 +554,7 @@ fun MainScreenContainer(
                                     serverUrl = serverUrl,
                                     imageLoader = imageLoader,
                                     draft = draft[contact.id] ?: emptyList<Draft>(),
-                                    savedText = savedText[contact.id] ?: "",
+                                    savedText = savedText[contact.id]?.second ?: "",
                                     openMenu = {
                                         messageMenu = true
                                         longPressId = contact.id

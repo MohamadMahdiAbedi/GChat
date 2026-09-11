@@ -63,13 +63,13 @@ sealed class Draft {
         val size: Long
     ) : Draft()
 
-    data class Text(val text: String, val id: Int) : Draft()
+    data class Text(val text: String, val markDown: List<Triple<Int, Int, String>>, val id: Int) : Draft()
 
     data class LaTeX(val text: String, val id: Int) : Draft()
 }
 
 sealed class Content {
-    data class Text(val text: String) : Content()
+    data class Text(val text: String, val markDown: List<Triple<Int, Int, String>>) : Content()
 
     data class LaTeX(val text: String) : Content()
 

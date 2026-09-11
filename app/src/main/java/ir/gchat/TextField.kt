@@ -62,7 +62,7 @@ fun Spanned.toAnnotatedString(): AnnotatedString {
             val start = getSpanStart(span)
             val end = getSpanEnd(span)
 
-            if (start < 0 || end <= start) {
+            if (start !in 0..<end) {
                 return@forEach
             }
 
@@ -116,7 +116,7 @@ fun toggleStyle(
     /*
      * آیا کل selection از قبل همین style را دارد؟
      *
-     * اگر بله → باید Unbold / Unitalic شود.
+     * اگر بله → باید Unbold / Un]talic شود.
      * اگر نه → باید Bold / Italic شود.
      */
     val fullyStyled = (start until end).all { index ->
@@ -374,12 +374,7 @@ fun Spanned.toMarkdown(): String {
             it.style == Typeface.ITALIC || it.style == Typeface.BOLD_ITALIC
         }
 
-        val currentChar = this[index]
-
-        /*
-         * پیدا کردن محدوده‌ای که formatting فعلی
-         * روی آن یکسان است.
-         */
+        //val currentChar = this[index]
         var end = index + 1
 
         while (end < length) {
@@ -435,6 +430,7 @@ fun Spanned.toMarkdown(): String {
     return result.toString()
 }
 
+//بعدا این تابع رو میکوبیم و با کامپوز مینویسیم
 fun showColorPicker(
     context: Context, anchor: View, colors: List<Int>, onColorSelected: (Int) -> Unit
 ) {
@@ -457,7 +453,7 @@ fun showColorPicker(
 
             shape = GradientDrawable.RECTANGLE
 
-            cornerRadius = 16.dp().toFloat()
+            cornerRadius = 2.dp().toFloat()
 
             setColor(
                 android.graphics.Color.WHITE
@@ -529,11 +525,12 @@ fun MessageTextField(
     setMessageText: (String) -> Unit,
     showFileRow: Boolean,
     showAnimation: () -> Job,
-    draftUpdate: (MutableList<Content>) -> Unit,
+    getDraft: (MutableList<Content>) -> Unit,
     draftSize: Int,
     sendMessage: (List<Content>) -> Unit,
     messageText: String,
-    setSavedText: (String) -> Unit
+    styledMessageText: SpannableStringBuilder,
+    setStyledMessageText: (SpannableStringBuilder) -> Unit
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     val textEditHint = stringResource(R.string.message)
@@ -545,12 +542,6 @@ fun MessageTextField(
 
     val textColorActionId = 1005
     val highlightActionId = 1006
-
-    var styledMessageText by remember {
-        mutableStateOf(
-            SpannableStringBuilder()
-        )
-    }
 
     var annotatedMessageText by remember {
         mutableStateOf(
@@ -695,13 +686,13 @@ fun MessageTextField(
                                         style = Typeface.BOLD
                                     )
 
-                                    styledMessageText =
+                                    setStyledMessageText(
                                         SpannableStringBuilder(
                                             editTextView.editableText
                                         )
+                                    )
 
-                                    annotatedMessageText =
-                                        styledMessageText.toAnnotatedString()
+                                    annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                     mode.finish()
 
@@ -717,13 +708,13 @@ fun MessageTextField(
                                         style = Typeface.ITALIC
                                     )
 
-                                    styledMessageText =
+                                    setStyledMessageText(
                                         SpannableStringBuilder(
                                             editTextView.editableText
                                         )
+                                    )
 
-                                    annotatedMessageText =
-                                        styledMessageText.toAnnotatedString()
+                                    annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                     mode.finish()
 
@@ -741,13 +732,13 @@ fun MessageTextField(
                                             UnderlineSpan()
                                         })
 
-                                    styledMessageText =
+                                    setStyledMessageText(
                                         SpannableStringBuilder(
                                             editTextView.editableText
                                         )
+                                    )
 
-                                    annotatedMessageText =
-                                        styledMessageText.toAnnotatedString()
+                                    annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                     mode.finish()
 
@@ -765,13 +756,13 @@ fun MessageTextField(
                                             StrikethroughSpan()
                                         })
 
-                                    styledMessageText =
+                                    setStyledMessageText(
                                         SpannableStringBuilder(
                                             editTextView.editableText
                                         )
+                                    )
 
-                                    annotatedMessageText =
-                                        styledMessageText.toAnnotatedString()
+                                    annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                     mode.finish()
 
@@ -815,13 +806,13 @@ fun MessageTextField(
                                             color = color
                                         )
 
-                                        styledMessageText =
+                                        setStyledMessageText(
                                             SpannableStringBuilder(
                                                 editTextView.editableText
                                             )
+                                        )
 
-                                        annotatedMessageText =
-                                            styledMessageText.toAnnotatedString()
+                                        annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                         mode.finish()
                                     }
@@ -873,13 +864,13 @@ fun MessageTextField(
                                             color = color
                                         )
 
-                                        styledMessageText =
+                                        setStyledMessageText(
                                             SpannableStringBuilder(
                                                 editTextView.editableText
                                             )
+                                        )
 
-                                        annotatedMessageText =
-                                            styledMessageText.toAnnotatedString()
+                                        annotatedMessageText = styledMessageText.toAnnotatedString()
 
                                         mode.finish()
                                     }
@@ -964,8 +955,10 @@ fun MessageTextField(
 
                     val markdownText = formattedText.toMarkdown()
 
-                    styledMessageText = SpannableStringBuilder(
-                        formattedText
+                    setStyledMessageText(
+                        SpannableStringBuilder(
+                            formattedText
+                        )
                     )
 
                     annotatedMessageText = styledMessageText.toAnnotatedString()
@@ -976,10 +969,70 @@ fun MessageTextField(
 
                     val content = mutableListOf<Content>()
 
-                    draftUpdate(content)
+                    getDraft(content)
 
                     if (markdownText.isNotBlank()) {
-                        content += Content.Text(text = markdownText)
+
+                        val markDown = mutableListOf<Triple<Int, Int, String>>()
+
+                        styledMessageText
+                            .getSpans(
+                                0,
+                                styledMessageText.length,
+                                CharacterStyle::class.java
+                            )
+                            .forEach { span ->
+
+                                val start = styledMessageText.getSpanStart(span)
+                                val end = styledMessageText.getSpanEnd(span)
+
+                                if (start >= end) {
+                                    return@forEach
+                                }
+
+                                when (span) {
+
+                                    is StyleSpan -> {
+
+                                        when (span.style) {
+
+                                            Typeface.BOLD -> {
+                                                markDown += Triple(start, end, "b")
+                                            }
+
+                                            Typeface.ITALIC -> {
+                                                markDown += Triple(start, end, "i")
+                                            }
+
+                                            Typeface.BOLD_ITALIC -> {
+                                                markDown += Triple(start, end, "b")
+                                                markDown += Triple(start, end, "i")
+                                            }
+                                        }
+                                    }
+
+                                    is UnderlineSpan -> {
+                                        markDown += Triple(start, end, "u")
+                                    }
+
+                                    is StrikethroughSpan -> {
+                                        markDown += Triple(start, end, "s")
+                                    }
+
+                                    is ForegroundColorSpan -> {
+                                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                    }
+
+                                    is BackgroundColorSpan -> {
+                                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                    }
+                                }
+                            }
+
+                        content += Content.Text(
+                            text = markdownText,
+                            markDown = markDown
+                        )
                     }
 
                     Log.d(
@@ -988,7 +1041,9 @@ fun MessageTextField(
 
                     sendMessage(content)
 
-                    styledMessageText = SpannableStringBuilder()
+                    setStyledMessageText(
+                        SpannableStringBuilder()
+                    )
 
                     annotatedMessageText = AnnotatedString("")
 
@@ -1013,10 +1068,8 @@ fun MessageTextField(
                         before: Int,
                         count: Int
                     ) {
-
-                        setMessageText(s?.toString().orEmpty())
-
-                        setSavedText(messageText)
+                        val text = s?.toString().orEmpty()
+                        setMessageText(text)
                     }
 
                     override fun afterTextChanged(
@@ -1024,7 +1077,9 @@ fun MessageTextField(
                     ) {
                         if (s == null) { return }
 
-                        styledMessageText = SpannableStringBuilder(s)
+                        setStyledMessageText(
+                            SpannableStringBuilder(s)
+                        )
 
                         annotatedMessageText = styledMessageText.toAnnotatedString()
                     }

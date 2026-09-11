@@ -6,10 +6,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
+import android.text.style.CharacterStyle
+import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
+import android.text.style.UnderlineSpan
 import android.util.Log
 import android.view.SoundEffectConstants
 import android.widget.EditText
@@ -17,6 +26,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -149,6 +159,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.graphics.toColorInt
 
 fun formatFileSize(bytes: Long): String {
     if (bytes < 1024) {
@@ -247,8 +258,8 @@ fun ChatScreen(
     onScrolledToBottom: () -> Unit,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
     draft: Map<String, List<Draft>>,
-    savedText: Map<String, String>,
-    setSavedText: (String, String) -> Unit,
+    savedText: Map<String, Triple<Int?, String, List<Triple<Int, Int, String>>>>,
+    setSavedText: (String, String, Int?, List<Triple<Int, Int, String>>) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     removeFileFromDraft: (String) -> Unit,
     removeTextFromDraft: (Int) -> Unit,
@@ -270,12 +281,154 @@ fun ChatScreen(
 ) {
     val context = LocalContext.current
     var messageText by rememberSaveable { mutableStateOf("") }
+    var editingMessageId by remember { mutableStateOf<Int?>(null) }
+    var displayedEditingMessageId by remember {
+        mutableStateOf<Int?>(null)
+    }
+    var styledMessageText by remember {
+        mutableStateOf(
+            SpannableStringBuilder()
+        )
+    }
 
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
+            val saved = savedText[id]
+
             getMessagesList(id)
-            messageText = savedText[id] ?: ""
+
+            editingMessageId = saved?.first
+            displayedEditingMessageId = editingMessageId
+
+            messageText = saved?.second ?: ""
+
+            val markDown = saved?.third ?: emptyList()
+
+            val spannable = SpannableStringBuilder(messageText)
+
+            markDown.forEach { (start, end, type) ->
+
+                if (start < 0 || end > spannable.length || start >= end) {
+                    return@forEach
+                }
+
+                when (type[0]) {
+                    'b' -> {
+                        spannable.setSpan(
+                            StyleSpan(Typeface.BOLD),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    'i' -> {
+                        spannable.setSpan(
+                            StyleSpan(Typeface.ITALIC),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    'u' -> {
+                        spannable.setSpan(
+                            UnderlineSpan(),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    's' -> {
+                        spannable.setSpan(
+                            StrikethroughSpan(),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                    'c' -> {
+                        val color = type.substring(1).toColorInt()
+
+                        spannable.setSpan(
+                            ForegroundColorSpan(color),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+
+                    'h' -> {
+                        val color = type.substring(1).toColorInt()
+
+                        spannable.setSpan(
+                            BackgroundColorSpan(color),
+                            start,
+                            end,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                }
+            }
+
+            styledMessageText = spannable
         }
+    }
+
+    LaunchedEffect(styledMessageText) {
+        val markDown = mutableListOf<Triple<Int, Int, String>>()
+
+        styledMessageText
+            .getSpans(
+                0,
+                styledMessageText.length,
+                CharacterStyle::class.java
+            )
+            .forEach { span ->
+
+                val start = styledMessageText.getSpanStart(span)
+                val end = styledMessageText.getSpanEnd(span)
+
+                if (start >= end) {
+                    return@forEach
+                }
+
+                when (span) {
+
+                    is StyleSpan -> {
+                        when (span.style) {
+
+                            Typeface.BOLD -> {
+                                markDown += Triple(start, end, "b")
+                            }
+
+                            Typeface.ITALIC -> {
+                                markDown += Triple(start, end, "i")
+                            }
+
+                            Typeface.BOLD_ITALIC -> {
+                                markDown += Triple(start, end, "b")
+                                markDown += Triple(start, end, "i")
+                            }
+                        }
+                    }
+
+                    is UnderlineSpan -> {
+                        markDown += Triple(start, end, "u")
+                    }
+
+                    is StrikethroughSpan -> {
+                        markDown += Triple(start, end, "s")
+                    }
+
+                    is ForegroundColorSpan -> {
+                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                    }
+
+                    is BackgroundColorSpan -> {
+                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                    }
+                }
+            }
+        setSavedText(id, messageText, editingMessageId, markDown)
     }
 
     var isExpandedAttachment by remember { mutableStateOf(false) }
@@ -356,11 +509,6 @@ fun ChatScreen(
     var messageMenuId by remember { mutableIntStateOf(0) }
     var messageMenuOffset by remember {
         mutableStateOf(DpOffset(0.dp, 0.dp))
-    }
-
-    var editingMessageId by remember { mutableStateOf<Int?>(null) }
-    var displayedEditingMessageId by remember {
-        mutableStateOf<Int?>(null)
     }
 
     val navigationBarHeight = WindowInsets.navigationBars.getBottom(LocalDensity.current)
@@ -788,12 +936,12 @@ fun ChatScreen(
                                     IconButton(
                                         onClick = {
                                             scope.launch {
+                                                clearDraft()
+                                                messageText = ""
+                                                setSavedText(id, "", null, emptyList())
                                                 editingMessageId = null
                                                 delay(300.milliseconds)
                                                 displayedEditingMessageId = null
-                                                messageText = ""
-                                                setSavedText(id, "")
-                                                clearDraft()
                                             }
                                         }) {
                                         Icon(
@@ -989,1008 +1137,67 @@ fun ChatScreen(
                                 )
                         ) {
                             Row(verticalAlignment = Alignment.Bottom) {
-//                                val onSurface = MaterialTheme.colorScheme.onSurface
-//                                val textEditHint = stringResource(R.string.message)
-//
-//                                val boldActionId = 1001
-//                                val italicActionId = 1002
-//                                val underlineActionId = 1003
-//                                val strikethroughActionId = 1004
-//
-//                                val textColorActionId = 1005
-//                                val highlightActionId = 1006
-//
-//                                val textColorRedId = 1101
-//                                val textColorBlueId = 1102
-//                                val textColorGreenId = 1103
-//                                val textColorOrangeId = 1104
-//                                val textColorPurpleId = 1105
-//                                val textColorPinkId = 1106
-//
-//                                val highlightYellowId = 1201
-//                                val highlightGreenId = 1202
-//                                val highlightBlueId = 1203
-//                                val highlightPinkId = 1204
-//                                val highlightOrangeId = 1205
-//                                val highlightPurpleId = 1206
-//
-//                                var styledMessageText by remember {
-//                                    mutableStateOf(
-//                                        SpannableStringBuilder()
-//                                    )
-//                                }
-//
-//                                var annotatedMessageText by remember {
-//                                    mutableStateOf(
-//                                        AnnotatedString("")
-//                                    )
-//                                }
-//
-//                                AndroidView(
-//                                    modifier = Modifier
-//                                        .fillMaxWidth()
-//                                        .padding(horizontal = 8.dp),
-//
-//                                    factory = { context ->
-//
-//                                        EditText(context).apply {
-//
-//                                            background = null
-//
-//                                            maxLines = 5
-//
-//                                            hint = textEditHint
-//
-//                                            setHintTextColor(
-//                                                android.graphics.Color.GRAY
-//                                            )
-//
-//                                            setTextColor(
-//                                                onSurface.toArgb()
-//                                            )
-//
-//                                            // ============================================================
-//                                            // SELECTION TOOLBAR
-//                                            // ============================================================
-//
-//                                            customSelectionActionModeCallback =
-//                                                object : ActionMode.Callback {
-//
-////                                                    override fun onCreateActionMode(
-////                                                        mode: ActionMode, menu: Menu
-////                                                    ): Boolean {
-////
-////                                                        menu.add(
-////                                                            Menu.NONE, boldActionId, 100, "Bold"
-////                                                        )
-////
-////                                                        menu.add(
-////                                                            Menu.NONE, italicActionId, 101, "Italic"
-////                                                        )
-////
-////                                                        menu.add(
-////                                                            Menu.NONE,
-////                                                            underlineActionId,
-////                                                            102,
-////                                                            "Underline"
-////                                                        )
-////
-////                                                        menu.add(
-////                                                            Menu.NONE,
-////                                                            strikethroughActionId,
-////                                                            103,
-////                                                            "Strikethrough"
-////                                                        )
-////
-////                                                        menu.add(
-////                                                            Menu.NONE,
-////                                                            textColorActionId,
-////                                                            104,
-////                                                            "Text Color"
-////                                                        )
-////
-////                                                        menu.add(
-////                                                            Menu.NONE,
-////                                                            highlightActionId,
-////                                                            105,
-////                                                            "Highlight"
-////                                                        )
-////
-////                                                        return true
-////                                                    }
-//
-//                                                    override fun onCreateActionMode(
-//                                                        mode: ActionMode,
-//                                                        menu: Menu
-//                                                    ): Boolean {
-//
-//                                                        menu.add(
-//                                                            Menu.NONE,
-//                                                            boldActionId,
-//                                                            100,
-//                                                            "Bold"
-//                                                        )
-//
-//                                                        menu.add(
-//                                                            Menu.NONE,
-//                                                            italicActionId,
-//                                                            101,
-//                                                            "Italic"
-//                                                        )
-//
-//                                                        menu.add(
-//                                                            Menu.NONE,
-//                                                            underlineActionId,
-//                                                            102,
-//                                                            "Underline"
-//                                                        )
-//
-//                                                        menu.add(
-//                                                            Menu.NONE,
-//                                                            strikethroughActionId,
-//                                                            103,
-//                                                            "Strikethrough"
-//                                                        )
-//
-//                                                        // ====================================================
-//                                                        // TEXT COLOR SUBMENU
-//                                                        // ====================================================
-//
-//                                                        val textColorMenu = menu.addSubMenu(
-//                                                            Menu.NONE,
-//                                                            textColorActionId,
-//                                                            104,
-//                                                            "Text Color"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorRedId,
-//                                                            0,
-//                                                            "Red"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorBlueId,
-//                                                            1,
-//                                                            "Blue"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorGreenId,
-//                                                            2,
-//                                                            "Green"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorOrangeId,
-//                                                            3,
-//                                                            "Orange"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorPurpleId,
-//                                                            4,
-//                                                            "Purple"
-//                                                        )
-//
-//                                                        textColorMenu.add(
-//                                                            Menu.NONE,
-//                                                            textColorPinkId,
-//                                                            5,
-//                                                            "Pink"
-//                                                        )
-//
-//                                                        // ====================================================
-//                                                        // HIGHLIGHT SUBMENU
-//                                                        // ====================================================
-//
-//                                                        val highlightMenu = menu.addSubMenu(
-//                                                            Menu.NONE,
-//                                                            highlightActionId,
-//                                                            105,
-//                                                            "Highlight"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightYellowId,
-//                                                            0,
-//                                                            "Yellow"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightGreenId,
-//                                                            1,
-//                                                            "Green"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightBlueId,
-//                                                            2,
-//                                                            "Blue"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightPinkId,
-//                                                            3,
-//                                                            "Pink"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightOrangeId,
-//                                                            4,
-//                                                            "Orange"
-//                                                        )
-//
-//                                                        highlightMenu.add(
-//                                                            Menu.NONE,
-//                                                            highlightPurpleId,
-//                                                            5,
-//                                                            "Purple"
-//                                                        )
-//
-//                                                        return true
-//                                                    }
-//
-//                                                    override fun onPrepareActionMode(
-//                                                        mode: ActionMode, menu: Menu
-//                                                    ): Boolean {
-//                                                        return false
-//                                                    }
-//
-//                                                    override fun onActionItemClicked(
-//                                                        mode: ActionMode, item: MenuItem
-//                                                    ): Boolean {
-//
-//                                                        val start = selectionStart
-//                                                        val end = selectionEnd
-//
-//                                                        /*
-//                                                         * Selection معتبر نیست.
-//                                                         */
-//                                                        if (start !in 0..<end) {
-//                                                            mode.finish()
-//                                                            return true
-//                                                        }
-//
-//                                                        when (item.itemId) {
-//
-//                                                            // ====================================================
-//                                                            // BOLD
-//                                                            // ====================================================
-//
-//                                                            boldActionId -> {
-//
-//                                                                toggleStyle(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    style = Typeface.BOLD
-//                                                                )
-//
-//                                                                /*
-//                                                                 * Editable بعد از تغییر Span
-//                                                                 * source of truth است.
-//                                                                 */
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(
-//                                                                        editableText
-//                                                                    )
-//
-//                                                                /*
-//                                                                 * Compose representation
-//                                                                 */
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            // ====================================================
-//                                                            // ITALIC
-//                                                            // ====================================================
-//
-//                                                            italicActionId -> {
-//
-//                                                                toggleStyle(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    style = Typeface.ITALIC
-//                                                                )
-//
-//                                                                /*
-//                                                                 * Source of truth
-//                                                                 */
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(
-//                                                                        editableText
-//                                                                    )
-//
-//                                                                /*
-//                                                                 * Compose representation
-//                                                                 */
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            // ====================================================
-//                                                            // UNDERLINE
-//                                                            // ====================================================
-//
-//                                                            underlineActionId -> {
-//
-//                                                                toggleSimpleSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    spanClass = UnderlineSpan::class.java,
-//                                                                    createSpan = { UnderlineSpan() }
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            // ====================================================
-//                                                            // STRIKETHROUGH
-//                                                            // ====================================================
-//
-//                                                            strikethroughActionId -> {
-//
-//                                                                toggleSimpleSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    spanClass = StrikethroughSpan::class.java,
-//                                                                    createSpan = { StrikethroughSpan() }
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorActionId -> {
-//
-//                                                                // اینجا فقط منوی رنگ باز می‌شود.
-//                                                                // خود رنگ در IDهای textColorRedId و ... هندل می‌شود.
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorRedId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.RED
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorBlueId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.BLUE
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorGreenId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.GREEN
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorOrangeId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(255, 152, 0)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorPurpleId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(156, 39, 176)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            textColorPinkId -> {
-//
-//                                                                toggleColorSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(233, 30, 99)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightActionId -> {
-//
-//                                                                // فقط منوی Highlight باز می‌شود.
-//                                                                // رنگ در IDهای highlight... هندل می‌شود.
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightYellowId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.YELLOW
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightGreenId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(139, 195, 74)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightBlueId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(100, 181, 246)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightPinkId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(244, 143, 177)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightOrangeId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(255, 183, 77)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            highlightPurpleId -> {
-//
-//                                                                toggleHighlightSpan(
-//                                                                    editable = editableText,
-//                                                                    start = start,
-//                                                                    end = end,
-//                                                                    color = android.graphics.Color.rgb(186, 104, 200)
-//                                                                )
-//
-//                                                                styledMessageText =
-//                                                                    SpannableStringBuilder(editableText)
-//
-//                                                                annotatedMessageText =
-//                                                                    styledMessageText.toAnnotatedString()
-//
-//                                                                mode.finish()
-//
-//                                                                return true
-//                                                            }
-//
-//                                                            /*
-//                                                             * Copy را اینجا handle نمی‌کنیم.
-//                                                             *
-//                                                             * Android خودش Copy را انجام می‌دهد.
-//                                                             */
-//                                                            else -> {
-//                                                                return false
-//                                                            }
-//                                                        }
-//                                                    }
-//
-//                                                    override fun onDestroyActionMode(
-//                                                        mode: ActionMode
-//                                                    ) {
-//                                                    }
-//                                                }
-//
-//                                            // ============================================================
-//                                            // ENTER
-//                                            // ============================================================
-//
-//                                            setOnKeyListener { _, keyCode, event ->
-//
-//                                                /*
-//                                                 * فقط Enter را بررسی می‌کنیم.
-//                                                 */
-//                                                if (keyCode != KeyEvent.KEYCODE_ENTER || event.action != KeyEvent.ACTION_DOWN) {
-//                                                    return@setOnKeyListener false
-//                                                }
-//
-//                                                val shift = event.isShiftPressed
-//                                                val ctrl = event.isCtrlPressed
-//                                                val alt = event.isAltPressed
-//
-//                                                val send = when {
-//                                                    !shift && !ctrl && !alt -> sendWith.enter
-//
-//                                                    shift && !ctrl && !alt -> sendWith.shiftEnter
-//
-//                                                    !shift && ctrl && !alt -> sendWith.ctrlEnter
-//
-//                                                    !shift && !ctrl && alt -> sendWith.altEnter
-//
-//                                                    else -> false
-//                                                }
-//
-//                                                Log.d(
-//                                                    "KEY_EVENT",
-//                                                    "ENTER | " + "shift=$shift | " + "ctrl=$ctrl | " + "alt=$alt | " + "send=$send"
-//                                                )
-//
-//                                                /*
-//                                                 * این ترکیب Enter نباید Send کند.
-//                                                 * بگذار EditText رفتار عادی خودش را انجام دهد.
-//                                                 */
-//                                                if (!send) {
-//                                                    return@setOnKeyListener false
-//                                                }
-//
-//                                                // ========================================================
-//                                                // CURRENT EDITABLE
-//                                                // ========================================================
-//
-//                                                /*
-//                                                 * خیلی مهم:
-//                                                 *
-//                                                 * از editableText استفاده می‌کنیم،
-//                                                 * نه messageText و نه String.
-//                                                 *
-//                                                 * چون StyleSpanها داخل Editable هستند.
-//                                                 */
-//                                                val currentStyledText = SpannableStringBuilder(
-//                                                    editableText
-//                                                )
-//
-//                                                // ========================================================
-//                                                // PLAIN TEXT
-//                                                // ========================================================
-//
-//                                                val plainText =
-//                                                    currentStyledText.toString().replace(
-//                                                        Regex("\\n+$"), ""
-//                                                    ).trim()
-//
-//                                                /*
-//                                                 * اگر نه متن داریم و نه فایل،
-//                                                 * چیزی برای Send نیست.
-//                                                 */
-//                                                if (plainText.isBlank() && !showFileRow) {
-//
-//                                                    Log.d(
-//                                                        "KEY_EVENT", "SEND CANCELLED"
-//                                                    )
-//
-//                                                    return@setOnKeyListener true
-//                                                }
-//
-//                                                // ========================================================
-//                                                // REMOVE TRAILING WHITESPACE
-//                                                // ========================================================
-//
-//                                                /*
-//                                                 * یک کپی می‌سازیم تا Spanهای EditText اصلی
-//                                                 * قبل از Send خراب نشوند.
-//                                                 */
-//                                                val formattedText = SpannableStringBuilder(
-//                                                    currentStyledText
-//                                                )
-//
-//                                                while (formattedText.isNotEmpty() && formattedText.last()
-//                                                        .isWhitespace()
-//                                                ) {
-//                                                    formattedText.delete(
-//                                                        formattedText.length - 1,
-//                                                        formattedText.length
-//                                                    )
-//                                                }
-//
-//                                                // ========================================================
-//                                                // SPANNED → MARKDOWN
-//                                                // ========================================================
-//
-//                                                val markdownText = formattedText.toMarkdown()
-//
-//                                                // ========================================================
-//                                                // SYNC STATE
-//                                                // ========================================================
-//
-//                                                styledMessageText = SpannableStringBuilder(
-//                                                    formattedText
-//                                                )
-//
-//                                                annotatedMessageText =
-//                                                    styledMessageText.toAnnotatedString()
-//
-//                                                messageText = formattedText.toString()
-//
-//                                                // ========================================================
-//                                                // ANIMATION
-//                                                // ========================================================
-//
-//                                                scope.launch {
-//
-//                                                    animate = true
-//
-//                                                    delay(
-//                                                        1000.milliseconds
-//                                                    )
-//
-//                                                    animate = false
-//                                                }
-//
-//                                                // ========================================================
-//                                                // CONTENT
-//                                                // ========================================================
-//
-//                                                val content = mutableListOf<Content>()
-//
-//                                                draft[id].orEmpty().forEach { item ->
-//
-//                                                    when (item) {
-//
-//                                                        is Draft.File -> {
-//                                                            content += Content.File(
-//                                                                id = item.id,
-//                                                                fileSize = item.size,
-//                                                                fileName = item.name
-//                                                            )
-//                                                        }
-//
-//                                                        is Draft.LaTeX -> {
-//                                                            content += Content.LaTeX(
-//                                                                text = item.text
-//                                                            )
-//                                                        }
-//
-//                                                        is Draft.Text -> {
-//                                                            content += Content.Text(
-//                                                                text = item.text
-//                                                            )
-//                                                        }
-//                                                    }
-//                                                }
-//
-//                                                // ========================================================
-//                                                // FORMATTED TEXT
-//                                                // ========================================================
-//
-//                                                if (markdownText.isNotBlank()) {
-//
-//                                                    content += Content.Text(
-//                                                        text = markdownText
-//                                                    )
-//                                                }
-//
-//                                                Log.d(
-//                                                    "KEY_EVENT",
-//                                                    "SEND | " + "textLength=${markdownText.length} | " + "draftItems=${draft[id].orEmpty().size} | " + "contentItems=${content.size}"
-//                                                )
-//
-//                                                // ========================================================
-//                                                // SEND
-//                                                // ========================================================
-//
-//                                                sendMessage(
-//                                                    id, content
-//                                                )
-//
-//                                                // ========================================================
-//                                                // CLEAR STATE
-//                                                // ========================================================
-//
-//                                                messageText = ""
-//
-//                                                styledMessageText = SpannableStringBuilder()
-//
-//                                                annotatedMessageText = AnnotatedString("")
-//
-//                                                setSavedText(
-//                                                    id, ""
-//                                                )
-//
-//                                                clearDraft()
-//
-//                                                /*
-//                                                 * Editable خود EditText را پاک می‌کنیم.
-//                                                 *
-//                                                 * نه text.clear()
-//                                                 * چون ممکن است text در scope دیگری
-//                                                 * به String resolve شود.
-//                                                 */
-//                                                editableText.clear()
-//
-//                                                /*
-//                                                 * Enter توسط ما مصرف شد.
-//                                                 */
-//                                                return@setOnKeyListener true
-//                                            }
-//
-//                                            // ============================================================
-//                                            // TEXT WATCHER
-//                                            // ============================================================
-//
-//                                            addTextChangedListener(object : TextWatcher {
-//
-//                                                override fun beforeTextChanged(
-//                                                    s: CharSequence?,
-//                                                    start: Int,
-//                                                    count: Int,
-//                                                    after: Int
-//                                                ) {
-//                                                }
-//
-//                                                override fun onTextChanged(
-//                                                    s: CharSequence?,
-//                                                    start: Int,
-//                                                    before: Int,
-//                                                    count: Int
-//                                                ) {
-//
-//                                                    /*
-//                                                     * messageText فقط plain String است.
-//                                                     */
-//                                                    messageText = s?.toString().orEmpty()
-//
-//                                                    /*
-//                                                     * فعلاً Saved Draft فقط String ذخیره می‌کند.
-//                                                     */
-//                                                    setSavedText(
-//                                                        id, messageText
-//                                                    )
-//                                                }
-//
-//                                                override fun afterTextChanged(
-//                                                    s: Editable?
-//                                                ) {
-//
-//                                                    if (s == null) {
-//                                                        return
-//                                                    }
-//
-//                                                    /*
-//                                                     * ==================================================
-//                                                     * SOURCE OF TRUTH
-//                                                     * ==================================================
-//                                                     *
-//                                                     * Spanها اینجا حفظ می‌شوند.
-//                                                     */
-//                                                    styledMessageText = SpannableStringBuilder(
-//                                                        s
-//                                                    )
-//
-//                                                    /*
-//                                                     * ==================================================
-//                                                     * COMPOSE REPRESENTATION
-//                                                     * ==================================================
-//                                                     */
-//                                                    annotatedMessageText =
-//                                                        styledMessageText.toAnnotatedString()
-//                                                }
-//                                            })
-//                                        }
-//                                    },
-//
-//                                    // ====================================================================
-//                                    // UPDATE
-//                                    // ====================================================================
-//
-//                                    update = { editText ->
-//
-//                                        val currentText = editText.editableText.toString()
-//
-//                                        /*
-//                                         * اگر View و state یکی هستند،
-//                                         * اصلاً setText نکن.
-//                                         *
-//                                         * این کار برای حفظ cursor و selection مهم است.
-//                                         */
-//                                        if (currentText == messageText) {
-//                                            return@AndroidView
-//                                        }
-//
-//                                        /*
-//                                         * اگر styledMessageText مربوط به همین messageText است،
-//                                         * Spanها را حفظ کن.
-//                                         *
-//                                         * در غیر این صورت state بیرونی جدید است
-//                                         * و باید plain text را وارد کنیم.
-//                                         */
-//                                        val value: CharSequence =
-//                                            if (styledMessageText.toString() == messageText) {
-//                                                SpannableString(
-//                                                    styledMessageText
-//                                                )
-//                                            } else {
-//                                                SpannableString(
-//                                                    messageText
-//                                                )
-//                                            }
-//
-//                                        editText.setText(
-//                                            value, TextView.BufferType.SPANNABLE
-//                                        )
-//
-//                                        /*
-//                                         * Cursor انتهای متن.
-//                                         */
-//                                        editText.setSelection(
-//                                            editText.editableText.length
-//                                        )
-//                                    })
-
                                 MessageTextField(
                                     sendWith = sendWith,
                                     showFileRow = showFileRow,
-                                    setMessageText = { text -> messageText = text },
+                                    setMessageText = { text ->
+                                        messageText = text
+                                        val markDown = mutableListOf<Triple<Int, Int, String>>()
+
+                                        styledMessageText
+                                            .getSpans(
+                                                0,
+                                                styledMessageText.length,
+                                                CharacterStyle::class.java
+                                            )
+                                            .forEach { span ->
+
+                                                val start = styledMessageText.getSpanStart(span)
+                                                val end = styledMessageText.getSpanEnd(span)
+
+                                                if (start >= end) {
+                                                    return@forEach
+                                                }
+
+                                                when (span) {
+
+                                                    is StyleSpan -> {
+                                                        when (span.style) {
+
+                                                            Typeface.BOLD -> {
+                                                                markDown += Triple(start, end, "b")
+                                                            }
+
+                                                            Typeface.ITALIC -> {
+                                                                markDown += Triple(start, end, "i")
+                                                            }
+
+                                                            Typeface.BOLD_ITALIC -> {
+                                                                markDown += Triple(start, end, "b")
+                                                                markDown += Triple(start, end, "i")
+                                                            }
+                                                        }
+                                                    }
+
+                                                    is UnderlineSpan -> {
+                                                        markDown += Triple(start, end, "u")
+                                                    }
+
+                                                    is StrikethroughSpan -> {
+                                                        markDown += Triple(start, end, "s")
+                                                    }
+
+                                                    is ForegroundColorSpan -> {
+                                                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                    }
+
+                                                    is BackgroundColorSpan -> {
+                                                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                    }
+                                                }
+                                            }
+                                        setSavedText(id, text, editingMessageId, markDown)
+                                    },
                                     showAnimation = {
                                         scope.launch {
                                             animate = true
@@ -1999,7 +1206,7 @@ fun ChatScreen(
                                         }
                                     },
                                     draftSize = draft[id].orEmpty().size,
-                                    draftUpdate = { content ->
+                                    getDraft = { content ->
                                         draft[id].orEmpty().forEach { item ->
                                             content += when (item) {
                                                 is Draft.File -> {
@@ -2015,7 +1222,7 @@ fun ChatScreen(
                                                 }
 
                                                 is Draft.Text -> {
-                                                    Content.Text(text = item.text)
+                                                    Content.Text(text = item.text, markDown = item.markDown)
                                                 }
                                             }
                                         }
@@ -2024,12 +1231,13 @@ fun ChatScreen(
                                         sendMessage(id, content)
                                         messageText = ""
 
-                                        setSavedText(id, "")
+                                        setSavedText(id, "", null, emptyList())
 
                                         clearDraft()
                                     },
                                     messageText = messageText,
-                                    setSavedText = { savedText -> setSavedText(id, savedText) }
+                                    styledMessageText = styledMessageText,
+                                    setStyledMessageText = { newStyledMessageText -> styledMessageText = newStyledMessageText }
                                 )
                             }
                         }
@@ -2057,7 +1265,8 @@ fun ChatScreen(
 
                                             is Draft.Text -> {
                                                 Content.Text(
-                                                    text = item.text
+                                                    text = item.text,
+                                                    markDown = item.markDown
                                                 )
                                             }
 
@@ -2071,12 +1280,13 @@ fun ChatScreen(
                                     if (messageText.isNotBlank()) {
                                         content += Content.Text(
                                             //type = "text",
-                                            text = messageText
+                                            text = messageText,
+                                            markDown = emptyList()
                                         )
                                     }
                                     editingMessageId?.let { editMessage(it, content) }
                                     messageText = ""
-                                    setSavedText(id, "")
+                                    setSavedText(id, "", null, emptyList())
                                     clearDraft()
                                     editingMessageId = null
 
@@ -2115,7 +1325,8 @@ fun ChatScreen(
 
                                                 is Draft.Text -> {
                                                     Content.Text(
-                                                        text = item.text
+                                                        text = item.text,
+                                                        markDown = item.markDown
                                                     )
                                                 }
 
@@ -2126,15 +1337,71 @@ fun ChatScreen(
                                                 }
                                             }
                                         }
+                                        val markDown: MutableList<Triple<Int, Int, String>> = mutableListOf()
+
+                                        styledMessageText
+                                            .getSpans(
+                                                0,
+                                                styledMessageText.length,
+                                                CharacterStyle::class.java
+                                            )
+                                            .forEach { span ->
+
+                                                val start = styledMessageText.getSpanStart(span)
+                                                val end = styledMessageText.getSpanEnd(span)
+
+                                                if (start >= end) {
+                                                    return@forEach
+                                                }
+
+                                                when (span) {
+
+                                                    is StyleSpan -> {
+
+                                                        when (span.style) {
+
+                                                            Typeface.BOLD -> {
+                                                                markDown += Triple(start, end, "b")
+                                                            }
+
+                                                            Typeface.ITALIC -> {
+                                                                markDown += Triple(start, end, "i")
+                                                            }
+
+                                                            Typeface.BOLD_ITALIC -> {
+                                                                markDown += Triple(start, end, "b")
+                                                                markDown += Triple(start, end, "i")
+                                                            }
+                                                        }
+                                                    }
+
+                                                    is UnderlineSpan -> {
+                                                        markDown += Triple(start, end, "u")
+                                                    }
+
+                                                    is StrikethroughSpan -> {
+                                                        markDown += Triple(start, end, "s")
+                                                    }
+
+                                                    is ForegroundColorSpan -> {
+                                                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                    }
+
+                                                    is BackgroundColorSpan -> {
+                                                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                    }
+                                                }
+                                            }
                                         if (messageText.isNotBlank()) {
                                             content += Content.Text(
                                                 //type = "text",
-                                                text = messageText
+                                                text = messageText,
+                                                markDown = markDown
                                             )
                                         }
                                         sendMessage(id, content)
                                         messageText = ""
-                                        setSavedText(id, "")
+                                        setSavedText(id, "", null, emptyList())
                                         clearDraft()
 
                                     }, modifier = Modifier
@@ -2735,7 +2002,61 @@ fun ChatScreen(
                                 when (content) {
                                     is Content.Text -> {
                                         if (index == messageContentList.content.lastIndex) {
-                                            setSavedText(id, content.text)
+                                            val markDown = mutableListOf<Triple<Int, Int, String>>()
+
+                                            styledMessageText
+                                                .getSpans(
+                                                    0,
+                                                    styledMessageText.length,
+                                                    CharacterStyle::class.java
+                                                )
+                                                .forEach { span ->
+
+                                                    val start = styledMessageText.getSpanStart(span)
+                                                    val end = styledMessageText.getSpanEnd(span)
+
+                                                    if (start >= end) {
+                                                        return@forEach
+                                                    }
+
+                                                    when (span) {
+
+                                                        is StyleSpan -> {
+                                                            when (span.style) {
+
+                                                                Typeface.BOLD -> {
+                                                                    markDown += Triple(start, end, "b")
+                                                                }
+
+                                                                Typeface.ITALIC -> {
+                                                                    markDown += Triple(start, end, "i")
+                                                                }
+
+                                                                Typeface.BOLD_ITALIC -> {
+                                                                    markDown += Triple(start, end, "b")
+                                                                    markDown += Triple(start, end, "i")
+                                                                }
+                                                            }
+                                                        }
+
+                                                        is UnderlineSpan -> {
+                                                            markDown += Triple(start, end, "u")
+                                                        }
+
+                                                        is StrikethroughSpan -> {
+                                                            markDown += Triple(start, end, "s")
+                                                        }
+
+                                                        is ForegroundColorSpan -> {
+                                                            markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                        }
+
+                                                        is BackgroundColorSpan -> {
+                                                            markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                        }
+                                                    }
+                                                }
+                                            setSavedText(id, content.text, editingMessageId, markDown)
                                             messageText = content.text
                                         } else {
                                             attachTextBlock(content.text)
@@ -3944,14 +3265,25 @@ fun UploadList(
     openText: (Int) -> Unit,
     openLaTeX: (Int) -> Unit
 ) {
-    val view = LocalView.current
-    if (showFileRow && draft.isNotEmpty()) {
+    val density = LocalDensity.current
+
+    AnimatedVisibility(
+        visible = (showFileRow && draft.isNotEmpty()),
+        //enter = slideInVertically { if (showFileRow) 2 * it else it }, // + fadeIn() + scaleIn(initialScale = 0.8f),
+        enter = slideInVertically {
+            with(density) {
+                64.dp.roundToPx()
+            }
+        },
+        //exit = slideOutVertically { if (showFileRow) 2 * it else it } // + fadeOut() + scaleOut(targetScale = 0.8f)
+        exit = ExitTransition.None) {
         Row(
             modifier = Modifier
                 //.fillMaxWidth()
                 //.background(MaterialTheme.colorScheme.primary)
                 .wrapContentWidth()
                 .horizontalScroll(rememberScrollState())
+                .requiredHeight(64.dp)
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -4106,7 +3438,6 @@ fun ChatScreenPopUp(
         }
     }
 
-    val view = LocalView.current
 
     var animate by remember { mutableStateOf(false) }
 

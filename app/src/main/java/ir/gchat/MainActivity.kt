@@ -237,9 +237,9 @@ class MainActivity : AppCompatActivity() {
                             },
                             draft = socketViewModel.drafts.collectAsState().value,
                             savedText = socketViewModel.savedText.collectAsState().value,
-                            setSavedText = { id, message ->
+                            setSavedText = { id, message, editingId, markDown ->
                                 socketViewModel.setSavedText(
-                                    id, message
+                                    id, message, editingId, markDown
                                 )
                             },
                             downloadFile = { fileId, fileName, fileSize, setProgress, setPending, setDownloadedBytes ->
@@ -458,8 +458,8 @@ fun MainNavigation(
     paletteIndex: Int,
     getUploadUri: (String, Long, String, Uri?) -> Unit,
     draft: Map<String, List<Draft>>,
-    savedText: Map<String, String>,
-    setSavedText: (String, String) -> Unit,
+    savedText: Map<String, Triple<Int?, String, List<Triple<Int, Int, String>>>>,
+    setSavedText: (String, String, Int?, List<Triple<Int, Int, String>>) -> Unit,
     downloadFile: (Int, String, Long, (Float) -> Unit, (Boolean) -> Unit, (Long) -> Unit) -> Unit,
     loginResponse: Boolean,
     removeFileFromDraft: (String) -> Unit,

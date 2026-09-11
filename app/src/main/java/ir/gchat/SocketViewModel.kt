@@ -107,8 +107,8 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
     private var _drafts = MutableStateFlow<Map<String, List<Draft>>>(emptyMap())
     val drafts: StateFlow<Map<String, List<Draft>>> = _drafts.asStateFlow()
 
-    private var _savedText = MutableStateFlow<Map<String, String>>(emptyMap())
-    val savedText: StateFlow<Map<String, String>> = _savedText.asStateFlow()
+    private var _savedText = MutableStateFlow<Map<String, Triple<Int?, String, List<Triple<Int, Int, String>>>>>(emptyMap())
+    val savedText: StateFlow<Map<String, Triple<Int?, String, List<Triple<Int, Int, String>>>>> = _savedText.asStateFlow()
 
     fun connect() {
         if (webSocket != null) {
@@ -349,7 +349,17 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                                 when (obj.getString("type")) {
                                                     "text" -> add(
                                                         Content.Text(
-                                                            text = obj.optString("text")
+                                                            text = obj.optString("text"),
+                                                            markDown = obj.optJSONArray("mark_down")?.let { array ->
+                                                                (0 until array.length()).map { i ->
+                                                                    val item = array.getJSONArray(i)
+                                                                    Triple(
+                                                                        item.getInt(0),
+                                                                        item.getInt(1),
+                                                                        item.getString(2)
+                                                                    )
+                                                                }
+                                                            } ?: emptyList()
                                                         )
                                                     )
 
@@ -400,7 +410,17 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                                             when (item.getString("type")) {
                                                 "text" -> {
                                                     lastMessageContent += Content.Text(
-                                                        text = item.getString("text")
+                                                        text = item.getString("text"),
+                                                        markDown = item.optJSONArray("mark_down")?.let { array ->
+                                                            (0 until array.length()).map { i ->
+                                                                val item = array.getJSONArray(i)
+                                                                Triple(
+                                                                    item.getInt(0),
+                                                                    item.getInt(1),
+                                                                    item.getString(2)
+                                                                )
+                                                            }
+                                                        } ?: emptyList()
                                                     )
                                                 }
 
@@ -1512,10 +1532,11 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun setSavedText(id: String, message: String) {
+    fun setSavedText(id: String, message: String, editingId: Int?, markDown: List<Triple<Int, Int, String>>) {
         _savedText.update { current ->
-            current + (id to message)
+            current + (id to Triple(editingId, message, markDown))
         }
+        println(_savedText.value.toString())
     }
 
     fun attachTextBlock(text: String) {
@@ -1525,7 +1546,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
 
             val newId = (drafts.filterIsInstance<Draft.Text>().maxOfOrNull { it.id } ?: -1) + 1
 
-            draftsMap + (chatId to (drafts + Draft.Text(text, id = newId)))
+            draftsMap + (chatId to (drafts + Draft.Text(text = text, markDown = emptyList(), id = newId)))
         }
     }
 
