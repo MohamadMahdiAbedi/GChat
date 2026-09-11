@@ -1,0 +1,106 @@
+Khat und GCorp Plattform – Regeln und Bestimmungen
+1. Grundsätze der Plattform
+
+Gleichbehandlung:
+Die Nutzer haben grundsätzlich freie Meinungsäußerung, können selbst bestimmen, mit wem sie Inhalte teilen, und frei Gruppen beitreten. Die Khat-Plattform ist vollständig nutzerorientiert. Alle Nutzer sind vor dem Gesetz gleich, unabhängig von Geschlecht, Religion, ethnischer Herkunft, Sprache oder anderen persönlichen Merkmalen.
+
+Verantwortung für Inhalte:
+Der Nutzer, der einen Inhalt veröffentlicht, trägt die alleinige Verantwortung für diesen Inhalt. Die Plattform fungiert lediglich als technischer Vermittler und übernimmt grundsätzlich keine zivil- oder strafrechtliche Verantwortung für von Nutzern veröffentlichte Inhalte, sofern gesetzlich nichts anderes ausdrücklich vorgeschrieben ist.
+
+2. Registrierung, Kontoinhaberschaft und Datenschutz
+
+Kontoinhaberschaft:
+Die Informationen zu Ihrem Konto gehören Ihnen und sollten nicht an andere Personen weitergegeben werden. Die Plattform übernimmt keine Verantwortung für Vorfälle oder Schäden, die durch die Weitergabe solcher Informationen durch den Nutzer entstehen.
+
+Löschung des Kontos:
+Wenn Sie die Löschung Ihres Kontos beantragen, werden sämtliche mit dem Nutzerkonto verbundenen Daten, einschließlich Nachrichten, Kontakte, Dateien sowie erstellter Gruppen und Kanäle, vollständig aus dem für den Nutzer zugänglichen Bereich entfernt.
+
+Verbot der Identitätsvortäuschung:
+Die Identität anderer Personen vorzutäuschen – insbesondere die von Prominenten oder Mitgliedern des Khat-Teams – ist untersagt und führt zur sofortigen Sperrung des Kontos.
+
+3. Einstufung der Privatsphäre von Inhalten
+
+Das intelligente System der Plattform legt abhängig von der Art der Interaktion unterschiedliche Zugriffsebenen für Inhalte fest:
+
+Private Nachrichten: Nur die an der Unterhaltung beteiligten Personen bzw. Mitglieder einer privaten Gruppe können die Inhalte einsehen.
+Private Gruppe/Kanal: Nur Nutzer, die der Gruppe bzw. dem Kanal offiziell beigetreten sind, können die Inhalte sehen.
+Öffentlicher Kanal: Die Inhalte dieser Kanäle sind auf der Khat-Website sichtbar und können auch von Personen eingesehen werden, die keine Mitglieder sind.
+
+Das intelligente System von Khat kann auf Informationen zugreifen, soweit dies zur Überprüfung und Gewährleistung der virtuellen Sicherheit der Nutzer erforderlich ist.
+
+4. Unzulässige Inhalte
+
+Die Veröffentlichung oder Bewerbung der folgenden Inhalte ist untersagt und kann rechtliche Konsequenzen nach sich ziehen:
+
+1. Straftaten gegen Personen
+Beleidigungen, Herabwürdigungen, Belästigungen und Spam.
+Belästigung, Nachstellung oder störendes Verhalten in privaten Nachrichten, Gruppen, Kommentaren usw.
+Drohungen gegen das Leben oder die körperliche Unversehrtheit sowie die Aufforderung oder Ermutigung zu Gewalt, Suizid, Selbstverletzung oder anderen schädlichen Handlungen.
+Veröffentlichung oder Weitergabe privater Informationen anderer Personen (z. B. Adresse, Telefonnummer oder Ausweisdokumente) ohne deren Zustimmung.
+Schädliche oder gezielt störende Inhalte, das Erstellen von Gruppen oder Aktivitäten gegen einzelne Personen sowie gezielte Diffamierungs- oder Schädigungskampagnen.
+2. Unmoralische und sexuelle Inhalte
+Pornografische Inhalte sind in sämtlichen Bereichen der Plattform, einschließlich des Cloud-Speichers, verboten und führen zum Ausschluss von der Plattform.
+Inhalte im Zusammenhang mit sexuellem Missbrauch von Kindern werden mit den strengsten Maßnahmen geahndet.
+3. Betrug und illegale Aktivitäten
+Veröffentlichung von Links zu Online-Betrug, betrügerischen Angeboten oder Weiterleitungen auf gefälschte Webseiten bzw. Portale.
+Kauf und Verkauf von Drogen oder alkoholischen Getränken sowie Schmuggel, Glücksspiele und Wetten.
+Verkauf von Mitgliedschaften sowie Kauf oder Verkauf von Nutzerkonten.
+Verbreitung von Falschmeldungen, die zu erheblichen Schäden für natürliche oder juristische Personen führen können.
+4. Technische Sicherheit
+Verbreitung von Viren, Schadsoftware oder anderem schädlichen Code, sofern dieser nicht ausdrücklich zu Bildungs- oder Schulungszwecken und mit den erforderlichen Warnhinweisen veröffentlicht wird.
+5. Besondere Regeln für Kanäle, Gruppen und Räume
+
+Verantwortung des Erstellers:
+Der Ersteller jeder Gruppe, jedes Kanals oder jedes Raums ist für die Überwachung der Inhalte und des Verhaltens seiner Mitglieder verantwortlich.
+
+Regeln für Räume
+Der Administrator bzw. Ersteller eines Raums ist verpflichtet, regelwidrige Inhalte zu entfernen und den betreffenden Nutzer aus dem Raum zu entfernen.
+Räume, die hauptsächlich für Spam (eine große Anzahl von Nachrichten mit geringem Informationswert), betrügerische Werbung oder die Verbreitung verbotener Inhalte genutzt werden, werden geschlossen.
+Anstößige oder unmoralische Namen und Beschreibungen für Räume sind nicht zulässig.
+Regeln für Kanäle
+
+Shop-Kanäle:
+Die Khat-Plattform fungiert ausschließlich als technischer Vermittler und übernimmt keine Verantwortung für Zahlungen, Versand oder die Qualität der angebotenen Produkte.
+
+Regel für abgebildete Models:
+Wenn bei Produkten in einem Shop-Kanal ein Model auf dem Produktbild zu sehen ist, muss das Model angemessen gekleidet sein, sodass die Darstellung nicht missbraucht werden kann.
+
+Umgang mit Meinungsverschiedenheiten:
+Unterschiedliche Meinungen und Meinungsverschiedenheiten sind normal. Nutzer sind jedoch verpflichtet, Konflikte respektvoll und ohne Beleidigungen, Belästigungen oder persönliche Angriffe auszutragen.
+
+6. Maßnahmen bei Verstößen
+
+Die Khat-Plattform verfügt über ein intelligentes System zur Erkennung von Spam und Regelverstößen, das Inhalte automatisch überprüft und kategorisiert. Wird ein Verstoß bestätigt, können – je nach Schwere des Verstoßes – schrittweise folgende Maßnahmen ergriffen werden:
+
+a) Maßnahmen gegen persönliche Konten
+Offizielle Verwarnung und Entfernung des betreffenden Inhalts.
+Deaktivierung der Synchronisierung der Kontaktliste.
+Einschränkung des Versands von Nachrichten an Personen, die nicht in der Kontaktliste des Nutzers stehen.
+Einschränkung des Versands von Nachrichten in Gruppen, in denen der Nutzer kein Administrator ist.
+Vollständige Einschränkung des Nachrichtenversands auf der Plattform.
+Einschränkung der Erstellung neuer Kanäle oder Gruppen.
+Einschränkung des Hinzufügens neuer Mitglieder zu Gruppen oder Kanälen.
+Ausschluss von der Plattform: In besonders schweren Fällen wird das Nutzerkonto gelöscht. Gleichzeitig werden alle von diesem Nutzer erstellten Gruppen und Kanäle gelöscht.
+b) Maßnahmen gegen Gruppen oder Kanäle
+Deaktivierung öffentlicher Beitrittslinks.
+Deaktivierung der öffentlichen Suchfunktion für die Gruppe bzw. den Kanal.
+Einschränkung der Veröffentlichung neuer Beiträge.
+Sperrung oder vollständige Löschung der Gruppe bzw. des Kanals.
+Entfernung des öffentlichen Kanals aus den Plattformlisten.
+7. Meldung von Verstößen und Kontakt zum Support
+
+Nutzer sind aufgefordert, regelwidrige Inhalte oder unangemessenes Verhalten über die Schaltfläche „Melden“ in der Anwendung zu melden. Alle Meldungen werden sorgfältig geprüft.
+
+Für Vorschläge, Kritik, Fehlermeldungen oder Fragen können Sie den internen Supportbereich der Anwendung oder die angegebene Administrator-ID kontaktieren.
+
+8. Änderungen der Regeln
+
+Die Khat-Plattform behält sich das Recht vor, ihre Regeln und Bestimmungen jederzeit ohne vorherige Ankündigung zu ändern, anzupassen oder zu aktualisieren.
+
+Die weitere Nutzung der Plattformdienste nach einer Änderung gilt als vollständige Zustimmung des Nutzers zu den neuen Regeln.
+
+Über wesentliche und kritische Änderungen werden die Nutzer über eine In-App-Nachricht oder den offiziellen Khat-Benachrichtigungskanal informiert.
+
+Den Nutzern wird empfohlen, die Seite „Regeln überprüfen“ regelmäßig aufzurufen und sich über mögliche Änderungen zu informieren.
+
+GCorp | Immer an Ihrer Seite – für eine sichere und schnelle Plattform

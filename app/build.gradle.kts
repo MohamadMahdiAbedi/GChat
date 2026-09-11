@@ -1,16 +1,16 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.android)
+    //alias(libs.plugins.kotlin.android)
 }
 
 android {
-    namespace = "ir.mint"
+    namespace = "ir.gchat"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "ir.mint"
-        minSdk = 21
+        applicationId = "ir.gchat"
+        minSdk = 23
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
@@ -65,10 +65,15 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.github.om252345:composemeshgradient:0.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    implementation("androidx.appcompat:appcompat:1.7.1")
-    implementation("androidx.profileinstaller:profileinstaller:1.4.0")
+    implementation(libs.androidx.appcompat)
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+
+    implementation("io.github.huarangmeng:latex-base:1.5.4-kt2.1.0")
+    implementation("io.github.huarangmeng:latex-parser:1.5.4-kt2.1.0")
+    implementation("io.github.huarangmeng:latex-renderer:1.5.4-kt2.1.0")
+    //implementation("com.airbnb.android:lottie-compose:6.5.2")
 }

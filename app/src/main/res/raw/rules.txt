@@ -1,20 +1,20 @@
-Mint and GCorp Platform Rules and Regulations
+Khat and GCorp Platform Rules and Regulations
 
 1. Platform Principles
-Equality: Users have complete freedom of opinion, choice of audience, and membership in groups. The Mint platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.
+Equality: Users have complete freedom of opinion, choice of audience, and membership in groups. The Khat platform is completely user-centered and all users are equal before the law, regardless of gender, religion, ethnicity, language, or other orientation.
 Content Responsibility: The publishing user is directly responsible for all published content. The platform acts as a technical intermediary and does not accept legal or criminal liability for user content (except in cases where the law expressly provides otherwise).
 
 2. Registration, Account Ownership, and Privacy
 Account Ownership: Your account information belongs to you and you should not make it available to other parties. The platform is not responsible for any incidents resulting from the sharing of information by the user.
 Account Deletion: If you request to delete your account, all information related to the user, including messages, contacts, files, groups, and channels created, will be completely removed from the user's access.
-Impersonation Prohibition: Impersonating others, especially celebrities, or members of the Mint team, is prohibited and will result in immediate account blocking.
+Impersonation Prohibition: Impersonating others, especially celebrities, or members of the Khat team, is prohibited and will result in immediate account blocking.
 
 3. Content Privacy Classification
 The platform's intelligent system defines different levels of content access based on the type of interaction:
 1. Private messages: Only the parties involved in the conversation (2-person or private groups) can view the content.
 2. Private group/channel: Only members who have officially joined can view the content.
-3. Public channel: The content of these channels is visible on the Mint website and can even be viewed by non-members.
-The Mint intelligent system can access all information to verify the virtual security of users.
+3. Public channel: The content of these channels is visible on the Khat website and can even be viewed by non-members.
+The Khat intelligent system can access all information to verify the virtual security of users.
 
 4. Unauthorized content
 Any publication or promotion of the following is prohibited and will be subject to legal action:
@@ -42,12 +42,12 @@ The admin or creator of the room is obliged to delete the offending content and 
 Rooms whose purpose is spam (multiple messages with low content value), fraudulent advertising, or promotion of prohibited content will be closed.
 Choosing offensive/immoral names or descriptions for the room is not allowed.
 Channel rules:
-Store channels: The Mint platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.
+Store channels: The Khat platform is only a technical intermediary and is not responsible for payment, shipping or quality of products.
 Model face rule: In store products where the model is present in the image, the model must be dressed in a way that cannot be abused.
 Disagreements: Disagreements are natural, but users are required to handle disagreements respectfully and without insults or harassment.
 
 6. Mechanism for dealing with violations
-The Mint platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):
+The Khat platform has an intelligent spam and violation detection system that automatically checks and organizes content. If a violation is confirmed, the following measures will be applied in a stepwise manner (from mild to severe):
 
 a) Personal account penalties:
 1. Official warning and removal of the offending content.
@@ -71,9 +71,9 @@ Users are required to register any violating content or inappropriate behavior v
 To send suggestions, criticism, bug reports or questions, you can contact us from the internal support section of the application or through the admin ID.
 
 8. Changes to the rules
-The Mint platform has the right to change, modify or update its rules and regulations at any time and without prior notice.
+The Khat platform has the right to change, modify or update its rules and regulations at any time and without prior notice.
 Continuing to use the platform services after any changes are made means full acceptance of the new rules by the user.
-Major and critical changes will be notified to users via an in-app message or the official Mint notification channel.
+Major and critical changes will be notified to users via an in-app message or the official Khat notification channel.
 Users are advised to periodically check the page Check the rules.
 
 GCorp | Always with you for a safe and fast space

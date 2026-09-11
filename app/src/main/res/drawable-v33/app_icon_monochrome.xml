@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1920"
+    android:viewportHeight="1920">
+
+    <!-- Main lower rectangle with K cutout -->
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="
+            M0,960
+            H1920
+            V1920
+            H0
+            Z
+
+            M834.8,1101.2
+            H921.5
+            V1205.5
+            L1006.8,1101.1
+            H1111
+            L999.9,1227.6
+            L1115.7,1401.8
+            H1012.9
+            L943.4,1292.2
+            L921.4,1316.7
+            V1402
+            H834.9
+            Z" />
+
+    <!-- Top small rectangle 1 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M608,622
+            H810
+            V723
+            H608
+            Z" />
+
+    <!-- Top small rectangle 2 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M911,622
+            H1113
+            V723
+            H911
+            Z" />
+
+    <!-- Top small rectangle 3 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M1213,622
+            H1314
+            V723
+            H1213
+            Z" />
+
+</vector>

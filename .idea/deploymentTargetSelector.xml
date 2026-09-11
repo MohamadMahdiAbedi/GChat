@@ -15,10 +15,10 @@
       </SelectionState>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-08-21T15:24:32.339258698Z">
+        <DropdownSelection timestamp="2026-09-10T12:55:36.286184203Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=/home/abedi/.android/avd/Small_Phone.avd" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/home/abedi/.android/avd/Medium_Phone.avd" />
             </handle>
           </Target>
         </DropdownSelection>

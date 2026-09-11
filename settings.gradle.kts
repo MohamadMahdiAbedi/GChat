@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Mint"
+rootProject.name = "GChat"
 include(":app")
