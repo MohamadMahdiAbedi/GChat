@@ -1148,7 +1148,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         JSONObject().apply {
                             put("type", "file")
                             put("file_id", content.id)
-                            put("file_name", content.fileName)
+                            put("name", content.fileName)
                         })
                 }
 
@@ -1642,7 +1642,7 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         JSONObject().apply {
                             put("type", "file")
                             put("file_id", content.id)
-                            put("file_name", content.fileName)
+                            put("name", content.fileName)
                         })
                 }
 
