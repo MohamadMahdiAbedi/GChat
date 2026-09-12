@@ -944,6 +944,7 @@ fun MainNavigation(
                     back = { navController.popBackStack() }
                 )
             }
+            composable(route = "chatSettingsScreen") { ChatSettingsScreen(navHostController = navController) }
         }
 
         val isKeyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0

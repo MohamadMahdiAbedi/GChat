@@ -2,7 +2,6 @@ package ir.gchat
 
 import android.content.Context
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.text.Editable
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
@@ -14,17 +13,15 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
+import android.util.AttributeSet
 import android.util.Log
 import android.view.ActionMode
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
-import android.view.WindowManager
 import android.widget.EditText
-import android.widget.GridLayout
-import android.widget.PopupWindow
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatEditText
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.Job
 import kotlin.collections.forEach
-import kotlin.math.roundToInt
 
 fun Spanned.toAnnotatedString(): AnnotatedString {
 
@@ -431,93 +427,93 @@ fun Spanned.toMarkdown(): String {
 }
 
 //بعدا این تابع رو میکوبیم و با کامپوز مینویسیم
-fun showColorPicker(
-    context: Context, anchor: View, colors: List<Int>, onColorSelected: (Int) -> Unit
-) {
-    val density = context.resources.displayMetrics.density
-
-    fun Int.dp(): Int {
-        return (this * density).roundToInt()
-    }
-
-    val grid = GridLayout(context).apply {
-
-        columnCount = 3
-        rowCount = 2
-
-        setPadding(
-            12.dp(), 12.dp(), 12.dp(), 12.dp()
-        )
-
-        background = GradientDrawable().apply {
-
-            shape = GradientDrawable.RECTANGLE
-
-            cornerRadius = 2.dp().toFloat()
-
-            setColor(
-                android.graphics.Color.WHITE
-            )
-        }
-    }
-
-    val popupWindow = PopupWindow(
-        grid, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, true
-    ).apply {
-
-        elevation = 12.dp().toFloat()
-
-        isOutsideTouchable = true
-
-        isFocusable = true
-    }
-
-    colors.forEachIndexed { index, color ->
-
-        val colorView = View(context).apply {
-
-            background = GradientDrawable().apply {
-
-                shape = GradientDrawable.OVAL
-
-                setColor(color)
-            }
-
-            isClickable = true
-
-            setOnClickListener {
-
-                onColorSelected(color)
-
-                popupWindow.dismiss()
-            }
-        }
-
-        val params = GridLayout.LayoutParams().apply {
-
-            width = 40.dp()
-            height = 40.dp()
-
-            setMargins(
-                8.dp(), 8.dp(), 8.dp(), 8.dp()
-            )
-
-            rowSpec = GridLayout.spec(
-                index / 3
-            )
-
-            columnSpec = GridLayout.spec(
-                index % 3
-            )
-        }
-
-        grid.addView(colorView, params)
-    }
-
-    popupWindow.showAsDropDown(
-        anchor, 0, -anchor.height
-    )
-}
+//fun showColorPicker(
+//    context: Context, anchor: View, colors: List<Int>, onColorSelected: (Int) -> Unit
+//) {
+//    val density = context.resources.displayMetrics.density
+//
+//    fun Int.dp(): Int {
+//        return (this * density).roundToInt()
+//    }
+//
+//    val grid = GridLayout(context).apply {
+//
+//        columnCount = 3
+//        rowCount = 2
+//
+//        setPadding(
+//            12.dp(), 12.dp(), 12.dp(), 12.dp()
+//        )
+//
+//        background = GradientDrawable().apply {
+//
+//            shape = GradientDrawable.RECTANGLE
+//
+//            cornerRadius = 2.dp().toFloat()
+//
+//            setColor(
+//                android.graphics.Color.WHITE
+//            )
+//        }
+//    }
+//
+//    val popupWindow = PopupWindow(
+//        grid, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, true
+//    ).apply {
+//
+//        elevation = 12.dp().toFloat()
+//
+//        isOutsideTouchable = true
+//
+//        isFocusable = true
+//    }
+//
+//    colors.forEachIndexed { index, color ->
+//
+//        val colorView = View(context).apply {
+//
+//            background = GradientDrawable().apply {
+//
+//                shape = GradientDrawable.OVAL
+//
+//                setColor(color)
+//            }
+//
+//            isClickable = true
+//
+//            setOnClickListener {
+//
+//                onColorSelected(color)
+//
+//                popupWindow.dismiss()
+//            }
+//        }
+//
+//        val params = GridLayout.LayoutParams().apply {
+//
+//            width = 40.dp()
+//            height = 40.dp()
+//
+//            setMargins(
+//                8.dp(), 8.dp(), 8.dp(), 8.dp()
+//            )
+//
+//            rowSpec = GridLayout.spec(
+//                index / 3
+//            )
+//
+//            columnSpec = GridLayout.spec(
+//                index % 3
+//            )
+//        }
+//
+//        grid.addView(colorView, params)
+//    }
+//
+//    popupWindow.showAsDropDown(
+//        anchor, 0, -anchor.height
+//    )
+//}
 
 @Composable
 fun MessageTextField(
@@ -530,7 +526,9 @@ fun MessageTextField(
     sendMessage: (List<Content>) -> Unit,
     messageText: String,
     styledMessageText: SpannableStringBuilder,
-    setStyledMessageText: (SpannableStringBuilder) -> Unit
+    setStyledMessageText: (SpannableStringBuilder) -> Unit,
+    showColorPicker: (List<Int>, (Int) -> Unit) -> Unit,
+    onSelectionChanged: (start: Int, end: Int) -> Unit
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     val textEditHint = stringResource(R.string.message)
@@ -555,8 +553,14 @@ fun MessageTextField(
             .padding(horizontal = 8.dp),
 
         factory = { context ->
+            SelectionEditText(context).apply {
 
-            EditText(context).apply {
+                SelectionEditText(context).apply {
+
+                    selectionChangedListener = onSelectionChanged
+
+                    // بقیه تنظیمات EditText
+                }
 
                 /*
                  * خیلی مهم:
@@ -770,32 +774,15 @@ fun MessageTextField(
                                 }
 
                                 textColorActionId -> {
+
                                     showColorPicker(
-                                        context = context,
-                                        anchor = editTextView,
-                                        colors = listOf(
-
-                                            // Black
+                                        listOf(
                                             android.graphics.Color.BLACK,
-
-                                            // Red
                                             android.graphics.Color.RED,
-
-                                            // Blue
                                             android.graphics.Color.BLUE,
-
-                                            // Green
                                             android.graphics.Color.GREEN,
-
-                                            // Orange
-                                            android.graphics.Color.rgb(
-                                                255, 152, 0
-                                            ),
-
-                                            // Purple
-                                            android.graphics.Color.rgb(
-                                                156, 39, 176
-                                            )
+                                            android.graphics.Color.rgb(255, 152, 0),
+                                            android.graphics.Color.rgb(156, 39, 176)
                                         )
                                     ) { color ->
 
@@ -807,53 +794,33 @@ fun MessageTextField(
                                         )
 
                                         setStyledMessageText(
-                                            SpannableStringBuilder(
-                                                editTextView.editableText
-                                            )
+                                            SpannableStringBuilder(editTextView.editableText)
                                         )
 
-                                        annotatedMessageText = styledMessageText.toAnnotatedString()
+                                        annotatedMessageText =
+                                            styledMessageText.toAnnotatedString()
 
                                         mode.finish()
+
+                                        editTextView.post {
+                                            editTextView.setSelection(start, end)
+                                        }
                                     }
 
                                     return true
                                 }
 
+
                                 highlightActionId -> {
 
                                     showColorPicker(
-                                        context = context,
-                                        anchor = editTextView,
-                                        colors = listOf(
-
-                                            // Yellow
+                                        listOf(
                                             android.graphics.Color.YELLOW,
-
-                                            // Green
-                                            android.graphics.Color.rgb(
-                                                139, 195, 74
-                                            ),
-
-                                            // Blue
-                                            android.graphics.Color.rgb(
-                                                100, 181, 246
-                                            ),
-
-                                            // Pink
-                                            android.graphics.Color.rgb(
-                                                244, 143, 177
-                                            ),
-
-                                            // Orange
-                                            android.graphics.Color.rgb(
-                                                255, 183, 77
-                                            ),
-
-                                            // Purple
-                                            android.graphics.Color.rgb(
-                                                186, 104, 200
-                                            )
+                                            android.graphics.Color.rgb(139, 195, 74),
+                                            android.graphics.Color.rgb(100, 181, 246),
+                                            android.graphics.Color.rgb(244, 143, 177),
+                                            android.graphics.Color.rgb(255, 183, 77),
+                                            android.graphics.Color.rgb(186, 104, 200)
                                         )
                                     ) { color ->
 
@@ -865,14 +832,17 @@ fun MessageTextField(
                                         )
 
                                         setStyledMessageText(
-                                            SpannableStringBuilder(
-                                                editTextView.editableText
-                                            )
+                                            SpannableStringBuilder(editTextView.editableText)
                                         )
 
-                                        annotatedMessageText = styledMessageText.toAnnotatedString()
+                                        annotatedMessageText =
+                                            styledMessageText.toAnnotatedString()
 
                                         mode.finish()
+
+                                        editTextView.post {
+                                            editTextView.setSelection(start, end)
+                                        }
                                     }
 
                                     return true
@@ -1088,6 +1058,7 @@ fun MessageTextField(
         },
 
         update = { editText ->
+            editText.selectionChangedListener = onSelectionChanged
 
             val currentText = editText.editableText.toString()
 
@@ -1105,5 +1076,27 @@ fun MessageTextField(
             editText.setText(value, TextView.BufferType.SPANNABLE)
 
             editText.setSelection(editText.editableText.length)
-        })
+        }
+    )
+}
+
+class SelectionEditText @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = android.R.attr.editTextStyle
+) : AppCompatEditText(context, attrs, defStyleAttr) {
+
+    var selectionChangedListener: ((start: Int, end: Int) -> Unit)? = null
+
+    override fun onSelectionChanged(
+        selStart: Int,
+        selEnd: Int
+    ) {
+        super.onSelectionChanged(selStart, selEnd)
+
+        selectionChangedListener?.invoke(
+            selStart,
+            selEnd
+        )
+    }
 }

@@ -76,4 +76,7 @@ dependencies {
     implementation("io.github.huarangmeng:latex-parser:1.5.4-kt2.1.0")
     implementation("io.github.huarangmeng:latex-renderer:1.5.4-kt2.1.0")
     //implementation("com.airbnb.android:lottie-compose:6.5.2")
+
+    // RaTeX-CMP
+    implementation("io.github.darriousliu:ratex-android:0.1.14")
 }

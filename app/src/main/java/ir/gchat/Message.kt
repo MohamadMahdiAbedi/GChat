@@ -63,6 +63,7 @@ import com.hrm.latex.renderer.Latex
 import com.hrm.latex.renderer.model.LatexConfig
 import com.hrm.latex.renderer.model.LatexTheme
 import com.hrm.latex.renderer.model.LatexThemeColors
+import io.ratex.compose.RaTeX
 import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
@@ -179,18 +180,12 @@ fun Message(
                                                 rememberScrollState()
                                             )
                                         ) {
-                                            Latex(
-                                                modifier = Modifier
-                                                    .wrapContentWidth()
-                                                    .padding(8.dp)
-                                                    .padding(bottom = 24.dp),
+                                            RaTeX(
+                                                modifier = Modifier.wrapContentWidth().padding(8.dp).padding(bottom = 24.dp),
                                                 latex = contentEntity.text,
-                                                config = LatexConfig(
-                                                    fontSize = 18f.sp, theme = LatexTheme.auto(
-                                                        light = LatexThemeColors(color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface),
-                                                        dark = LatexThemeColors(color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
-                                                    )
-                                                )
+                                                fontSize = 18f.sp,
+                                                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                                displayMode = true
                                             )
                                         }
                                     }
@@ -430,17 +425,12 @@ fun Message(
                                                 rememberScrollState()
                                             )
                                         ) {
-                                            Latex(
-                                                modifier = Modifier
-                                                    .wrapContentWidth()
-                                                    .padding(8.dp),
+                                            RaTeX(
+                                                modifier = Modifier.wrapContentWidth().padding(8.dp),
                                                 latex = contentEntity.text,
-                                                config = LatexConfig(
-                                                    fontSize = 18f.sp, theme = LatexTheme.auto(
-                                                        light = LatexThemeColors(color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface),
-                                                        dark = LatexThemeColors(color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
-                                                    )
-                                                )
+                                                fontSize = 18f.sp,
+                                                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                                displayMode = true
                                             )
                                         }
                                     }

@@ -1,5 +1,6 @@
 package ir.gchat
 
+import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.os.Build
 import android.util.Log
@@ -15,11 +16,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -93,6 +97,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.DrawableCompat
@@ -100,10 +105,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.hrm.latex.renderer.Latex
-import com.hrm.latex.renderer.model.LatexConfig
-import com.hrm.latex.renderer.model.LatexTheme
-import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -116,7 +117,6 @@ fun AppearanceSettingsScreen(
     useDynamicColor: Boolean,
     setUseDynamicColor: (Boolean) -> Unit
 ) {
-    val view = LocalView.current
 
     val dropdownThemeText = when (theme) {
         0 -> stringResource(R.string.system)
@@ -153,40 +153,40 @@ fun AppearanceSettingsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                Text(stringResource(R.string.appearance))
-            }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                IconButton(
-                    onClick = {
-                        //view.playSoundEffect(SoundEffectConstants.CLICK)
+                    Text(stringResource(R.string.appearance))
+                }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            //view.playSoundEffect(SoundEffectConstants.CLICK)
 
-                        Log.d(
-                            "AppearanceBack",
-                            "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            Log.d(
+                                "AppearanceBack",
+                                "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+
+                            val result = navHostController.popBackStack()
+
+                            Log.d(
+                                "AppearanceBack",
+                                "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            //contentDescription = "Back"
+                            contentDescription = null
                         )
-
-                        val result = navHostController.popBackStack()
-
-                        Log.d(
-                            "AppearanceBack",
-                            "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
-                        )
-
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.arrow_back),
-                        //contentDescription = "Back"
-                        contentDescription = null
-                    )
-                }
-            }, colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-            ), modifier = Modifier.shadow(
-                elevation = 4.dp, shape = RectangleShape, clip = false
-            )
+                    }
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp, shape = RectangleShape, clip = false
+                )
             )
         }) { innerPadding ->
         Spacer(modifier = Modifier.padding(innerPadding))
@@ -372,6 +372,184 @@ fun AppearanceSettingsScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun ChatSettingsScreen(navHostController: NavHostController) {
+    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
+
+    val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) && windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact) }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(stringResource(R.string.appearance))
+                }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            //view.playSoundEffect(SoundEffectConstants.CLICK)
+
+                            Log.d(
+                                "AppearanceBack",
+                                "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+
+                            val result = navHostController.popBackStack()
+
+                            Log.d(
+                                "AppearanceBack",
+                                "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            //contentDescription = "Back"
+                            contentDescription = null
+                        )
+                    }
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp, shape = RectangleShape, clip = false
+                )
+            )
+        }) { innerPadding ->
+        Spacer(modifier = Modifier.padding(innerPadding))
+        BoxWithConstraints {
+            val height = maxHeight - 64.dp
+            val width = maxWidth
+            if (width > height) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = 64.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    val layoutDirection = if (LocalContext.current.isRtl()) {
+                        LayoutDirection.Rtl
+                    } else {
+                        LayoutDirection.Ltr
+                    }
+                    CompositionLocalProvider(
+                        LocalLayoutDirection provides layoutDirection
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = if (expandedScreen) 8.dp else 0.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
+                            shape = if (expandedScreen) RoundedCornerShape(2.dp) else RectangleShape
+                        ) {
+                            Column {
+
+                                Text(
+                                    text = stringResource(R.string.theme),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                Row {
+                                    //shadow
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.5f)
+                                            .aspectRatio(1f),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        onClick = {}
+                                    ) {
+                                        TWallpaper(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 8.dp).padding(bottom = 8.dp)
+                                                .clip(RoundedCornerShape(2.dp)),
+                                            colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
+                                            fps = 60,
+                                            tails = 90,
+                                            animate = true,
+                                            patternAlpha = 0.3f,
+                                            pattern = painterResource(R.drawable.pattern)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .padding(top = 64.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    val layoutDirection = if (LocalContext.current.isRtl()) {
+                        LayoutDirection.Rtl
+                    } else {
+                        LayoutDirection.Ltr
+                    }
+                    CompositionLocalProvider(
+                        LocalLayoutDirection provides layoutDirection
+                    ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = if (expandedScreen) 8.dp else 0.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
+                            shape = if (expandedScreen) RoundedCornerShape(2.dp) else RectangleShape
+                        ) {
+                            Column {
+
+                                Text(
+                                    text = stringResource(R.string.theme),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    onClick = {}
+                                ) {
+                                    TWallpaper(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(horizontal = 8.dp).padding(bottom = 8.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
+                                        fps = 60,
+                                        tails = 90,
+                                        animate = true,
+                                        patternAlpha = 0.3f,
+                                        pattern = painterResource(R.drawable.pattern)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@SuppressLint("UseSwitchCompatOrMaterialCode") //اپ کامپکت خیلی زر میزنه!!!
 @Composable
 private fun LegacySwitch(
     checked: Boolean, onCheckedChange: (Boolean) -> Unit
@@ -444,8 +622,6 @@ fun ContentAnalysisScreen(
     navHostController: NavHostController,
     //enableContentAnalysis: (String) -> Unit
 ) {
-    val view = LocalView.current
-
     var obscene by rememberSaveable { mutableStateOf(false) }
     var spam by rememberSaveable { mutableStateOf(false) }
     var hate by rememberSaveable { mutableStateOf(false) }
@@ -463,38 +639,38 @@ fun ContentAnalysisScreen(
         topBar = {
             TopAppBar(
                 title = {
-                Text(stringResource(R.string.content_analysis))
-            }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                IconButton(
-                    onClick = {
-                        //view.playSoundEffect(SoundEffectConstants.CLICK)
-                        Log.d(
-                            "AppearanceBack",
-                            "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
-                        )
+                    Text(stringResource(R.string.content_analysis))
+                }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            //view.playSoundEffect(SoundEffectConstants.CLICK)
+                            Log.d(
+                                "AppearanceBack",
+                                "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
 
-                        val result = navHostController.popBackStack()
+                            val result = navHostController.popBackStack()
 
-                        Log.d(
-                            "AppearanceBack",
-                            "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            Log.d(
+                                "AppearanceBack",
+                                "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            //contentDescription = "Back"
+                            contentDescription = null
                         )
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.arrow_back),
-                        //contentDescription = "Back"
-                        contentDescription = null
-                    )
-                }
-            }, colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-            ), modifier = Modifier.shadow(
-                elevation = 4.dp, shape = RectangleShape, clip = false
-            )
+                    }
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp, shape = RectangleShape, clip = false
+                )
             )
         }) { innerPadding ->
         Spacer(modifier = Modifier.padding(innerPadding))
@@ -711,8 +887,6 @@ fun SendBoxKeysSettingsScreen(
     sendWith: SendMessageWith,
     setSendWith: (SendMessageWith) -> Unit
 ) {
-    val view = LocalView.current
-
     val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) && windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact) }
@@ -744,61 +918,61 @@ fun SendBoxKeysSettingsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                Text(stringResource(R.string.send_short_keys))
-                //Row(verticalAlignment = Alignment.CenterVertically) {
-                //    Text("Send Short Keys", modifier = Modifier.weight(1f))
-                //    Row(
-                //        modifier = Modifier
-                //            .height(64.dp)
-                //            .clickable(
-                //                interactionSource = remember { MutableInteractionSource() },
-                //                indication = ripple(bounded = false)
-                //            ) {
-                //                //view.playSoundEffect(SoundEffectConstants.CLICK)
-                //                setSendWith(
-                //                    SendMessageWith(
-                //                        enter = sendWithReturnKey,
-                //                        shiftEnter = sendWithShiftReturnKey,
-                //                        ctrlEnter = sendWithCtrlReturnKey,
-                //                        altEnter = sendWithOptionReturnKey
-                //                    )
-                //                )
-                //            }, verticalAlignment = Alignment.CenterVertically
-                //    ) {
-                //        Text(text = "Save")
-                //    }
-                //}
-            }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                IconButton(
-                    onClick = {
-                        //view.playSoundEffect(SoundEffectConstants.CLICK)
-                        Log.d(
-                            "AppearanceBack",
-                            "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
-                        )
+                    Text(stringResource(R.string.send_short_keys))
+                    //Row(verticalAlignment = Alignment.CenterVertically) {
+                    //    Text("Send Short Keys", modifier = Modifier.weight(1f))
+                    //    Row(
+                    //        modifier = Modifier
+                    //            .height(64.dp)
+                    //            .clickable(
+                    //                interactionSource = remember { MutableInteractionSource() },
+                    //                indication = ripple(bounded = false)
+                    //            ) {
+                    //                //view.playSoundEffect(SoundEffectConstants.CLICK)
+                    //                setSendWith(
+                    //                    SendMessageWith(
+                    //                        enter = sendWithReturnKey,
+                    //                        shiftEnter = sendWithShiftReturnKey,
+                    //                        ctrlEnter = sendWithCtrlReturnKey,
+                    //                        altEnter = sendWithOptionReturnKey
+                    //                    )
+                    //                )
+                    //            }, verticalAlignment = Alignment.CenterVertically
+                    //    ) {
+                    //        Text(text = "Save")
+                    //    }
+                    //}
+                }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            //view.playSoundEffect(SoundEffectConstants.CLICK)
+                            Log.d(
+                                "AppearanceBack",
+                                "BEFORE | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
 
-                        val result = navHostController.popBackStack()
+                            val result = navHostController.popBackStack()
 
-                        Log.d(
-                            "AppearanceBack",
-                            "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            Log.d(
+                                "AppearanceBack",
+                                "AFTER | " + "result=$result | " + "current=${navHostController.currentBackStackEntry?.destination?.route} | " + "previous=${navHostController.previousBackStackEntry?.destination?.route}"
+                            )
+                        }) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            //contentDescription = "Back"
+                            contentDescription = null
                         )
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.arrow_back),
-                        //contentDescription = "Back"
-                        contentDescription = null
-                    )
-                }
-            }, colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-            ), modifier = Modifier.shadow(
-                elevation = 4.dp, shape = RectangleShape, clip = false
-            )
+                    }
+                }, colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                ), modifier = Modifier.shadow(
+                    elevation = 4.dp, shape = RectangleShape, clip = false
+                )
             )
         }) { innerPadding ->
         Spacer(modifier = Modifier.padding(innerPadding))
@@ -1042,8 +1216,6 @@ fun ColorPaletteSelector(
     modifier: Modifier = Modifier,
     showColorPicker: () -> Unit = { }
 ) {
-    val view = LocalView.current
-
     FlowRow(
         modifier = modifier
             .fillMaxWidth()
@@ -1113,8 +1285,6 @@ fun SettingsScreen(
     useDynamicColor: Boolean,
     setUseDynamicColor: (Boolean) -> Unit
 ) {
-    val view = LocalView.current
-
     val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
 
     val expandedScreen by remember { mutableStateOf(!(windowSizeClass.widthSizeClass == Compact || windowSizeClass.widthSizeClass == Medium) && windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact) }
@@ -1152,27 +1322,27 @@ fun SettingsScreen(
                 ), containerColor = MaterialTheme.colorScheme.background, topBar = {
                 TopAppBar(
                     title = {
-                    Text(stringResource(R.string.setting))
-                }, /*expandedHeight = 56.dp,*/ navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            //view.playSoundEffect(SoundEffectConstants.CLICK)
-                            navHostController.popBackStack()
-                        }) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null //contentDescription = "Back"
-                        )
-                    }
-                }, colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                    subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                ), modifier = Modifier.shadow(
-                    elevation = 4.dp, shape = RectangleShape, clip = false
-                )
+                        Text(stringResource(R.string.setting))
+                    }, /*expandedHeight = 56.dp,*/ navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                //view.playSoundEffect(SoundEffectConstants.CLICK)
+                                navHostController.popBackStack()
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = null //contentDescription = "Back"
+                            )
+                        }
+                    }, colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                    ), modifier = Modifier.shadow(
+                        elevation = 4.dp, shape = RectangleShape, clip = false
+                    )
                 )
             }) { innerPadding ->
             Spacer(modifier = Modifier.padding(innerPadding))
@@ -1310,7 +1480,11 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.surface,
                                 onClick = {
                                     //view.playSoundEffect(SoundEffectConstants.CLICK)
-
+                                    if (expandedScreen) {
+                                        navController.navigate("chatSettingsScreen")
+                                    } else {
+                                        navHostController.navigate("chatSettingsScreen")
+                                    }
                                 }) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1650,9 +1824,7 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .height(72.dp),
                                 color = MaterialTheme.colorScheme.surface,
-                                onClick = {
-                                    //view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }) {
+                                onClick = {}) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1782,6 +1954,7 @@ fun SettingsScreen(
                     composable(route = "setLanguage") {
                         Language(back = { navController.popBackStack() })
                     }
+                    composable(route = "chatSettingsScreen") { ChatSettingsScreen(navHostController = navController) }
                 }
             }
         }
@@ -1797,7 +1970,6 @@ fun IpConfig(
     setDevice: (Int) -> Unit,
     setServerIP: (String) -> Unit
 ) {
-    val view = LocalView.current
     val focusManager = LocalFocusManager.current
     var host by remember { mutableStateOf(serverIP.split(":")[0]) }
     var port by remember { mutableStateOf(serverIP.split(":")[1]) }
@@ -1919,39 +2091,40 @@ fun IpConfig(
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
                     devices.forEach { thisDevice ->
-                        Row(modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                when (thisDevice) {
-                                    devices[0] -> {
-                                        setDevice(0)
-                                        automaticMode = true
-                                        networkProtocol = "IPv4"
-                                        host = "10.0.2.2"
-                                        port = "8765"
-                                    }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    when (thisDevice) {
+                                        devices[0] -> {
+                                            setDevice(0)
+                                            automaticMode = true
+                                            networkProtocol = "IPv4"
+                                            host = "10.0.2.2"
+                                            port = "8765"
+                                        }
 
-                                    devices[1] -> {
-                                        setDevice(1)
-                                        automaticMode = true
-                                        networkProtocol = "IPv4"
-                                        host = "10.0.3.2"
-                                        port = "8765"
-                                    }
+                                        devices[1] -> {
+                                            setDevice(1)
+                                            automaticMode = true
+                                            networkProtocol = "IPv4"
+                                            host = "10.0.3.2"
+                                            port = "8765"
+                                        }
 
-                                    //devices[2] -> {
-                                    //    setDevice(2)
-                                    //    automaticMode = false
-                                    //}
+                                        //devices[2] -> {
+                                        //    setDevice(2)
+                                        //    automaticMode = false
+                                        //}
 
-                                    else -> {
-                                        setDevice(2)
-                                        automaticMode = false
+                                        else -> {
+                                            setDevice(2)
+                                            automaticMode = false
+                                        }
                                     }
+                                    selectedDevice = thisDevice
                                 }
-                                selectedDevice = thisDevice
-                            }
-                            .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             RadioButton(
                                 selected = selectedDevice == thisDevice, onClick = {
                                     when (thisDevice) {
@@ -2494,223 +2667,224 @@ fun IpConfigDialog(
             .shadow(
                 elevation = 24.dp, shape = RoundedCornerShape(2.dp), clip = false
             ), onDismissRequest = back, title = {
-        Text(stringResource(R.string.set_server_ip))
-    }, shape = RoundedCornerShape(2.dp), text = {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(
-                    rememberScrollState()
-                ), verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-
+            Text(stringResource(R.string.set_server_ip))
+        }, shape = RoundedCornerShape(2.dp), text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(
-                        elevation = 2.dp, shape = RoundedCornerShape(2.dp), clip = false
-                    )
-                    .background(
-                        color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(2.dp)
-                    )
+                    .verticalScroll(
+                        rememberScrollState()
+                    ), verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                devices.forEach { thisDevice ->
 
-                    fun selectDevice() {
-                        when (thisDevice) {
-                            // Android Studio emulator
-                            devices[0] -> {
-                                setDevice(0)
-                                automaticMode = true
-                                networkProtocol = "IPv4"
-                                host = "10.0.2.2"
-                                port = "8765"
-                            }
-
-                            // Genymotion emulator
-                            devices[1] -> {
-                                setDevice(1)
-                                automaticMode = true
-                                networkProtocol = "IPv4"
-                                host = "10.0.3.2"
-                                port = "8765"
-                            }
-
-                            // other devices
-                            else -> {
-                                setDevice(2)
-                                automaticMode = false
-                            }
-                        }
-
-                        selectedDevice = thisDevice
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectDevice()
-                            }, verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = selectedDevice == thisDevice, onClick = {
-                                selectDevice()
-                            })
-
-                        Text(
-                            text = thisDevice, modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                TextField(
-                    modifier = Modifier.weight(0.6f),
-                    value = host,
-                    onValueChange = {
-                        host = it
-                    },
-                    enabled = !automaticMode,
-                    isError = hostError,
-                    singleLine = true,
-                    label = {
-                        Text(stringResource(R.string.host))
-                    },
-                    textStyle = LocalTextStyle.current.copy(
-                        textDirection = TextDirection.Ltr
-                    ),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = {
-                            focusManager.moveFocus(
-                                FocusDirection.Next
-                            )
-                        })
-                )
-
-                Spacer(
-                    modifier = Modifier.width(8.dp)
-                )
-
-                TextField(
-                    modifier = Modifier.weight(0.4f),
-                    value = port,
-                    onValueChange = {
-                        port = it
-                    },
-                    textStyle = LocalTextStyle.current.copy(
-                        textDirection = TextDirection.Ltr
-                    ),
-                    enabled = !automaticMode,
-                    isError = portError,
-                    singleLine = true,
-                    label = {
-                        Text(stringResource(R.string.port))
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            keyboardController?.hide()
-
-                            if (!portError && !hostError) {
-                                setServerIP("$host:$port")
-                                back()
-                            }
-                        })
-                )
-            }
-
-            val enabled = false
-
-            ExposedDropdownMenuBox(
-                expanded = expanded, onExpandedChange = {
-                    if (enabled) {
-                        expanded = !expanded
-                    }
-                }) {
-                TextField(
-                    value = networkProtocol,
-                    onValueChange = {},
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(
-                            ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled
-                        ),
-                    readOnly = true,
-                    enabled = enabled,
-                    label = {
-                        Text(stringResource(R.string.protocol))
-                    },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent
-                    )
-                )
+                        .shadow(
+                            elevation = 2.dp, shape = RoundedCornerShape(2.dp), clip = false
+                        )
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(2.dp)
+                        )
+                ) {
+                    devices.forEach { thisDevice ->
 
-                ExposedDropdownMenu(
-                    expanded = enabled && expanded, onDismissRequest = {
-                        expanded = false
+                        fun selectDevice() {
+                            when (thisDevice) {
+                                // Android Studio emulator
+                                devices[0] -> {
+                                    setDevice(0)
+                                    automaticMode = true
+                                    networkProtocol = "IPv4"
+                                    host = "10.0.2.2"
+                                    port = "8765"
+                                }
+
+                                // Genymotion emulator
+                                devices[1] -> {
+                                    setDevice(1)
+                                    automaticMode = true
+                                    networkProtocol = "IPv4"
+                                    host = "10.0.3.2"
+                                    port = "8765"
+                                }
+
+                                // other devices
+                                else -> {
+                                    setDevice(2)
+                                    automaticMode = false
+                                }
+                            }
+
+                            selectedDevice = thisDevice
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectDevice()
+                                }, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedDevice == thisDevice, onClick = {
+                                    selectDevice()
+                                })
+
+                            Text(
+                                text = thisDevice, modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextField(
+                        modifier = Modifier.weight(0.6f),
+                        value = host,
+                        onValueChange = {
+                            host = it
+                        },
+                        enabled = !automaticMode,
+                        isError = hostError,
+                        singleLine = true,
+                        label = {
+                            Text(stringResource(R.string.host))
+                        },
+                        textStyle = LocalTextStyle.current.copy(
+                            textDirection = TextDirection.Ltr
+                        ),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                focusManager.moveFocus(
+                                    FocusDirection.Next
+                                )
+                            })
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(8.dp)
+                    )
+
+                    TextField(
+                        modifier = Modifier.weight(0.4f),
+                        value = port,
+                        onValueChange = {
+                            port = it
+                        },
+                        textStyle = LocalTextStyle.current.copy(
+                            textDirection = TextDirection.Ltr
+                        ),
+                        enabled = !automaticMode,
+                        isError = portError,
+                        singleLine = true,
+                        label = {
+                            Text(stringResource(R.string.port))
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+
+                                if (!portError && !hostError) {
+                                    setServerIP("$host:$port")
+                                    back()
+                                }
+                            })
+                    )
+                }
+
+                val enabled = false
+
+                ExposedDropdownMenuBox(
+                    expanded = expanded, onExpandedChange = {
+                        if (enabled) {
+                            expanded = !expanded
+                        }
                     }) {
-                    networkProtocols.forEach { protocol ->
-                        DropdownMenuItem(text = {
-                            Text(protocol)
-                        }, onClick = {
-                            networkProtocol = protocol
+                    TextField(
+                        value = networkProtocol,
+                        onValueChange = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled
+                            ),
+                        readOnly = true,
+                        enabled = enabled,
+                        label = {
+                            Text(stringResource(R.string.protocol))
+                        },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded)
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            errorContainerColor = Color.Transparent
+                        )
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = enabled && expanded, onDismissRequest = {
                             expanded = false
-                        })
+                        }) {
+                        networkProtocols.forEach { protocol ->
+                            DropdownMenuItem(text = {
+                                Text(protocol)
+                            }, onClick = {
+                                networkProtocol = protocol
+                                expanded = false
+                            })
+                        }
                     }
                 }
             }
-        }
-    }, confirmButton = {
-        Button(
-            onClick = {
-                view.playSoundEffect(
-                    SoundEffectConstants.CLICK
-                )
+        }, confirmButton = {
+            Button(
+                onClick = {
+                    view.playSoundEffect(
+                        SoundEffectConstants.CLICK
+                    )
 
-                setServerIP("$host:$port")
-                back()
-            }, shape = RoundedCornerShape(2.dp), enabled = !portError && !hostError
-        ) {
-            Text(stringResource(R.string.ok))
-        }
-    }, dismissButton = {
-        TextButton(
-            shape = RoundedCornerShape(2.dp), onClick = {
-                view.playSoundEffect(
-                    SoundEffectConstants.CLICK
-                )
-                back()
-            }) {
-            Text(stringResource(R.string.cancel))
-        }
-    })
+                    setServerIP("$host:$port")
+                    back()
+                }, shape = RoundedCornerShape(2.dp), enabled = !portError && !hostError
+            ) {
+                Text(stringResource(R.string.ok))
+            }
+        }, dismissButton = {
+            TextButton(
+                shape = RoundedCornerShape(2.dp), onClick = {
+                    view.playSoundEffect(
+                        SoundEffectConstants.CLICK
+                    )
+                    back()
+                }) {
+                Text(stringResource(R.string.cancel))
+            }
+        })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2718,7 +2892,6 @@ fun IpConfigDialog(
 fun Language(
     back: () -> Unit
 ) {
-    val view = LocalView.current
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier
@@ -2771,11 +2944,8 @@ fun Language(
                     listOf("العربية", "中文", "Deutsch", "English", "فارسی", "עברית", "Русский")
                 }
 
-                val selectedLanguage = AppCompatDelegate
-                    .getApplicationLocales()
-                    .get(0)
-                    ?.language
-                    ?: "en"
+                val selectedLanguage =
+                    AppCompatDelegate.getApplicationLocales().get(0)?.language ?: "en"
                 val editedSelectedLanguage = selectedLanguage.replace("iw", "he")
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -2803,11 +2973,9 @@ fun Language(
                                         )
                                     }
                                     .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                                verticalAlignment = Alignment.CenterVertically) {
                                 RadioButton(
-                                    selected = editedSelectedLanguage == language,
-                                    onClick = {
+                                    selected = editedSelectedLanguage == language, onClick = {
                                         Log.d(
                                             "LANGUAGE",
                                             "BEFORE: ${AppCompatDelegate.getApplicationLocales()}"
@@ -2819,8 +2987,7 @@ fun Language(
                                             "LANGUAGE",
                                             "AFTER: ${AppCompatDelegate.getApplicationLocales()}"
                                         )
-                                    }
-                                )
+                                    })
 
                                 Text(
                                     text = languagesName[index],

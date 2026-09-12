@@ -3,9 +3,6 @@ package ir.gchat
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -19,7 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -28,10 +24,8 @@ import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import kotlinx.coroutines.delay
-import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sin
@@ -153,7 +147,8 @@ fun TWallpaper(
     fps: Int = 24,
     tails: Int = 6,
     animate: Boolean = true,
-    patternAlpha: Float = 0.3f
+    patternAlpha: Float = 0.3f,
+    pattern: Painter = painterResource(R.drawable.pattern)
 ) {
     val rgbColors = remember(colors) { colors.take(4).map { hexToRgb(it) } }
 
@@ -190,18 +185,18 @@ fun TWallpaper(
     )
     
     TelegramPatternOverlay(
+        pattern = pattern,
         alpha = patternAlpha,
-        modifier = Modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize()
     )
 }
 
 @Composable
 private fun TelegramPatternOverlay(
     modifier: Modifier = Modifier,
-    alpha: Float = 0.15f
+    alpha: Float = 0.15f,
+    pattern: Painter
 ) {
-    val pattern = painterResource(R.drawable.pattern)
-
     Canvas(
         modifier = modifier
             .clipToBounds()

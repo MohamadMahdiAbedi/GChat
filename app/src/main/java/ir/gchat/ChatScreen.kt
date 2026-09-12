@@ -27,6 +27,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -148,6 +150,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.content.contentValuesOf
+import androidx.core.graphics.toColor
 import coil.ImageLoader
 import coil.compose.SubcomposeAsyncImage
 import com.hrm.latex.renderer.Latex
@@ -160,6 +164,8 @@ import java.io.File
 import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.graphics.toColorInt
+import androidx.core.graphics.toColorLong
+import io.ratex.compose.RaTeX
 
 fun formatFileSize(bytes: Long): String {
     if (bytes < 1024) {
@@ -291,6 +297,10 @@ fun ChatScreen(
         )
     }
 
+    var showColorPicker by remember { mutableStateOf(false) }
+    var colorPickerColors by remember { mutableStateOf(emptyList<Int>()) }
+    var onColorSelectedAction by remember { mutableStateOf({ color: Int -> }) }
+
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
             val saved = savedText[id]
@@ -315,44 +325,33 @@ fun ChatScreen(
                 when (type[0]) {
                     'b' -> {
                         spannable.setSpan(
-                            StyleSpan(Typeface.BOLD),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
+
                     'i' -> {
                         spannable.setSpan(
-                            StyleSpan(Typeface.ITALIC),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
+
                     'u' -> {
                         spannable.setSpan(
-                            UnderlineSpan(),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            UnderlineSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
+
                     's' -> {
                         spannable.setSpan(
-                            StrikethroughSpan(),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            StrikethroughSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
+
                     'c' -> {
                         val color = type.substring(1).toColorInt()
 
                         spannable.setSpan(
-                            ForegroundColorSpan(color),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            ForegroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
 
@@ -360,10 +359,7 @@ fun ChatScreen(
                         val color = type.substring(1).toColorInt()
 
                         spannable.setSpan(
-                            BackgroundColorSpan(color),
-                            start,
-                            end,
-                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                            BackgroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
                 }
@@ -376,13 +372,9 @@ fun ChatScreen(
     LaunchedEffect(styledMessageText) {
         val markDown = mutableListOf<Triple<Int, Int, String>>()
 
-        styledMessageText
-            .getSpans(
-                0,
-                styledMessageText.length,
-                CharacterStyle::class.java
-            )
-            .forEach { span ->
+        styledMessageText.getSpans(
+                0, styledMessageText.length, CharacterStyle::class.java
+            ).forEach { span ->
 
                 val start = styledMessageText.getSpanStart(span)
                 val end = styledMessageText.getSpanEnd(span)
@@ -420,11 +412,19 @@ fun ChatScreen(
                     }
 
                     is ForegroundColorSpan -> {
-                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                        markDown += Triple(
+                            start,
+                            end,
+                            "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor)
+                        )
                     }
 
                     is BackgroundColorSpan -> {
-                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                        markDown += Triple(
+                            start,
+                            end,
+                            "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor)
+                        )
                     }
                 }
             }
@@ -515,6 +515,8 @@ fun ChatScreen(
 
     val lastNotZeroNavigationBarHeight by remember { mutableIntStateOf(navigationBarHeight) }
 
+    val density = LocalDensity.current
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -533,60 +535,60 @@ fun ChatScreen(
                 if (id != "") {
                     TopAppBar(
                         windowInsets = if (isLandscape) {
-                            WindowInsets.statusBars
-                        } else {
-                            TopAppBarDefaults.windowInsets
-                        }, title = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(64.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = ripple(bounded = false)
-                                    ) {
-                                        //view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    }, verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .aspectRatio(1f)
-                                        .clip(CircleShape),
-                                    shape = CircleShape,
-                                    color = backgroundColor
+                        WindowInsets.statusBars
+                    } else {
+                        TopAppBarDefaults.windowInsets
+                    }, title = {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = ripple(bounded = false)
                                 ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.profile_black_content),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        tint = iconColor.copy(alpha = 0.5f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = displayName, modifier = Modifier.weight(1f))
-                            }
-                        }, navigationIcon = {
-                            IconButton(
-                                onClick = {
                                     //view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    back()
-                                }) {
+                                }, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .aspectRatio(1f)
+                                    .clip(CircleShape),
+                                shape = CircleShape,
+                                color = backgroundColor
+                            ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.arrow_back),
-                                    //contentDescription = "Menu"
-                                    contentDescription = null
+                                    painter = painterResource(R.drawable.profile_black_content),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    tint = iconColor.copy(alpha = 0.5f)
                                 )
                             }
-                        }, colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                        ), modifier = Modifier.shadow(
-                            elevation = 4.dp, shape = RectangleShape, clip = false
-                        )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(text = displayName, modifier = Modifier.weight(1f))
+                        }
+                    }, navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                //view.playSoundEffect(SoundEffectConstants.CLICK)
+                                back()
+                            }) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                //contentDescription = "Menu"
+                                contentDescription = null
+                            )
+                        }
+                    }, colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                    ), modifier = Modifier.shadow(
+                        elevation = 4.dp, shape = RectangleShape, clip = false
+                    )
                     )
                 }
             }) { innerPadding ->
@@ -803,8 +805,6 @@ fun ChatScreen(
                                 onScrolledToBottom()
                             }
                         }
-
-                        val density = LocalDensity.current
 
                         this@Column.AnimatedVisibility(
                             visible = showButton,
@@ -1144,13 +1144,11 @@ fun ChatScreen(
                                         messageText = text
                                         val markDown = mutableListOf<Triple<Int, Int, String>>()
 
-                                        styledMessageText
-                                            .getSpans(
+                                        styledMessageText.getSpans(
                                                 0,
                                                 styledMessageText.length,
                                                 CharacterStyle::class.java
-                                            )
-                                            .forEach { span ->
+                                            ).forEach { span ->
 
                                                 val start = styledMessageText.getSpanStart(span)
                                                 val end = styledMessageText.getSpanEnd(span)
@@ -1188,11 +1186,21 @@ fun ChatScreen(
                                                     }
 
                                                     is ForegroundColorSpan -> {
-                                                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                        markDown += Triple(
+                                                            start, end, "c" + String.format(
+                                                                "#%06X",
+                                                                0xFFFFFF and span.foregroundColor
+                                                            )
+                                                        )
                                                     }
 
                                                     is BackgroundColorSpan -> {
-                                                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                        markDown += Triple(
+                                                            start, end, "h" + String.format(
+                                                                "#%06X",
+                                                                0xFFFFFF and span.backgroundColor
+                                                            )
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1222,7 +1230,9 @@ fun ChatScreen(
                                                 }
 
                                                 is Draft.Text -> {
-                                                    Content.Text(text = item.text, markDown = item.markDown)
+                                                    Content.Text(
+                                                        text = item.text, markDown = item.markDown
+                                                    )
                                                 }
                                             }
                                         }
@@ -1237,7 +1247,20 @@ fun ChatScreen(
                                     },
                                     messageText = messageText,
                                     styledMessageText = styledMessageText,
-                                    setStyledMessageText = { newStyledMessageText -> styledMessageText = newStyledMessageText }
+                                    setStyledMessageText = { newStyledMessageText ->
+                                        styledMessageText = newStyledMessageText
+                                    },
+                                    showColorPicker = { colors, onColorSelected ->
+                                        colorPickerColors = colors
+                                        showColorPicker = true
+                                        onColorSelectedAction = onColorSelected
+                                    }, onSelectionChanged = { start, end ->
+                                        if (showColorPicker) {
+                                            showColorPicker = false
+                                            colorPickerColors = emptyList()
+                                            onColorSelectedAction = {}
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -1265,8 +1288,7 @@ fun ChatScreen(
 
                                             is Draft.Text -> {
                                                 Content.Text(
-                                                    text = item.text,
-                                                    markDown = item.markDown
+                                                    text = item.text, markDown = item.markDown
                                                 )
                                             }
 
@@ -1280,8 +1302,7 @@ fun ChatScreen(
                                     if (messageText.isNotBlank()) {
                                         content += Content.Text(
                                             //type = "text",
-                                            text = messageText,
-                                            markDown = emptyList()
+                                            text = messageText, markDown = emptyList()
                                         )
                                     }
                                     editingMessageId?.let { editMessage(it, content) }
@@ -1325,8 +1346,7 @@ fun ChatScreen(
 
                                                 is Draft.Text -> {
                                                     Content.Text(
-                                                        text = item.text,
-                                                        markDown = item.markDown
+                                                        text = item.text, markDown = item.markDown
                                                     )
                                                 }
 
@@ -1337,15 +1357,14 @@ fun ChatScreen(
                                                 }
                                             }
                                         }
-                                        val markDown: MutableList<Triple<Int, Int, String>> = mutableListOf()
+                                        val markDown: MutableList<Triple<Int, Int, String>> =
+                                            mutableListOf()
 
-                                        styledMessageText
-                                            .getSpans(
+                                        styledMessageText.getSpans(
                                                 0,
                                                 styledMessageText.length,
                                                 CharacterStyle::class.java
-                                            )
-                                            .forEach { span ->
+                                            ).forEach { span ->
 
                                                 val start = styledMessageText.getSpanStart(span)
                                                 val end = styledMessageText.getSpanEnd(span)
@@ -1384,19 +1403,28 @@ fun ChatScreen(
                                                     }
 
                                                     is ForegroundColorSpan -> {
-                                                        markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                        markDown += Triple(
+                                                            start, end, "c" + String.format(
+                                                                "#%06X",
+                                                                0xFFFFFF and span.foregroundColor
+                                                            )
+                                                        )
                                                     }
 
                                                     is BackgroundColorSpan -> {
-                                                        markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                        markDown += Triple(
+                                                            start, end, "h" + String.format(
+                                                                "#%06X",
+                                                                0xFFFFFF and span.backgroundColor
+                                                            )
+                                                        )
                                                     }
                                                 }
                                             }
                                         if (messageText.isNotBlank()) {
                                             content += Content.Text(
                                                 //type = "text",
-                                                text = messageText,
-                                                markDown = markDown
+                                                text = messageText, markDown = markDown
                                             )
                                         }
                                         sendMessage(id, content)
@@ -1634,6 +1662,49 @@ fun ChatScreen(
                                         modifier = Modifier.align(Alignment.Center)
                                     )
                                 }
+                            }
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = showColorPicker,
+                        enter = expandVertically(
+                            expandFrom = Alignment.Top
+                        ),
+                        exit = shrinkVertically(
+                            shrinkTowards = Alignment.Top
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .height(40.dp)
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .background(MaterialTheme.colorScheme.background)
+                        ) {
+                            Icon(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clickable {
+                                        showColorPicker = false
+                                        colorPickerColors = emptyList()
+                                        onColorSelectedAction = {}
+                                    },
+                                painter = painterResource(R.drawable.keyboard_arrow_down),
+                                contentDescription = null
+                            )
+
+                            colorPickerColors.forEach { color ->
+                                Spacer(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(Color(color))
+                                        .clickable {
+                                            onColorSelectedAction(color)
+                                            showColorPicker = false
+                                            colorPickerColors = emptyList()
+                                            onColorSelectedAction = {}
+                                        }
+                                )
                             }
                         }
                     }
@@ -1877,25 +1948,25 @@ fun ChatScreen(
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.latex)) }, onClick = {
-                        //view.playSoundEffect(SoundEffectConstants.CLICK)
-                        showLatexSheet = true
-                        isExpandedAttachment = false
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.function), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
+                    //view.playSoundEffect(SoundEffectConstants.CLICK)
+                    showLatexSheet = true
+                    isExpandedAttachment = false
+                }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.function), contentDescription = null
+                    )
+                }, trailingIcon = { }, enabled = true
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.files)) }, onClick = {
-                        //view.playSoundEffect(SoundEffectConstants.CLICK)
-                        isExpandedAttachment = false
-                        launcher.launch("*/*")  // "image/*", "video/*"
-                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                        Icon(
-                            painterResource(R.drawable.folder), contentDescription = null
-                        )
-                    }, trailingIcon = { }, enabled = true
+                    //view.playSoundEffect(SoundEffectConstants.CLICK)
+                    isExpandedAttachment = false
+                    launcher.launch("*/*")  // "image/*", "video/*"
+                }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.folder), contentDescription = null
+                    )
+                }, trailingIcon = { }, enabled = true
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.text_block)) },
@@ -2004,13 +2075,11 @@ fun ChatScreen(
                                         if (index == messageContentList.content.lastIndex) {
                                             val markDown = mutableListOf<Triple<Int, Int, String>>()
 
-                                            styledMessageText
-                                                .getSpans(
+                                            styledMessageText.getSpans(
                                                     0,
                                                     styledMessageText.length,
                                                     CharacterStyle::class.java
-                                                )
-                                                .forEach { span ->
+                                                ).forEach { span ->
 
                                                     val start = styledMessageText.getSpanStart(span)
                                                     val end = styledMessageText.getSpanEnd(span)
@@ -2025,16 +2094,24 @@ fun ChatScreen(
                                                             when (span.style) {
 
                                                                 Typeface.BOLD -> {
-                                                                    markDown += Triple(start, end, "b")
+                                                                    markDown += Triple(
+                                                                        start, end, "b"
+                                                                    )
                                                                 }
 
                                                                 Typeface.ITALIC -> {
-                                                                    markDown += Triple(start, end, "i")
+                                                                    markDown += Triple(
+                                                                        start, end, "i"
+                                                                    )
                                                                 }
 
                                                                 Typeface.BOLD_ITALIC -> {
-                                                                    markDown += Triple(start, end, "b")
-                                                                    markDown += Triple(start, end, "i")
+                                                                    markDown += Triple(
+                                                                        start, end, "b"
+                                                                    )
+                                                                    markDown += Triple(
+                                                                        start, end, "i"
+                                                                    )
                                                                 }
                                                             }
                                                         }
@@ -2048,15 +2125,27 @@ fun ChatScreen(
                                                         }
 
                                                         is ForegroundColorSpan -> {
-                                                            markDown += Triple(start, end, "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor))
+                                                            markDown += Triple(
+                                                                start, end, "c" + String.format(
+                                                                    "#%06X",
+                                                                    0xFFFFFF and span.foregroundColor
+                                                                )
+                                                            )
                                                         }
 
                                                         is BackgroundColorSpan -> {
-                                                            markDown += Triple(start, end, "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor))
+                                                            markDown += Triple(
+                                                                start, end, "h" + String.format(
+                                                                    "#%06X",
+                                                                    0xFFFFFF and span.backgroundColor
+                                                                )
+                                                            )
                                                         }
                                                     }
                                                 }
-                                            setSavedText(id, content.text, editingMessageId, markDown)
+                                            setSavedText(
+                                                id, content.text, editingMessageId, markDown
+                                            )
                                             messageText = content.text
                                         } else {
                                             attachTextBlock(content.text)
@@ -2722,15 +2811,12 @@ fun LaTeXSuperEditor(
 
                     } else {
 
-                        Latex(
+                        RaTeX(
                             modifier = Modifier.wrapContentWidth(),
                             latex = text,
-                            config = LatexConfig(
-                                fontSize = (18f * zoom).sp, theme = LatexTheme.auto(
-                                    light = LatexThemeColors(color = MaterialTheme.colorScheme.onSurface),
-                                    dark = LatexThemeColors(color = MaterialTheme.colorScheme.onSurface)
-                                )
-                            )
+                            fontSize = (18f * zoom).sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            displayMode = true
                         )
                     }
                 }
@@ -3276,7 +3362,8 @@ fun UploadList(
             }
         },
         //exit = slideOutVertically { if (showFileRow) 2 * it else it } // + fadeOut() + scaleOut(targetScale = 0.8f)
-        exit = ExitTransition.None) {
+        exit = ExitTransition.None
+    ) {
         Row(
             modifier = Modifier
                 //.fillMaxWidth()
