@@ -165,7 +165,7 @@ import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.graphics.toColorInt
 import androidx.core.graphics.toColorLong
-import io.ratex.compose.RaTeX
+//import io.ratex.compose.RaTeX
 
 fun formatFileSize(bytes: Long): String {
     if (bytes < 1024) {
@@ -2810,7 +2810,6 @@ fun LaTeXSuperEditor(
                         )
 
                     } else {
-
                         RaTeX(
                             modifier = Modifier.wrapContentWidth(),
                             latex = text,
@@ -3525,9 +3524,6 @@ fun ChatScreenPopUp(
         }
     }
 
-
-    var animate by remember { mutableStateOf(false) }
-
     var messageMenu by remember { mutableStateOf(false) }
     var messageMenuId by remember { mutableIntStateOf(0) }
     var messageMenuOffset by remember {
@@ -3542,7 +3538,7 @@ fun ChatScreenPopUp(
                 colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
                 fps = 60,
                 tails = 90,
-                animate = animate
+                animate = false
             )
             if (id != "") {
                 Column(

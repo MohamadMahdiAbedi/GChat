@@ -1140,7 +1140,22 @@ class SocketViewModel(application: Application) : AndroidViewModel(application) 
                         JSONObject().apply {
                             put("type", "text")
                             put("text", content.text)
-                        })
+                            put(
+                                "mark_down",
+                                JSONArray().apply {
+                                    content.markDown.forEach { (start, end, type) ->
+                                        put(
+                                            JSONArray().apply {
+                                                put(start)
+                                                put(end)
+                                                put(type)
+                                            }
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    )
                 }
 
                 is Content.File -> {

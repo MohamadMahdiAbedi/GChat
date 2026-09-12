@@ -63,7 +63,7 @@ import com.hrm.latex.renderer.Latex
 import com.hrm.latex.renderer.model.LatexConfig
 import com.hrm.latex.renderer.model.LatexTheme
 import com.hrm.latex.renderer.model.LatexThemeColors
-import io.ratex.compose.RaTeX
+//import io.ratex.compose.RaTeX
 import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
