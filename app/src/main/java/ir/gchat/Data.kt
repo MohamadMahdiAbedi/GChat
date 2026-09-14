@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -29,6 +30,16 @@ val SEND_WITH_SHIFT = booleanPreferencesKey("sendWithShift")
 val SEND_WITH_CTRL = booleanPreferencesKey("sendWithCtrl")
 val SEND_WITH_ALT = booleanPreferencesKey("sendWithAlt")
 val USE_DYNAMIC_COLOR = booleanPreferencesKey("useDynamicColor")
+val FIRST_GRADIENT_COLOR = intPreferencesKey("firstGradientColor")
+val SECOND_GRADIENT_COLOR = intPreferencesKey("secondGradientColor")
+val THIRD_GRADIENT_COLOR = intPreferencesKey("thirdGradientColor")
+val FOURTH_GRADIENT_COLOR = intPreferencesKey("fourthGradientColor")
+val PATTERN_BLEND_MODE = intPreferencesKey("patternBlendMode") // 0 -> Normal, 1 -> Overlay, 2 -> SoftLight, 3 -> HardLight
+val PATTERN_TINT = intPreferencesKey("patternTint")
+val PATTERN_PATTERN_ALPHA = floatPreferencesKey("patternPatternAlpha")
+val GRADIENT_UPDATE_FPS = intPreferencesKey("gradientUpdateFps")
+val GRADIENT_ANGULAR_SPEED = floatPreferencesKey("gradientAngularSpeed")
+val GRADIENT_ALWAYS_ANIMATE = booleanPreferencesKey("gradientAlwaysAnimate")
 
 data class Contact(
     val id: String,
@@ -88,6 +99,16 @@ data class SendMessageWith(
     val altEnter: Boolean = false
 )
 
+data class GradientSettings(
+    val colors: List<Int>,
+    val blendMode: Int,
+    val patternTint: Int,
+    val patternAlpha: Float,
+    val updateFps: Int,
+    val angularSpeed: Float,
+    val alwaysAnimate: Boolean
+)
+
 fun calculateFileHash(file: File): String {
     return try {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -99,7 +120,7 @@ fun calculateFileHash(file: File): String {
             }
         }
         digest.digest().joinToString("") { "%02x".format(it) }
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         ""
     }
 }

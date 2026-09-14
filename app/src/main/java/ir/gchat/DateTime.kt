@@ -59,32 +59,6 @@ fun formatMessageTime(timestamp: String): String {
     }
 }
 
-fun formatGregorianDate(date: String): String {
-    val parts = date.substring(0, 10).split("-")
-
-    val year = parts[0]
-    val month = parts[1].toInt()
-    val day = parts[2].toInt()
-
-    val monthName = when (month) {
-        1 -> "January"
-        2 -> "February"
-        3 -> "March"
-        4 -> "April"
-        5 -> "May"
-        6 -> "June"
-        7 -> "July"
-        8 -> "August"
-        9 -> "September"
-        10 -> "October"
-        11 -> "November"
-        12 -> "December"
-        else -> ""
-    }
-
-    return "%s %02d %s".format(year, monthName, day)
-}
-
 fun formatMessageTimeJalali(timestamp: String): String {
     if (timestamp.isBlank()) return ""
     val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
@@ -157,6 +131,32 @@ fun formatMessageTimeJalali(timestamp: String): String {
         },
         persianDigits
     )
+}
+
+fun formatGregorianDate(date: String): String {
+    val parts = date.substring(0, 10).split("-")
+
+    val year = parts[0]
+    val month = parts[1].toInt()
+    val day = parts[2].toInt()
+
+    val monthName = when (month) {
+        1 -> "January"
+        2 -> "February"
+        3 -> "March"
+        4 -> "April"
+        5 -> "May"
+        6 -> "June"
+        7 -> "July"
+        8 -> "August"
+        9 -> "September"
+        10 -> "October"
+        11 -> "November"
+        12 -> "December"
+        else -> ""
+    }
+
+    return "%s %02d %s".format(year, monthName, day)
 }
 
 fun gregorianToJalali(date: String): String {

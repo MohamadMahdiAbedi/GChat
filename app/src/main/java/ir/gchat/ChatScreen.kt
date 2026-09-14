@@ -74,7 +74,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.foundation.verticalScroll
@@ -85,18 +84,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -107,7 +100,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -136,35 +128,28 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.content.contentValuesOf
-import androidx.core.graphics.toColor
+import androidx.core.graphics.toColorInt
 import coil.ImageLoader
 import coil.compose.SubcomposeAsyncImage
-import com.hrm.latex.renderer.Latex
-import com.hrm.latex.renderer.model.LatexConfig
-import com.hrm.latex.renderer.model.LatexTheme
-import com.hrm.latex.renderer.model.LatexThemeColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLConnection
 import kotlin.time.Duration.Companion.milliseconds
-import androidx.core.graphics.toColorInt
-import androidx.core.graphics.toColorLong
+
 //import io.ratex.compose.RaTeX
 
 fun formatFileSize(bytes: Long): String {
@@ -299,7 +284,7 @@ fun ChatScreen(
 
     var showColorPicker by remember { mutableStateOf(false) }
     var colorPickerColors by remember { mutableStateOf(emptyList<Int>()) }
-    var onColorSelectedAction by remember { mutableStateOf({ color: Int -> }) }
+    var onColorSelectedAction by remember { mutableStateOf({ _: Int -> }) }
 
     LaunchedEffect(id) {
         if (id.isNotBlank()) {
@@ -373,61 +358,61 @@ fun ChatScreen(
         val markDown = mutableListOf<Triple<Int, Int, String>>()
 
         styledMessageText.getSpans(
-                0, styledMessageText.length, CharacterStyle::class.java
-            ).forEach { span ->
+            0, styledMessageText.length, CharacterStyle::class.java
+        ).forEach { span ->
 
-                val start = styledMessageText.getSpanStart(span)
-                val end = styledMessageText.getSpanEnd(span)
+            val start = styledMessageText.getSpanStart(span)
+            val end = styledMessageText.getSpanEnd(span)
 
-                if (start >= end) {
-                    return@forEach
-                }
+            if (start >= end) {
+                return@forEach
+            }
 
-                when (span) {
+            when (span) {
 
-                    is StyleSpan -> {
-                        when (span.style) {
+                is StyleSpan -> {
+                    when (span.style) {
 
-                            Typeface.BOLD -> {
-                                markDown += Triple(start, end, "b")
-                            }
+                        Typeface.BOLD -> {
+                            markDown += Triple(start, end, "b")
+                        }
 
-                            Typeface.ITALIC -> {
-                                markDown += Triple(start, end, "i")
-                            }
+                        Typeface.ITALIC -> {
+                            markDown += Triple(start, end, "i")
+                        }
 
-                            Typeface.BOLD_ITALIC -> {
-                                markDown += Triple(start, end, "b")
-                                markDown += Triple(start, end, "i")
-                            }
+                        Typeface.BOLD_ITALIC -> {
+                            markDown += Triple(start, end, "b")
+                            markDown += Triple(start, end, "i")
                         }
                     }
+                }
 
-                    is UnderlineSpan -> {
-                        markDown += Triple(start, end, "u")
-                    }
+                is UnderlineSpan -> {
+                    markDown += Triple(start, end, "u")
+                }
 
-                    is StrikethroughSpan -> {
-                        markDown += Triple(start, end, "s")
-                    }
+                is StrikethroughSpan -> {
+                    markDown += Triple(start, end, "s")
+                }
 
-                    is ForegroundColorSpan -> {
-                        markDown += Triple(
-                            start,
-                            end,
-                            "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor)
-                        )
-                    }
+                is ForegroundColorSpan -> {
+                    markDown += Triple(
+                        start,
+                        end,
+                        "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor)
+                    )
+                }
 
-                    is BackgroundColorSpan -> {
-                        markDown += Triple(
-                            start,
-                            end,
-                            "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor)
-                        )
-                    }
+                is BackgroundColorSpan -> {
+                    markDown += Triple(
+                        start,
+                        end,
+                        "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor)
+                    )
                 }
             }
+        }
         setSavedText(id, messageText, editingMessageId, markDown)
     }
 
@@ -535,69 +520,69 @@ fun ChatScreen(
                 if (id != "") {
                     TopAppBar(
                         windowInsets = if (isLandscape) {
-                        WindowInsets.statusBars
-                    } else {
-                        TopAppBarDefaults.windowInsets
-                    }, title = {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = ripple(bounded = false)
-                                ) {
-                                    //view.playSoundEffect(SoundEffectConstants.CLICK)
-                                }, verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
+                            WindowInsets.statusBars
+                        } else {
+                            TopAppBarDefaults.windowInsets
+                        }, title = {
+                            Row(
                                 modifier = Modifier
-                                    .height(48.dp)
-                                    .aspectRatio(1f)
-                                    .clip(CircleShape),
-                                shape = CircleShape,
-                                color = backgroundColor
+                                    .fillMaxWidth()
+                                    .height(64.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = ripple(bounded = false)
+                                    ) {
+                                        //view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    }, verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Surface(
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .aspectRatio(1f)
+                                        .clip(CircleShape),
+                                    shape = CircleShape,
+                                    color = backgroundColor
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.profile_black_content),
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        tint = iconColor.copy(alpha = 0.5f)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(text = displayName, modifier = Modifier.weight(1f))
+                            }
+                        }, navigationIcon = {
+                            IconButton(
+                                onClick = {
+                                    //view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    back()
+                                }) {
                                 Icon(
-                                    painter = painterResource(R.drawable.profile_black_content),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    tint = iconColor.copy(alpha = 0.5f)
+                                    painter = painterResource(R.drawable.arrow_back),
+                                    //contentDescription = "Menu"
+                                    contentDescription = null
                                 )
                             }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(text = displayName, modifier = Modifier.weight(1f))
-                        }
-                    }, navigationIcon = {
-                        IconButton(
-                            onClick = {
-                                //view.playSoundEffect(SoundEffectConstants.CLICK)
-                                back()
-                            }) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_back),
-                                //contentDescription = "Menu"
-                                contentDescription = null
-                            )
-                        }
-                    }, colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        subtitleContentColor = MaterialTheme.colorScheme.onPrimary
-                    ), modifier = Modifier.shadow(
-                        elevation = 4.dp, shape = RectangleShape, clip = false
-                    )
+                        }, colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                            subtitleContentColor = MaterialTheme.colorScheme.onPrimary
+                        ), modifier = Modifier.shadow(
+                            elevation = 4.dp, shape = RectangleShape, clip = false
+                        )
                     )
                 }
             }) { innerPadding ->
             Spacer(modifier = Modifier.padding(innerPadding))
             TWallpaper(
                 modifier = Modifier.fillMaxSize(),
-                colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
-                fps = 60,
-                tails = 90,
+                colors = listOf(Color(0xffdbddbb), Color(0xff6ba587), Color(0xffd5d88d), Color(0xff88b884)),
+                updateFps = 60,
+                angularSpeed = Math.PI.toFloat() / 4f,
                 animate = animate
             )
             if (id != "") {
@@ -1052,22 +1037,133 @@ fun ChatScreen(
                                                 }
                                             }
 
+                                            //if ((texts + latexs).isNotEmpty()) {
+                                            //    Text(
+                                            //        text = buildAnnotatedString {
+                                            //            (texts + latexs).forEachIndexed { textIndex, content ->
+                                            //                if (textIndex > 0) append(" ")
+
+                                            //                append(
+                                            //                    when (content) {
+                                            //                        is Content.Text -> content.text
+                                            //                        is Content.LaTeX -> content.text
+                                            //                        else -> ""
+                                            //                    }.replace("\n", " ")
+                                            //                )
+                                            //            }
+                                            //        },
+                                            //        color = MaterialTheme.colorScheme.onSurface,
+                                            //        maxLines = 1,
+                                            //        overflow = TextOverflow.Ellipsis,
+                                            //    )
+                                            //}
+
                                             if ((texts + latexs).isNotEmpty()) {
                                                 Text(
                                                     text = buildAnnotatedString {
-                                                        (texts + latexs).forEachIndexed { textIndex, content ->
-                                                            if (textIndex > 0) append(" ")
 
-                                                            append(
-                                                                when (content) {
-                                                                    is Content.Text -> content.text
-                                                                    is Content.LaTeX -> content.text
-                                                                    else -> ""
-                                                                }.replace("\n", " ")
-                                                            )
+                                                        (texts + latexs).forEachIndexed { index, content ->
+
+                                                            if (index > 0) {
+                                                                append(" ")
+                                                            }
+
+                                                            when (content) {
+
+                                                                is Content.Text -> {
+                                                                    val markDown = content.markDown
+                                                                    val startOffset = length
+
+                                                                    append(content.text.replace("\n", " "))
+
+                                                                    markDown.forEach { (start, end, type) ->
+
+                                                                        if (
+                                                                            start < 0 ||
+                                                                            end > content.text.length ||
+                                                                            start >= end
+                                                                        ) {
+                                                                            return@forEach
+                                                                        }
+
+                                                                        when (type.firstOrNull()) {
+
+                                                                            'b' -> {
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        fontWeight = FontWeight.Bold
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+
+                                                                            'i' -> {
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        fontStyle = FontStyle.Italic
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+
+                                                                            'u' -> {
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        textDecoration = TextDecoration.Underline
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+
+                                                                            's' -> {
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        textDecoration = TextDecoration.LineThrough
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+
+                                                                            'c' -> {
+                                                                                val color = type.substring(1).toColorInt()
+
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        color = Color(color)
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+
+                                                                            'h' -> {
+                                                                                val color = type.substring(1).toColorInt()
+
+                                                                                addStyle(
+                                                                                    SpanStyle(
+                                                                                        background = Color(color)
+                                                                                    ),
+                                                                                    startOffset + start,
+                                                                                    startOffset + end
+                                                                                )
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                is Content.LaTeX -> {
+                                                                    append(content.text.replace("\n", " "))
+                                                                }
+
+                                                                else -> Unit
+                                                            }
                                                         }
                                                     },
-                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    style = MaterialTheme.typography.bodySmall,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
                                                 )
@@ -1145,65 +1241,65 @@ fun ChatScreen(
                                         val markDown = mutableListOf<Triple<Int, Int, String>>()
 
                                         styledMessageText.getSpans(
-                                                0,
-                                                styledMessageText.length,
-                                                CharacterStyle::class.java
-                                            ).forEach { span ->
+                                            0,
+                                            styledMessageText.length,
+                                            CharacterStyle::class.java
+                                        ).forEach { span ->
 
-                                                val start = styledMessageText.getSpanStart(span)
-                                                val end = styledMessageText.getSpanEnd(span)
+                                            val start = styledMessageText.getSpanStart(span)
+                                            val end = styledMessageText.getSpanEnd(span)
 
-                                                if (start >= end) {
-                                                    return@forEach
-                                                }
+                                            if (start >= end) {
+                                                return@forEach
+                                            }
 
-                                                when (span) {
+                                            when (span) {
 
-                                                    is StyleSpan -> {
-                                                        when (span.style) {
+                                                is StyleSpan -> {
+                                                    when (span.style) {
 
-                                                            Typeface.BOLD -> {
-                                                                markDown += Triple(start, end, "b")
-                                                            }
+                                                        Typeface.BOLD -> {
+                                                            markDown += Triple(start, end, "b")
+                                                        }
 
-                                                            Typeface.ITALIC -> {
-                                                                markDown += Triple(start, end, "i")
-                                                            }
+                                                        Typeface.ITALIC -> {
+                                                            markDown += Triple(start, end, "i")
+                                                        }
 
-                                                            Typeface.BOLD_ITALIC -> {
-                                                                markDown += Triple(start, end, "b")
-                                                                markDown += Triple(start, end, "i")
-                                                            }
+                                                        Typeface.BOLD_ITALIC -> {
+                                                            markDown += Triple(start, end, "b")
+                                                            markDown += Triple(start, end, "i")
                                                         }
                                                     }
+                                                }
 
-                                                    is UnderlineSpan -> {
-                                                        markDown += Triple(start, end, "u")
-                                                    }
+                                                is UnderlineSpan -> {
+                                                    markDown += Triple(start, end, "u")
+                                                }
 
-                                                    is StrikethroughSpan -> {
-                                                        markDown += Triple(start, end, "s")
-                                                    }
+                                                is StrikethroughSpan -> {
+                                                    markDown += Triple(start, end, "s")
+                                                }
 
-                                                    is ForegroundColorSpan -> {
-                                                        markDown += Triple(
-                                                            start, end, "c" + String.format(
-                                                                "#%06X",
-                                                                0xFFFFFF and span.foregroundColor
-                                                            )
+                                                is ForegroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start, end, "c" + String.format(
+                                                            "#%06X",
+                                                            0xFFFFFF and span.foregroundColor
                                                         )
-                                                    }
+                                                    )
+                                                }
 
-                                                    is BackgroundColorSpan -> {
-                                                        markDown += Triple(
-                                                            start, end, "h" + String.format(
-                                                                "#%06X",
-                                                                0xFFFFFF and span.backgroundColor
-                                                            )
+                                                is BackgroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start, end, "h" + String.format(
+                                                            "#%06X",
+                                                            0xFFFFFF and span.backgroundColor
                                                         )
-                                                    }
+                                                    )
                                                 }
                                             }
+                                        }
                                         setSavedText(id, text, editingMessageId, markDown)
                                     },
                                     showAnimation = {
@@ -1254,7 +1350,7 @@ fun ChatScreen(
                                         colorPickerColors = colors
                                         showColorPicker = true
                                         onColorSelectedAction = onColorSelected
-                                    }, onSelectionChanged = { start, end ->
+                                    }, onSelectionChanged = { _, _ ->
                                         if (showColorPicker) {
                                             showColorPicker = false
                                             colorPickerColors = emptyList()
@@ -1276,6 +1372,7 @@ fun ChatScreen(
                                         animate = false
                                     }
                                     val content = mutableListOf<Content>()
+                                    Log.d("edit draft", draft[id].toString())
                                     draft[id].orEmpty().forEach { item ->
                                         content += when (item) {
                                             is Draft.File -> {
@@ -1300,9 +1397,67 @@ fun ChatScreen(
                                         }
                                     }
                                     if (messageText.isNotBlank()) {
+                                        val markDown = mutableListOf<Triple<Int, Int, String>>()
+
+                                        styledMessageText.getSpans(
+                                            0, styledMessageText.length, CharacterStyle::class.java
+                                        ).forEach { span ->
+
+                                            val start = styledMessageText.getSpanStart(span)
+                                            val end = styledMessageText.getSpanEnd(span)
+
+                                            if (start >= end) {
+                                                return@forEach
+                                            }
+
+                                            when (span) {
+
+                                                is StyleSpan -> {
+                                                    when (span.style) {
+
+                                                        Typeface.BOLD -> {
+                                                            markDown += Triple(start, end, "b")
+                                                        }
+
+                                                        Typeface.ITALIC -> {
+                                                            markDown += Triple(start, end, "i")
+                                                        }
+
+                                                        Typeface.BOLD_ITALIC -> {
+                                                            markDown += Triple(start, end, "b")
+                                                            markDown += Triple(start, end, "i")
+                                                        }
+                                                    }
+                                                }
+
+                                                is UnderlineSpan -> {
+                                                    markDown += Triple(start, end, "u")
+                                                }
+
+                                                is StrikethroughSpan -> {
+                                                    markDown += Triple(start, end, "s")
+                                                }
+
+                                                is ForegroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start,
+                                                        end,
+                                                        "c" + String.format("#%06X", 0xFFFFFF and span.foregroundColor)
+                                                    )
+                                                }
+
+                                                is BackgroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start,
+                                                        end,
+                                                        "h" + String.format("#%06X", 0xFFFFFF and span.backgroundColor)
+                                                    )
+                                                }
+                                            }
+                                        }
                                         content += Content.Text(
                                             //type = "text",
-                                            text = messageText, markDown = emptyList()
+                                            text = messageText, markDown = markDown
                                         )
                                     }
                                     editingMessageId?.let { editMessage(it, content) }
@@ -1361,67 +1516,68 @@ fun ChatScreen(
                                             mutableListOf()
 
                                         styledMessageText.getSpans(
-                                                0,
-                                                styledMessageText.length,
-                                                CharacterStyle::class.java
-                                            ).forEach { span ->
+                                            0,
+                                            styledMessageText.length,
+                                            CharacterStyle::class.java
+                                        ).forEach { span ->
 
-                                                val start = styledMessageText.getSpanStart(span)
-                                                val end = styledMessageText.getSpanEnd(span)
+                                            val start = styledMessageText.getSpanStart(span)
+                                            val end = styledMessageText.getSpanEnd(span)
 
-                                                if (start >= end) {
-                                                    return@forEach
-                                                }
+                                            if (start >= end) {
+                                                return@forEach
+                                            }
 
-                                                when (span) {
+                                            when (span) {
 
-                                                    is StyleSpan -> {
+                                                is StyleSpan -> {
 
-                                                        when (span.style) {
+                                                    when (span.style) {
 
-                                                            Typeface.BOLD -> {
-                                                                markDown += Triple(start, end, "b")
-                                                            }
+                                                        Typeface.BOLD -> {
+                                                            markDown += Triple(start, end, "b")
+                                                        }
 
-                                                            Typeface.ITALIC -> {
-                                                                markDown += Triple(start, end, "i")
-                                                            }
+                                                        Typeface.ITALIC -> {
+                                                            markDown += Triple(start, end, "i")
+                                                        }
 
-                                                            Typeface.BOLD_ITALIC -> {
-                                                                markDown += Triple(start, end, "b")
-                                                                markDown += Triple(start, end, "i")
-                                                            }
+                                                        Typeface.BOLD_ITALIC -> {
+                                                            markDown += Triple(start, end, "b")
+                                                            markDown += Triple(start, end, "i")
                                                         }
                                                     }
+                                                }
 
-                                                    is UnderlineSpan -> {
-                                                        markDown += Triple(start, end, "u")
-                                                    }
+                                                is UnderlineSpan -> {
+                                                    markDown += Triple(start, end, "u")
+                                                }
 
-                                                    is StrikethroughSpan -> {
-                                                        markDown += Triple(start, end, "s")
-                                                    }
+                                                is StrikethroughSpan -> {
+                                                    markDown += Triple(start, end, "s")
+                                                }
 
-                                                    is ForegroundColorSpan -> {
-                                                        markDown += Triple(
-                                                            start, end, "c" + String.format(
-                                                                "#%06X",
-                                                                0xFFFFFF and span.foregroundColor
-                                                            )
+                                                is ForegroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start, end, "c" + String.format(
+                                                            "#%06X",
+                                                            0xFFFFFF and span.foregroundColor
                                                         )
-                                                    }
+                                                    )
+                                                }
 
-                                                    is BackgroundColorSpan -> {
-                                                        markDown += Triple(
-                                                            start, end, "h" + String.format(
-                                                                "#%06X",
-                                                                0xFFFFFF and span.backgroundColor
-                                                            )
+                                                is BackgroundColorSpan -> {
+                                                    markDown += Triple(
+                                                        start, end, "h" + String.format(
+                                                            "#%06X",
+                                                            0xFFFFFF and span.backgroundColor
                                                         )
-                                                    }
+                                                    )
                                                 }
                                             }
+                                        }
                                         if (messageText.isNotBlank()) {
+
                                             content += Content.Text(
                                                 //type = "text",
                                                 text = messageText, markDown = markDown
@@ -1721,7 +1877,7 @@ fun ChatScreen(
             }
         }
 
-        AnimatedMenuBad(
+        VoicePopUp(
             modifier = Modifier
                 .statusBarsPadding()
                 .navigationBarsPadding()
@@ -1948,25 +2104,25 @@ fun ChatScreen(
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.latex)) }, onClick = {
-                    //view.playSoundEffect(SoundEffectConstants.CLICK)
-                    showLatexSheet = true
-                    isExpandedAttachment = false
-                }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                    Icon(
-                        painterResource(R.drawable.function), contentDescription = null
-                    )
-                }, trailingIcon = { }, enabled = true
+                        //view.playSoundEffect(SoundEffectConstants.CLICK)
+                        showLatexSheet = true
+                        isExpandedAttachment = false
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.function), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.files)) }, onClick = {
-                    //view.playSoundEffect(SoundEffectConstants.CLICK)
-                    isExpandedAttachment = false
-                    launcher.launch("*/*")  // "image/*", "video/*"
-                }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
-                    Icon(
-                        painterResource(R.drawable.folder), contentDescription = null
-                    )
-                }, trailingIcon = { }, enabled = true
+                        //view.playSoundEffect(SoundEffectConstants.CLICK)
+                        isExpandedAttachment = false
+                        launcher.launch("*/*")  // "image/*", "video/*"
+                    }, modifier = Modifier.fillMaxWidth(), leadingIcon = {
+                        Icon(
+                            painterResource(R.drawable.folder), contentDescription = null
+                        )
+                    }, trailingIcon = { }, enabled = true
                 )
                 DropdownMenuItem(
                     text = { Text(text = stringResource(R.string.text_block)) },
@@ -2073,81 +2229,101 @@ fun ChatScreen(
                                 when (content) {
                                     is Content.Text -> {
                                         if (index == messageContentList.content.lastIndex) {
-                                            val markDown = mutableListOf<Triple<Int, Int, String>>()
+                                            messageText = content.text
+                                            val markDown = content.markDown
+                                            setSavedText(id, content.text, editingMessageId, markDown)
+                                            Log.d("markDown" ,markDown.toString())
 
-                                            styledMessageText.getSpans(
-                                                    0,
-                                                    styledMessageText.length,
-                                                    CharacterStyle::class.java
-                                                ).forEach { span ->
+                                            val spannable = SpannableStringBuilder(messageText)
 
-                                                    val start = styledMessageText.getSpanStart(span)
-                                                    val end = styledMessageText.getSpanEnd(span)
+                                            markDown.forEach { (start, end, type) ->
 
-                                                    if (start >= end) {
-                                                        return@forEach
+                                                if (start < 0 || end > spannable.length || start >= end) {
+                                                    return@forEach
+                                                }
+
+                                                when (type[0]) {
+                                                    'b' -> {
+                                                        spannable.setSpan(
+                                                            StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
                                                     }
 
-                                                    when (span) {
+                                                    'i' -> {
+                                                        spannable.setSpan(
+                                                            StyleSpan(Typeface.ITALIC), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
+                                                    }
 
-                                                        is StyleSpan -> {
-                                                            when (span.style) {
+                                                    'u' -> {
+                                                        spannable.setSpan(
+                                                            UnderlineSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
+                                                    }
 
-                                                                Typeface.BOLD -> {
-                                                                    markDown += Triple(
-                                                                        start, end, "b"
-                                                                    )
-                                                                }
+                                                    's' -> {
+                                                        spannable.setSpan(
+                                                            StrikethroughSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
+                                                    }
 
-                                                                Typeface.ITALIC -> {
-                                                                    markDown += Triple(
-                                                                        start, end, "i"
-                                                                    )
-                                                                }
+                                                    'c' -> {
+                                                        val color = type.substring(1).toColorInt()
 
-                                                                Typeface.BOLD_ITALIC -> {
-                                                                    markDown += Triple(
-                                                                        start, end, "b"
-                                                                    )
-                                                                    markDown += Triple(
-                                                                        start, end, "i"
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
+                                                        spannable.setSpan(
+                                                            ForegroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
+                                                    }
 
-                                                        is UnderlineSpan -> {
-                                                            markDown += Triple(start, end, "u")
-                                                        }
+                                                    'h' -> {
+                                                        val color = type.substring(1).toColorInt()
 
-                                                        is StrikethroughSpan -> {
-                                                            markDown += Triple(start, end, "s")
-                                                        }
-
-                                                        is ForegroundColorSpan -> {
-                                                            markDown += Triple(
-                                                                start, end, "c" + String.format(
-                                                                    "#%06X",
-                                                                    0xFFFFFF and span.foregroundColor
-                                                                )
-                                                            )
-                                                        }
-
-                                                        is BackgroundColorSpan -> {
-                                                            markDown += Triple(
-                                                                start, end, "h" + String.format(
-                                                                    "#%06X",
-                                                                    0xFFFFFF and span.backgroundColor
-                                                                )
-                                                            )
-                                                        }
+                                                        spannable.setSpan(
+                                                            BackgroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                        )
                                                     }
                                                 }
-                                            setSavedText(
-                                                id, content.text, editingMessageId, markDown
+                                            }
+                                            Log.d(
+                                                "MD_2_SPANNABLE",
+                                                "text='${spannable}' length=${spannable.length}"
                                             )
-                                            messageText = content.text
+
+                                            spannable.getSpans(
+                                                0,
+                                                spannable.length,
+                                                CharacterStyle::class.java
+                                            ).forEach { span ->
+
+                                                Log.d(
+                                                    "MD_2_SPANNABLE",
+                                                    "${span.javaClass.simpleName} " +
+                                                            "start=${spannable.getSpanStart(span)} " +
+                                                            "end=${spannable.getSpanEnd(span)}"
+                                                )
+                                            }
+                                            styledMessageText = spannable
+
+                                            Log.d(
+                                                "EDIT_FLOW",
+                                                "1) AFTER ASSIGN | " +
+                                                        "text='${styledMessageText}' | " +
+                                                        "length=${styledMessageText.length} | " +
+                                                        "spans=${
+                                                            styledMessageText.getSpans(
+                                                                0,
+                                                                styledMessageText.length,
+                                                                CharacterStyle::class.java
+                                                            ).map { span ->
+                                                                "${span.javaClass.simpleName}(" +
+                                                                        "${styledMessageText.getSpanStart(span)}-" +
+                                                                        "${styledMessageText.getSpanEnd(span)})"
+                                                            }
+                                                        }"
+                                            )
+                                            Log.d("styledMessageText" ,styledMessageText.toString())
                                         } else {
+                                            //بعدا مارک داون میگیره
                                             attachTextBlock(content.text)
                                         }
                                     }
@@ -2571,775 +2747,6 @@ fun ChatScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun LaTeXSuperEditor(
-    initialText: String = "", onTextSubmit: (String) -> Unit = {}, onDismiss: () -> Unit = {}
-) {
-    var textFieldValue by rememberSaveable(
-        stateSaver = TextFieldValue.Saver
-    ) {
-        mutableStateOf(
-            TextFieldValue(
-                text = initialText, selection = TextRange(initialText.length)
-            )
-        )
-    }
-
-    var category by rememberSaveable { mutableIntStateOf(0) }
-    var zoom by rememberSaveable { mutableFloatStateOf(1f) }
-
-    val scope = rememberCoroutineScope()
-
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
-
-    val toolbarScroll = rememberScrollState()
-
-    val text = textFieldValue.text
-
-    /*
-     * درج متن در محل cursor یا جایگزینی selection
-     */
-    fun insert(
-        value: String, cursor: Int = value.length
-    ) {
-        val current = textFieldValue
-        val currentText = current.text
-
-        val start = current.selection.start.coerceIn(0, currentText.length)
-
-        val end = current.selection.end.coerceIn(0, currentText.length)
-
-        val from = minOf(start, end)
-        val to = maxOf(start, end)
-
-        val newText = currentText.substring(0, from) + value + currentText.substring(to)
-
-        val newCursor = (from + cursor).coerceIn(0, newText.length)
-
-        textFieldValue = TextFieldValue(
-            text = newText, selection = TextRange(newCursor)
-        )
-    }
-
-    /*
-     * قرار دادن before و after دور selection
-     *
-     * اگر چیزی انتخاب نشده باشد:
-     *
-     *     cursor
-     *
-     * تبدیل می‌شود به:
-     *
-     *     before|after
-     *
-     * اگر selection وجود داشته باشد:
-     *
-     *     abc[x]def
-     *
-     * تبدیل می‌شود به:
-     *
-     *     abc[before x after]def
-     */
-    fun wrap(
-        before: String, after: String
-    ) {
-        val current = textFieldValue
-        val currentText = current.text
-
-        val start = current.selection.start.coerceIn(0, currentText.length)
-
-        val end = current.selection.end.coerceIn(0, currentText.length)
-
-        val from = minOf(start, end)
-        val to = maxOf(start, end)
-
-        val selected = currentText.substring(from, to)
-
-        val replacement = before + selected + after
-
-        val newText = currentText.substring(0, from) + replacement + currentText.substring(to)
-
-        /*
-         * اگر selection خالی باشد،
-         * cursor را بین before و after می‌گذاریم.
-         *
-         * مثال:
-         *
-         * \sqrt{|}
-         */
-        val newCursor = if (selected.isEmpty()) {
-            from + before.length
-        } else {/*
-                 * اگر متن انتخاب شده باشد،
-                 * بعد از کل عبارت قرار می‌گیرد.
-                 *
-                 * مثال:
-                 *
-                 * \sqrt{x}|
-                 */
-            from + before.length + selected.length + after.length
-        }
-
-        textFieldValue = TextFieldValue(
-            text = newText, selection = TextRange(
-                newCursor.coerceIn(0, newText.length)
-            )
-        )
-    }
-
-    ModalBottomSheet(
-        sheetState = sheetState,
-
-        onDismissRequest = {
-            scope.launch {
-                sheetState.hide()
-                onDismiss()
-            }
-        },
-
-        shape = RectangleShape,
-
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-
-        sheetGesturesEnabled = false,
-
-        dragHandle = {}) {
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .imePadding()
-                .padding(
-                    start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp
-                )
-        ) {
-
-            /*
-             * Header
-             */
-            Row(
-                modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = stringResource(R.string.latex_editor),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f)
-                )
-
-                IconButton(
-                    onClick = {
-                        zoom = (zoom + 0.1f).coerceAtMost(2f)
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.zoom_in),
-                        contentDescription = "Zoom in"
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        zoom = (zoom - 0.1f).coerceAtLeast(0.5f)
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.zoom_out),
-                        contentDescription = "Zoom out"
-                    )
-                }
-
-                IconButton(
-                    onClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            onDismiss()
-                        }
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.close), contentDescription = "Close"
-                    )
-                }
-
-                IconButton(
-                    enabled = text.isNotBlank(), onClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            onTextSubmit(text)
-                        }
-                    }) {
-                    Icon(
-                        painter = painterResource(R.drawable.check), contentDescription = "Done"
-                    )
-                }
-            }
-
-            /*
-             * Preview
-             */
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 240.dp)
-                    .padding(
-                        bottom = 4.dp, top = 8.dp
-                    ), shape = RoundedCornerShape(2.dp)
-            ) {
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(
-                            rememberScrollState()
-                        )
-                        .verticalScroll(
-                            rememberScrollState()
-                        )
-                        .padding(12.dp),
-
-                    contentAlignment = Alignment.Center
-                ) {
-
-                    if (text.isBlank()) {
-
-                        Text(
-                            text = stringResource(R.string.preview), color = Color.Gray
-                        )
-
-                    } else {
-                        RaTeX(
-                            modifier = Modifier.wrapContentWidth(),
-                            latex = text,
-                            fontSize = (18f * zoom).sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            displayMode = true
-                        )
-                    }
-                }
-            }
-
-            /*
-             * Text editor
-             */
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 240.dp)
-                    .padding(vertical = 4.dp),
-
-                shape = RoundedCornerShape(2.dp)
-            ) {
-
-                val editTextHint = stringResource(
-                    R.string.write_your_latex_here
-                )
-
-                TextField(
-                    value = textFieldValue,
-
-                    onValueChange = { newValue ->
-                        /*
-                         * این مهم‌ترین قسمت است.
-                         *
-                         * متن + cursor + selection
-                         * همگی از TextFieldValue می‌آیند.
-                         *
-                         * بنابراین اگر کاربر:
-                         *
-                         * - cursor را جابه‌جا کند
-                         * - متن را انتخاب کند
-                         * - وسط متن تایپ کند
-                         * - Backspace بزند
-                         * - متن را paste کند
-                         *
-                         * state کاملاً با TextField هماهنگ می‌ماند.
-                         */
-                        textFieldValue = newValue
-                    },
-
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-
-                    placeholder = {
-                        Text(
-                            text = editTextHint, color = Color.Gray
-                        )
-                    },
-
-                    textStyle = LocalTextStyle.current.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-
-                    singleLine = false,
-
-                    maxLines = 5,
-
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text, imeAction = ImeAction.Default
-                    ),
-
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        errorContainerColor = Color.Transparent,
-
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        errorIndicatorColor = Color.Transparent,
-
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-
-                        errorTextColor = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            }
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-
-                shape = RoundedCornerShape(2.dp)
-            ) {
-
-                Column {
-
-                    ScrollableTabRow(
-                        modifier = Modifier.fillMaxWidth(),
-
-                        selectedTabIndex = category,
-
-                        edgePadding = 0.dp
-                    ) {
-
-                        listOf(
-                            "Basic",
-                            "Greek",
-                            "Calculus",
-                            "Relations",
-                            "Functions",
-                            "Sets",
-                            "Arrows",
-                            "Matrix"
-                        ).forEachIndexed { index, name ->
-
-                            Tab(
-                                selected = category == index,
-
-                                onClick = {
-                                    category = index
-                                },
-
-                                text = {
-                                    Text(name)
-                                })
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(
-                                toolbarScroll
-                            ),
-
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-
-                        when (category) {
-
-                            /*
-                             * BASIC
-                             */
-                            0 -> {
-
-                                listOf(
-
-                                    "a/b" to {
-                                        wrap(
-                                            "\\frac{", "}{}"
-                                        )
-                                    },
-
-                                    "√" to {
-                                        wrap(
-                                            "\\sqrt{", "}"
-                                        )
-                                    },
-
-                                    "√ⁿ" to {
-                                        insert("\\sqrt[]{}")
-                                    },
-
-                                    "x²" to {
-                                        wrap(
-                                            "^{", "}"
-                                        )
-                                    },
-
-                                    "xₙ" to {
-                                        wrap(
-                                            "_{", "}"
-                                        )
-                                    },
-
-                                    "( )" to {
-                                        wrap(
-                                            "\\left(", "\\right)"
-                                        )
-                                    },
-
-                                    "[ ]" to {
-                                        wrap(
-                                            "\\left[", "\\right]"
-                                        )
-                                    },
-
-                                    "{ }" to {
-                                        wrap(
-                                            "\\left\\{", "\\right\\}"
-                                        )
-                                    },
-
-                                    "|x|" to {
-                                        wrap(
-                                            "\\left|", "\\right|"
-                                        )
-                                    },
-
-                                    "x̂" to {
-                                        wrap(
-                                            "\\hat{", "}"
-                                        )
-                                    },
-
-                                    "x̄" to {
-                                        wrap(
-                                            "\\bar{", "}"
-                                        )
-                                    },
-
-                                    "∞" to {
-                                        insert("\\infty")
-                                    },
-
-                                    "±" to {
-                                        insert("\\pm")
-                                    },
-
-                                    "×" to {
-                                        insert("\\times")
-                                    },
-
-                                    "÷" to {
-                                        insert("\\div")
-                                    }
-
-                                ).forEach { (label, action) ->
-
-                                    TextButton(
-                                        onClick = action
-                                    ) {
-                                        Text(
-                                            text = label, fontSize = 17.sp
-                                        )
-                                    }
-                                }
-                            }
-
-                            /*
-                             * GREEK
-                             */
-                            1 -> {
-
-                                listOf(
-                                    "α" to "\\alpha",
-                                    "β" to "\\beta",
-                                    "γ" to "\\gamma",
-                                    "δ" to "\\delta",
-                                    "ε" to "\\epsilon",
-                                    "ζ" to "\\zeta",
-                                    "η" to "\\eta",
-                                    "θ" to "\\theta",
-                                    "λ" to "\\lambda",
-                                    "μ" to "\\mu",
-                                    "ξ" to "\\xi",
-                                    "π" to "\\pi",
-                                    "ρ" to "\\rho",
-                                    "σ" to "\\sigma",
-                                    "φ" to "\\phi",
-                                    "ψ" to "\\psi",
-                                    "ω" to "\\omega",
-                                    "Γ" to "\\Gamma",
-                                    "Δ" to "\\Delta",
-                                    "Θ" to "\\Theta",
-                                    "Λ" to "\\Lambda",
-                                    "Π" to "\\Pi",
-                                    "Σ" to "\\Sigma",
-                                    "Φ" to "\\Phi",
-                                    "Ω" to "\\Omega"
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(
-                                            text = label, fontSize = 19.sp
-                                        )
-                                    }
-                                }
-                            }
-
-                            /*
-                             * CALCULUS
-                             */
-                            2 -> {
-
-                                listOf(
-                                    "∫" to "\\int ",
-                                    "∬" to "\\iint ",
-                                    "∭" to "\\iiint ",
-                                    "∮" to "\\oint ",
-                                    "Σ" to "\\sum ",
-                                    "Π" to "\\prod ",
-                                    "∂" to "\\partial ",
-                                    "∇" to "\\nabla ",
-                                    "lim" to "\\lim_{",
-                                    "d/dx" to "\\frac{d}{dx}\\left("
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-
-                            /*
-                             * RELATIONS
-                             */
-                            3 -> {
-
-                                listOf(
-                                    "=" to "=",
-                                    "≠" to "\\neq",
-                                    "≈" to "\\approx",
-                                    "≡" to "\\equiv",
-                                    "≤" to "\\leq",
-                                    "≥" to "\\geq",
-                                    "∼" to "\\sim",
-                                    "∝" to "\\propto",
-                                    "∈" to "\\in",
-                                    "∉" to "\\notin",
-                                    "⊂" to "\\subset",
-                                    "⊆" to "\\subseteq",
-                                    "⊃" to "\\supset",
-                                    "⊇" to "\\supseteq"
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-
-                            /*
-                             * FUNCTIONS
-                             */
-                            4 -> {
-
-                                listOf(
-                                    "sin" to "\\sin ",
-                                    "cos" to "\\cos ",
-                                    "tan" to "\\tan ",
-                                    "cot" to "\\cot ",
-                                    "sec" to "\\sec ",
-                                    "csc" to "\\csc ",
-                                    "log" to "\\log ",
-                                    "ln" to "\\ln ",
-                                    "exp" to "\\exp ",
-                                    "max" to "\\max ",
-                                    "min" to "\\min ",
-                                    "det" to "\\det "
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-
-                            /*
-                             * SETS
-                             */
-                            5 -> {
-
-                                listOf(
-                                    "∅" to "\\emptyset",
-                                    "∀" to "\\forall",
-                                    "∃" to "\\exists",
-                                    "¬" to "\\neg",
-                                    "∧" to "\\land",
-                                    "∨" to "\\lor",
-                                    "∩" to "\\cap",
-                                    "∪" to "\\cup",
-                                    "⇒" to "\\Rightarrow",
-                                    "⇔" to "\\Leftrightarrow",
-                                    "⊥" to "\\perp"
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-
-                            /*
-                             * ARROWS
-                             */
-                            6 -> {
-
-                                listOf(
-                                    "→" to "\\rightarrow",
-                                    "←" to "\\leftarrow",
-                                    "↔" to "\\leftrightarrow",
-                                    "⇒" to "\\Rightarrow",
-                                    "⇐" to "\\Leftarrow",
-                                    "⇔" to "\\Leftrightarrow",
-                                    "↦" to "\\mapsto",
-                                    "↑" to "\\uparrow",
-                                    "↓" to "\\downarrow",
-                                    "↗" to "\\nearrow",
-                                    "↘" to "\\searrow",
-                                    "↙" to "\\swarrow",
-                                    "↖" to "\\nwarrow"
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-
-                            /*
-                             * MATRIX
-                             */
-                            7 -> {
-
-                                listOf(
-
-                                    "matrix" to """
-                                        \begin{matrix}
-                                        & \\
-                                        &
-                                        \end{matrix}
-                                    """.trimIndent(),
-
-                                    "( )" to """
-                                        \begin{pmatrix}
-                                        & \\
-                                        &
-                                        \end{pmatrix}
-                                    """.trimIndent(),
-
-                                    "[ ]" to """
-                                        \begin{bmatrix}
-                                        & \\
-                                        &
-                                        \end{bmatrix}
-                                    """.trimIndent(),
-
-                                    "| |" to """
-                                        \begin{vmatrix}
-                                        & \\
-                                        &
-                                        \end{vmatrix}
-                                    """.trimIndent(),
-
-                                    "cases" to """
-                                        \begin{cases}
-                                        & \\
-                                        &
-                                        \end{cases}
-                                    """.trimIndent()
-
-                                ).forEach { (label, latex) ->
-
-                                    TextButton(
-                                        onClick = {
-                                            insert(latex)
-                                        }) {
-                                        Text(label)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            /*
-             * Footer
-             */
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "${text.length} characters",
-
-                    style = MaterialTheme.typography.labelSmall,
-
-                    color = MaterialTheme.colorScheme.onPrimary,
-
-                    modifier = Modifier.weight(1f)
-                )
-
-                Text(
-                    text = "${(zoom * 100).toInt()}%",
-
-                    style = MaterialTheme.typography.labelSmall,
-
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        sheetState.show()
-    }
-}
-
 @Composable
 fun UploadList(
     showFileRow: Boolean,
@@ -3535,9 +2942,9 @@ fun ChatScreenPopUp(
         Box(modifier = Modifier.fillMaxSize()) {
             TWallpaper(
                 modifier = Modifier.fillMaxSize(),
-                colors = listOf("#dbddbb", "#6ba587", "#d5d88d", "#88b884"),
-                fps = 60,
-                tails = 90,
+                colors = listOf(Color(0xffdbddbb), Color(0xff6ba587), Color(0xffd5d88d), Color(0xff88b884)),
+                updateFps = 60,
+                angularSpeed = Math.PI.toFloat() / 4f,
                 animate = false
             )
             if (id != "") {

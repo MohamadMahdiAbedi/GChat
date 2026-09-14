@@ -9,11 +9,11 @@ import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
-import android.view.KeyEvent
 import android.view.SoundEffectConstants
+import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -24,7 +24,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,7 +44,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -56,10 +54,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenuItem
@@ -74,8 +69,6 @@ import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults.colors
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -121,10 +114,13 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -132,6 +128,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
+import androidx.core.graphics.toColorInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -146,11 +143,7 @@ import coil.compose.SubcomposeAsyncImage
 import com.hrm.latex.renderer.Latex
 import com.hrm.latex.renderer.model.LatexConfig
 import com.hrm.latex.renderer.model.LatexTheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
-import android.view.View
-import android.view.inputmethod.EditorInfo
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("ConfigurationScreenWidthHeight")
@@ -505,24 +498,98 @@ fun MainScreenContainer(
 //                                    }
 //                                }
                                     .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        val down = awaitFirstDown(
-                                            requireUnconsumed = false,
-                                            pass = PointerEventPass.Initial
-                                        )
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(
+                                                requireUnconsumed = false,
+                                                pass = PointerEventPass.Initial
+                                            )
 
-                                        messageMenuOffset = DpOffset(
-                                            x = down.position.x.toDp(),
-                                            y = down.position.y.toDp()
-                                        )
+                                            messageMenuOffset = DpOffset(
+                                                x = down.position.x.toDp(),
+                                                y = down.position.y.toDp()
+                                            )
+                                        }
                                     }
-                                }
                             , contentPadding = PaddingValues(
                                 bottom = smsAlertHeight + 8.dp
                             )
                         ) {
                             items(
                                 items = chatList, key = { it.id }) { contact ->
+                                val text = savedText[contact.id]?.second ?: ""
+                                val annotatedText = buildAnnotatedString {
+                                    append(text)
+
+                                    savedText[contact.id]?.third?.forEach { (start, end, type) ->
+
+                                        if (
+                                            start < 0 ||
+                                            end > text.length ||
+                                            start >= end
+                                        ) {
+                                            return@forEach
+                                        }
+
+                                        when (type.firstOrNull()) {
+
+                                            'b' -> addStyle(
+                                                SpanStyle(
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                start,
+                                                end
+                                            )
+
+                                            'i' -> addStyle(
+                                                SpanStyle(
+                                                    fontStyle = FontStyle.Italic
+                                                ),
+                                                start,
+                                                end
+                                            )
+
+                                            'u' -> addStyle(
+                                                SpanStyle(
+                                                    textDecoration = TextDecoration.Underline
+                                                ),
+                                                start,
+                                                end
+                                            )
+
+                                            's' -> addStyle(
+                                                SpanStyle(
+                                                    textDecoration = TextDecoration.LineThrough
+                                                ),
+                                                start,
+                                                end
+                                            )
+
+                                            'c' -> {
+                                                val color = type.substring(1).toColorInt()
+
+                                                addStyle(
+                                                    SpanStyle(
+                                                        color = Color(color)
+                                                    ),
+                                                    start,
+                                                    end
+                                                )
+                                            }
+
+                                            'h' -> {
+                                                val color = type.substring(1).toColorInt()
+
+                                                addStyle(
+                                                    SpanStyle(
+                                                        background = Color(color)
+                                                    ),
+                                                    start,
+                                                    end
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 ContactItem(
                                     contact = contact,
                                     onClick = {
@@ -554,7 +621,7 @@ fun MainScreenContainer(
                                     serverUrl = serverUrl,
                                     imageLoader = imageLoader,
                                     draft = draft[contact.id] ?: emptyList<Draft>(),
-                                    savedText = savedText[contact.id]?.second ?: "",
+                                    savedText = annotatedText,
                                     openMenu = {
                                         messageMenu = true
                                         longPressId = contact.id
@@ -1076,7 +1143,7 @@ fun ContactItem(
     serverUrl: String,
     imageLoader: ImageLoader,
     draft: List<Draft> = emptyList<Draft>(),
-    savedText: String = "",
+    savedText: AnnotatedString = AnnotatedString(""),
     openMenu: () -> Unit
 ) {
     val backgroundColor = remember(contact.id) {
@@ -1533,19 +1600,109 @@ fun ContactItem(
                             //    )
                             //}
                             // همه متن‌ها در یک Text
-                            if ((texts+latexs).isNotEmpty()) {
+                            if ((texts + latexs).isNotEmpty()) {
                                 Text(
                                     text = buildAnnotatedString {
-                                        (texts+latexs).forEachIndexed { index, content ->
-                                            if (index > 0) append(" ")
 
-                                            append(
-                                                when (content) {
-                                                    is Content.Text -> content.text
-                                                    is Content.LaTeX -> content.text
-                                                    else -> ""
-                                                }.replace("\n", " ")
-                                            )
+                                        (texts + latexs).forEachIndexed { index, content ->
+
+                                            if (index > 0) {
+                                                append(" ")
+                                            }
+
+                                            when (content) {
+
+                                                is Content.Text -> {
+                                                    val markDown = content.markDown
+                                                    val startOffset = length
+
+                                                    append(content.text.replace("\n", " "))
+
+                                                    markDown.forEach { (start, end, type) ->
+
+                                                        if (
+                                                            start < 0 ||
+                                                            end > content.text.length ||
+                                                            start >= end
+                                                        ) {
+                                                            return@forEach
+                                                        }
+
+                                                        when (type.firstOrNull()) {
+
+                                                            'b' -> {
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        fontWeight = FontWeight.Bold
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+
+                                                            'i' -> {
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        fontStyle = FontStyle.Italic
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+
+                                                            'u' -> {
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        textDecoration = TextDecoration.Underline
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+
+                                                            's' -> {
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        textDecoration = TextDecoration.LineThrough
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+
+                                                            'c' -> {
+                                                                val color = type.substring(1).toColorInt()
+
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        color = Color(color)
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+
+                                                            'h' -> {
+                                                                val color = type.substring(1).toColorInt()
+
+                                                                addStyle(
+                                                                    SpanStyle(
+                                                                        background = Color(color)
+                                                                    ),
+                                                                    startOffset + start,
+                                                                    startOffset + end
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                is Content.LaTeX -> {
+                                                    append(content.text.replace("\n", " "))
+                                                }
+
+                                                else -> Unit
+                                            }
                                         }
                                     },
                                     style = MaterialTheme.typography.bodySmall,
@@ -1567,10 +1724,82 @@ fun ContactItem(
                                             for (content in draft) {
                                                 when (content) {
                                                     is Draft.Text -> {
+                                                        val annotatedText = buildAnnotatedString {
+                                                            append(content.text)
+
+                                                            content.markDown.forEach { (start, end, type) ->
+
+                                                                if (
+                                                                    start < 0 ||
+                                                                    end > content.text.length ||
+                                                                    start >= end
+                                                                ) {
+                                                                    return@forEach
+                                                                }
+
+                                                                when (type.firstOrNull()) {
+
+                                                                    'b' -> addStyle(
+                                                                        SpanStyle(
+                                                                            fontWeight = FontWeight.Bold
+                                                                        ),
+                                                                        start,
+                                                                        end
+                                                                    )
+
+                                                                    'i' -> addStyle(
+                                                                        SpanStyle(
+                                                                            fontStyle = FontStyle.Italic
+                                                                        ),
+                                                                        start,
+                                                                        end
+                                                                    )
+
+                                                                    'u' -> addStyle(
+                                                                        SpanStyle(
+                                                                            textDecoration = TextDecoration.Underline
+                                                                        ),
+                                                                        start,
+                                                                        end
+                                                                    )
+
+                                                                    's' -> addStyle(
+                                                                        SpanStyle(
+                                                                            textDecoration = TextDecoration.LineThrough
+                                                                        ),
+                                                                        start,
+                                                                        end
+                                                                    )
+
+                                                                    'c' -> {
+                                                                        val color = type.substring(1).toColorInt()
+
+                                                                        addStyle(
+                                                                            SpanStyle(
+                                                                                color = Color(color)
+                                                                            ),
+                                                                            start,
+                                                                            end
+                                                                        )
+                                                                    }
+
+                                                                    'h' -> {
+                                                                        val color = type.substring(1).toColorInt()
+
+                                                                        addStyle(
+                                                                            SpanStyle(
+                                                                                background = Color(color)
+                                                                            ),
+                                                                            start,
+                                                                            end
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
                                                         Text(
-                                                            text = content.text.toRichAnnotatedString(
-                                                                linkColor = MaterialTheme.colorScheme.primary
-                                                            )
+                                                            text = annotatedText
                                                         )
                                                     }
 
@@ -1684,9 +1913,10 @@ fun ContactItem(
                                             }
                                             if (savedText.isNotBlank()) {
                                                 Text(
-                                                    text = savedText.toRichAnnotatedString(
-                                                        linkColor = MaterialTheme.colorScheme.primary
-                                                    )
+                                                    text = savedText
+                                                        //.toRichAnnotatedString(
+                                                        //linkColor = MaterialTheme.colorScheme.primary
+                                                        //)
                                                 )
                                             }
                                         }

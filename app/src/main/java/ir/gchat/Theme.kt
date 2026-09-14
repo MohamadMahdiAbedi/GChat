@@ -69,132 +69,132 @@ var materialPalette = mutableStateListOf(
 )
 
 var backgroundLight = Color(0xFFF4F4F4)
-var onBackgroundLight = Color(0xFF1A1A1A)
+//var onBackgroundLight = Color(0xFF1A1A1A)
 
 var surfaceLight = Color(0xFFFFFFFF)
-var onSurfaceLight = Color(0xFF1A1A1A)
+//var onSurfaceLight = Color(0xFF1A1A1A)
 
 var backgroundDark = Color(0xFF212121)
-var onBackgroundDark = Color(0xFFE0E0E0)
+//var onBackgroundDark = Color(0xFFE0E0E0)
 
 //var surfaceDark = Color(0xFF2C2C2C)
 var surfaceDark = Color(0xFF333333)
-var onSurfaceDark = Color(0xFFE0E0E0)
+//var onSurfaceDark = Color(0xFFE0E0E0)
 
 var tWallpaperColors = mutableStateListOf(
     listOf(
-        "#dbddbb",
-        "#6ba587",
-        "#d5d88d",
-        "#88b884"
+        Color(0xFFDBDDBB),
+        Color(0xFF6BA587),
+        Color(0xFFD5D88D),
+        Color(0xFF88B884)
     ),
     listOf(
-        "#4f5bd5",
-        "#962fbf",
-        "#dd6cb9",
-        "#fec496"
+        Color(0xFF4F5BD5),
+        Color(0xFF962FBF),
+        Color(0xFFDD6CB9),
+        Color(0xFFFEC496)
     ),
     listOf(
-        "#baa161",
-        "#ddb56d",
-        "#cea668",
-        "#faf4d2"
+        Color(0xFFBAA161),
+        Color(0xFFDDB56D),
+        Color(0xFFCEA668),
+        Color(0xFFFAF4D2)
     ),
     listOf(
-        "#ecd893",
-        "#e5a1d0",
-        "#edd594",
-        "#d1a3e2"
+        Color(0xFFECD893),
+        Color(0xFFE5A1D0),
+        Color(0xFFEDD594),
+        Color(0xFFD1A3E2)
     ),
     listOf(
-        "#efd359",
-        "#e984d8",
-        "#ac86ed",
-        "#40cdde"
+        Color(0xFFEFD359),
+        Color(0xFFE984D8),
+        Color(0xFFAC86ED),
+        Color(0xFF40CDDE)
     ),
     listOf(
-        "#fbd9e6",
-        "#fb9ae5",
-        "#d5f7ff",
-        "#73caff"
+        Color(0xFFFBD9E6),
+        Color(0xFFFB9AE5),
+        Color(0xFFD5F7FF),
+        Color(0xFF73CAFF)
     ),
     listOf(
-        "#b4936e",
-        "#eab9d9",
-        "#8376c2",
-        "#e4b2ea"
+        Color(0xFFB4936E),
+        Color(0xFFEAB9D9),
+        Color(0xFF8376C2),
+        Color(0xFFE4B2EA)
     ),
     listOf(
-        "#679ced",
-        "#e39fea",
-        "#888dec",
-        "#8adbf2"
+        Color(0xFF679CED),
+        Color(0xFFE39FEA),
+        Color(0xFF888DEC),
+        Color(0xFF8ADBF2)
     ),
     listOf(
-        "#85d685",
-        "#67a3f2",
-        "#8fe1d6",
-        "#dceb92"
+        Color(0xFF85D685),
+        Color(0xFF67A3F2),
+        Color(0xFF8FE1D6),
+        Color(0xFFDCEB92)
     ),
     listOf(
-        "#b9e2ff",
-        "#eccbff",
-        "#a2b4ff",
-        "#daeacb"
+        Color(0xFFB9E2FF),
+        Color(0xFFECCBFF),
+        Color(0xFFA2B4FF),
+        Color(0xFFDAEACB)
     ),
     listOf(
-        "#efb7dc",
-        "#c6b1ef",
-        "#b1e9ea",
-        "#97beeb"
+        Color(0xFFEFB7DC),
+        Color(0xFFC6B1EF),
+        Color(0xFFB1E9EA),
+        Color(0xFF97BEEB)
     ),
     listOf(
-        "#fbe37d",
-        "#336f55",
-        "#fff5c5",
-        "#7fa381"
+        Color(0xFFFBE37D),
+        Color(0xFF336F55),
+        Color(0xFFFFF5C5),
+        Color(0xFF7FA381)
     ),
     listOf(
-        "#b2e3dd",
-        "#bbead5",
-        "#9fb0ea",
-        "#b0cdeb"
+        Color(0xFFB2E3DD),
+        Color(0xFFBBEAD5),
+        Color(0xFF9FB0EA),
+        Color(0xFFB0CDEB)
     ),
     listOf(
-        "#f7dd6d",
-        "#e96caf",
-        "#edac4c",
-        "#a464f4"
+        Color(0xFFF7DD6D),
+        Color(0xFFE96CAF),
+        Color(0xFFEDAC4C),
+        Color(0xFFA464F4)
     ),
     listOf(
-        "#e8c06e",
-        "#f29ebf",
-        "#f0e486",
-        "#eaa36e"
+        Color(0xFFE8C06E),
+        Color(0xFFF29EBF),
+        Color(0xFFF0E486),
+        Color(0xFFEAA36E)
     ),
     listOf(
-        "#f0c07a",
-        "#afd677",
-        "#e4d573",
-        "#7fc289"
+        Color(0xFFF0C07A),
+        Color(0xFFAFD677),
+        Color(0xFFE4D573),
+        Color(0xFF7FC289)
     ),
     listOf(
-        "#ffe7b2",
-        "#e2c0ff",
-        "#ffc3b2",
-        "#ffd5b2"
+        Color(0xFFFFE7B2),
+        Color(0xFFE2C0FF),
+        Color(0xFFFFC3B2),
+        Color(0xFFFFD5B2)
     ),
     listOf(
-        "#6c8cd4",
-        "#d4a7c9",
-        "#b2b1ee",
-        "#8f9ee1"
+        Color(0xFF6C8CD4),
+        Color(0xFFD4A7C9),
+        Color(0xFFB2B1EE),
+        Color(0xFF8F9EE1)
     ),
     listOf(
-        "#527bdd",
-        "#009fdd",
-        "#a4dbff",
-        "#7babee"
+        Color(0xFF527BDD),
+        Color(0xFF009FDD),
+        Color(0xFFA4DBFF),
+        Color(0xFF7BABEE)
     )
 )
 

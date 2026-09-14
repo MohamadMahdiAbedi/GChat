@@ -1,13 +1,9 @@
 package ir.gchat
 
 import android.app.Application
-import android.content.Intent
-import android.os.Build
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.os.LocaleListCompat
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,21 +15,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-
     private val context = getApplication<Application>()
-
     private val _theme = MutableStateFlow(0)
     val theme: StateFlow<Int> = _theme.asStateFlow()
-
     private val _palette = MutableStateFlow(19)
     val palette: StateFlow<Int> = _palette.asStateFlow()
-
     private val _ready = MutableStateFlow(false)
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
-
-    private val _sendWith = MutableStateFlow(SendMessageWith())
-    val sendWith: StateFlow<SendMessageWith> = _sendWith.asStateFlow()
-
     private val _useDynamicColor = MutableStateFlow(false)
     val useDynamicColor: StateFlow<Boolean> = _useDynamicColor.asStateFlow()
 
@@ -49,8 +37,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val color = Color(argb)
 
                 materialPalette[19] = Palette(
-                    primary = color,
-                    onPrimary = if (color.luminance() >= 0.5f) {
+                    primary = color, onPrimary = if (color.luminance() >= 0.5f) {
                         Color.Black
                     } else {
                         Color.White
@@ -59,24 +46,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _ready.value = true
-
             val enter = preferences[SEND_WITH_ENTER] ?: false
             val shiftEnter = preferences[SEND_WITH_SHIFT] ?: false
             val ctrlEnter = preferences[SEND_WITH_CTRL] ?: false
             val altEnter = preferences[SEND_WITH_ALT] ?: false
 
             _sendWith.value = SendMessageWith(
-                enter = enter,
-                shiftEnter = shiftEnter,
-                ctrlEnter = ctrlEnter,
-                altEnter = altEnter
+                enter = enter, shiftEnter = shiftEnter, ctrlEnter = ctrlEnter, altEnter = altEnter
+            )
+
+            _gradientSettings.value = GradientSettings(
+                colors = listOf(
+                    preferences[FIRST_GRADIENT_COLOR] ?: Color(0xffdbddbb).toArgb(),
+                    preferences[SECOND_GRADIENT_COLOR] ?: Color(0xff6ba587).toArgb(),
+                    preferences[THIRD_GRADIENT_COLOR] ?: Color(0xffd5d88d).toArgb(),
+                    preferences[FOURTH_GRADIENT_COLOR] ?: Color(0xff88b884).toArgb()
+                ),
+                blendMode = preferences[PATTERN_BLEND_MODE] ?: 1,
+                patternTint = preferences[PATTERN_TINT] ?: Color.Black.toArgb(),
+                patternAlpha = preferences[PATTERN_PATTERN_ALPHA] ?: 0.5f,
+                updateFps = preferences[GRADIENT_UPDATE_FPS] ?: 60,
+                angularSpeed = preferences[GRADIENT_ANGULAR_SPEED] ?: (Math.PI.toFloat() / 4f),
+                alwaysAnimate = preferences[GRADIENT_ALWAYS_ANIMATE] ?: false
             )
         }
     }
 
     private val _lightNavBar: MutableStateFlow<Boolean?> = MutableStateFlow(null)
     val lightNavBar: StateFlow<Boolean?> = _lightNavBar.asStateFlow()
-
+    private val _sendWith = MutableStateFlow(SendMessageWith())
+    val sendWith: StateFlow<SendMessageWith> = _sendWith.asStateFlow()
+    private val _gradientSettings = MutableStateFlow<GradientSettings?>(null)
+    val gradientSettings = _gradientSettings.asStateFlow()
     fun setSendWith(value: SendMessageWith) {
         _sendWith.value = value
 
@@ -145,5 +146,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setNavBarTheme(light: Boolean?) {
         _lightNavBar.value = light
+    }
+
+    fun setBackgroundSettings(settings: GradientSettings) {
+        _gradientSettings.value = settings
     }
 }

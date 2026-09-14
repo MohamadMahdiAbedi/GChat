@@ -52,11 +52,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import com.hrm.latex.renderer.Latex
@@ -115,6 +120,80 @@ fun Message(
                             if (index == content.size - 1) {
                                 when (contentEntity) {
                                     is Content.Text -> {
+                                        val annotatedText = buildAnnotatedString {
+                                            append(contentEntity.text)
+
+                                            contentEntity.markDown.forEach { (start, end, type) ->
+
+                                                if (
+                                                    start < 0 ||
+                                                    end > contentEntity.text.length ||
+                                                    start >= end
+                                                ) {
+                                                    return@forEach
+                                                }
+
+                                                when (type.firstOrNull()) {
+
+                                                    'b' -> addStyle(
+                                                        SpanStyle(
+                                                            fontWeight = FontWeight.Bold
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'i' -> addStyle(
+                                                        SpanStyle(
+                                                            fontStyle = FontStyle.Italic
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'u' -> addStyle(
+                                                        SpanStyle(
+                                                            textDecoration = TextDecoration.Underline
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    's' -> addStyle(
+                                                        SpanStyle(
+                                                            textDecoration = TextDecoration.LineThrough
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'c' -> {
+                                                        val color = type.substring(1).toColorInt()
+
+                                                        addStyle(
+                                                            SpanStyle(
+                                                                color = Color(color)
+                                                            ),
+                                                            start,
+                                                            end
+                                                        )
+                                                    }
+
+                                                    'h' -> {
+                                                        val color = type.substring(1).toColorInt()
+
+                                                        addStyle(
+                                                            SpanStyle(
+                                                                background = Color(color)
+                                                            ),
+                                                            start,
+                                                            end
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         var isOverflowed by remember {
                                             mutableStateOf(false)
                                         }
@@ -131,9 +210,10 @@ fun Message(
                                             Text(
                                                 // ممکنه مشکل پیش بیاد
                                                 // تکست های چند تایی چی؟؟؟
-                                                text = contentEntity.text.toRichAnnotatedString(
-                                                    linkColor = MaterialTheme.colorScheme.onPrimary
-                                                ),
+                                                text = annotatedText,
+                                                    //.toRichAnnotatedString(
+                                                    //linkColor = MaterialTheme.colorScheme.onPrimary
+                                                //),
                                                 onTextLayout = {
                                                     if (lineCount == 0) {
                                                         lineCount = it.lineCount
@@ -180,13 +260,28 @@ fun Message(
                                                 rememberScrollState()
                                             )
                                         ) {
-                                            RaTeX(
+                                            Latex(
                                                 modifier = Modifier.wrapContentWidth().padding(8.dp).padding(bottom = 24.dp),
                                                 latex = contentEntity.text,
-                                                fontSize = 18f.sp,
-                                                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                displayMode = true
+                                                config = LatexConfig(
+                                                    fontSize = 18f.sp,
+                                                    theme = LatexTheme.auto(
+                                                        light = LatexThemeColors(
+                                                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                        ),
+                                                        dark = LatexThemeColors(
+                                                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    )
+                                                )
                                             )
+                                            //RaTeX(
+                                            //    modifier = Modifier.wrapContentWidth().padding(8.dp).padding(bottom = 24.dp),
+                                            //    latex = contentEntity.text,
+                                            //    fontSize = 18f.sp,
+                                            //    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            //    displayMode = true
+                                            //)
                                         }
                                     }
 
@@ -411,11 +506,85 @@ fun Message(
                             } else {
                                 when (contentEntity) {
                                     is Content.Text -> {
+                                        val annotatedText = buildAnnotatedString {
+                                            append(contentEntity.text)
+
+                                            contentEntity.markDown.forEach { (start, end, type) ->
+
+                                                if (
+                                                    start < 0 ||
+                                                    end > contentEntity.text.length ||
+                                                    start >= end
+                                                ) {
+                                                    return@forEach
+                                                }
+
+                                                when (type.firstOrNull()) {
+
+                                                    'b' -> addStyle(
+                                                        SpanStyle(
+                                                            fontWeight = FontWeight.Bold
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'i' -> addStyle(
+                                                        SpanStyle(
+                                                            fontStyle = FontStyle.Italic
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'u' -> addStyle(
+                                                        SpanStyle(
+                                                            textDecoration = TextDecoration.Underline
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    's' -> addStyle(
+                                                        SpanStyle(
+                                                            textDecoration = TextDecoration.LineThrough
+                                                        ),
+                                                        start,
+                                                        end
+                                                    )
+
+                                                    'c' -> {
+                                                        val color = type.substring(1).toColorInt()
+
+                                                        addStyle(
+                                                            SpanStyle(
+                                                                color = Color(color)
+                                                            ),
+                                                            start,
+                                                            end
+                                                        )
+                                                    }
+
+                                                    'h' -> {
+                                                        val color = type.substring(1).toColorInt()
+
+                                                        addStyle(
+                                                            SpanStyle(
+                                                                background = Color(color)
+                                                            ),
+                                                            start,
+                                                            end
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
                                         Text(
                                             modifier = Modifier.padding(8.dp),
-                                            text = contentEntity.text.toRichAnnotatedString(
-                                                linkColor = MaterialTheme.colorScheme.onPrimary
-                                            )
+                                            text = annotatedText
+                                                //.toRichAnnotatedString(
+                                                //linkColor = MaterialTheme.colorScheme.onPrimary
+                                                //)
                                         )
                                     }
 
@@ -425,13 +594,28 @@ fun Message(
                                                 rememberScrollState()
                                             )
                                         ) {
-                                            RaTeX(
+                                            Latex(
                                                 modifier = Modifier.wrapContentWidth().padding(8.dp),
                                                 latex = contentEntity.text,
-                                                fontSize = 18f.sp,
-                                                color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                displayMode = true
+                                                config = LatexConfig(
+                                                    fontSize = 18f.sp,
+                                                    theme = LatexTheme.auto(
+                                                        light = LatexThemeColors(
+                                                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                        ),
+                                                        dark = LatexThemeColors(
+                                                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    )
+                                                )
                                             )
+                                            //RaTeX(
+                                            //    modifier = Modifier.wrapContentWidth().padding(8.dp),
+                                            //    latex = contentEntity.text,
+                                            //    fontSize = 18f.sp,
+                                            //    color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            //    displayMode = true
+                                            //)
                                         }
                                     }
 

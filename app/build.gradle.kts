@@ -79,4 +79,5 @@ dependencies {
 
     // RaTeX-CMP
     //implementation("io.github.darriousliu:ratex-android:0.1.14")
+    implementation("com.ibm.icu:icu4j:78.3")
 }

@@ -3,6 +3,7 @@ package ir.gchat
 import android.content.Context
 import android.graphics.Typeface
 import android.text.Editable
+import android.text.Spannable
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -547,6 +548,15 @@ fun MessageTextField(
         )
     }
 
+    val stringResources = listOf(
+        stringResource(R.string.bold),
+        stringResource(R.string.italic),
+        stringResource(R.string.underline),
+        stringResource(R.string.strikethrough),
+        stringResource(R.string.text_color),
+        stringResource(R.string.highlight)
+    )
+
     AndroidView(
         modifier = Modifier
             .fillMaxWidth()
@@ -599,7 +609,7 @@ fun MessageTextField(
                             // ------------------------------------------------
 
                             menu.add(
-                                Menu.NONE, boldActionId, 100, "Bold"
+                                Menu.NONE, boldActionId, 100, stringResources[0]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_ALWAYS
                             )
@@ -609,7 +619,7 @@ fun MessageTextField(
                             // ------------------------------------------------
 
                             menu.add(
-                                Menu.NONE, italicActionId, 101, "Italic"
+                                Menu.NONE, italicActionId, 101, stringResources[1]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_ALWAYS
                             )
@@ -622,7 +632,7 @@ fun MessageTextField(
                                 Menu.NONE,
                                 underlineActionId,
                                 102,
-                                "Underline"
+                                stringResources[2]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_ALWAYS
                             )
@@ -635,7 +645,7 @@ fun MessageTextField(
                                 Menu.NONE,
                                 strikethroughActionId,
                                 103,
-                                "Strikethrough"
+                                stringResources[3]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_ALWAYS
                             )
@@ -644,7 +654,7 @@ fun MessageTextField(
                                 Menu.NONE,
                                 textColorActionId,
                                 104,
-                                "Text Color"
+                                stringResources[4]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_NEVER
                             )
@@ -653,7 +663,7 @@ fun MessageTextField(
                                 Menu.NONE,
                                 highlightActionId,
                                 105,
-                                "Highlight"
+                                stringResources[5]
                             ).setShowAsAction(
                                 MenuItem.SHOW_AS_ACTION_NEVER
                             )
@@ -1057,12 +1067,71 @@ fun MessageTextField(
             }
         },
 
+        //update = { editText ->
+        //    editText.selectionChangedListener = onSelectionChanged
+
+        //    val currentText = editText.editableText.toString()
+
+        //    if (currentText == messageText) {
+        //        return@AndroidView
+        //    }
+
+        //    val value: CharSequence =
+        //        if (styledMessageText.toString() == messageText) {
+        //            SpannableString(styledMessageText)
+        //        } else {
+        //            SpannableString(messageText)
+        //        }
+
+        //    editText.setText(value, TextView.BufferType.SPANNABLE)
+
+        //    editText.setSelection(editText.editableText.length)
+        //}
+
         update = { editText ->
-            editText.selectionChangedListener = onSelectionChanged
+
+            Log.d(
+                "EDIT_FLOW",
+                "2) ANDROID_VIEW_UPDATE | " +
+                        "messageText='$messageText' | " +
+                        "styled='${styledMessageText}' | " +
+                        "styledLength=${styledMessageText.length} | " +
+                        "editText='${editText.editableText}'"
+            )
+
+            styledMessageText
+                .getSpans(
+                    0,
+                    styledMessageText.length,
+                    CharacterStyle::class.java
+                )
+                .forEach { span ->
+
+                    Log.d(
+                        "EDIT_FLOW",
+                        "3) STATE_SPAN | " +
+                                "${span.javaClass.simpleName} " +
+                                "${styledMessageText.getSpanStart(span)}-" +
+                                "${styledMessageText.getSpanEnd(span)}"
+                    )
+                }
 
             val currentText = editText.editableText.toString()
 
+            Log.d(
+                "EDIT_FLOW",
+                "4) BEFORE_RETURN | " +
+                        "currentText='$currentText' | " +
+                        "messageText='$messageText' | " +
+                        "equal=${currentText == messageText}"
+            )
+
             if (currentText == messageText) {
+                Log.d(
+                    "EDIT_FLOW",
+                    "5) RETURNED_BECAUSE_TEXT_EQUAL"
+                )
+
                 return@AndroidView
             }
 
@@ -1073,9 +1142,61 @@ fun MessageTextField(
                     SpannableString(messageText)
                 }
 
-            editText.setText(value, TextView.BufferType.SPANNABLE)
+            Log.d(
+                "EDIT_FLOW",
+                "6) SETTING_TEXT | " +
+                        "value='$value' | " +
+                        "valueClass=${value.javaClass.simpleName}"
+            )
 
-            editText.setSelection(editText.editableText.length)
+            if (value is Spannable) {
+                value.getSpans(
+                    0,
+                    value.length,
+                    CharacterStyle::class.java
+                ).forEach { span ->
+
+                    Log.d(
+                        "EDIT_FLOW",
+                        "7) VALUE_SPAN | " +
+                                "${span.javaClass.simpleName} " +
+                                "${value.getSpanStart(span)}-" +
+                                "${value.getSpanEnd(span)}"
+                    )
+                }
+            }
+
+            editText.setText(
+                value,
+                TextView.BufferType.SPANNABLE
+            )
+
+            Log.d(
+                "EDIT_FLOW",
+                "8) AFTER_SET_TEXT | " +
+                        "text='${editText.editableText}'"
+            )
+
+            editText.editableText
+                .getSpans(
+                    0,
+                    editText.editableText.length,
+                    CharacterStyle::class.java
+                )
+                .forEach { span ->
+
+                    Log.d(
+                        "EDIT_FLOW",
+                        "9) EDITTEXT_SPAN | " +
+                                "${span.javaClass.simpleName} " +
+                                "${editText.editableText.getSpanStart(span)}-" +
+                                "${editText.editableText.getSpanEnd(span)}"
+                    )
+                }
+
+            editText.setSelection(
+                editText.editableText.length
+            )
         }
     )
 }
